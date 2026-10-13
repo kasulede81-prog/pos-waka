@@ -198,3 +198,7 @@ table_sessions|sales|sale_id|rN
 table_sessions|shops|shop_id|cN
 waitlist_entries|shops|shop_id|cN
 waitlist_entries|table_sessions|seated_session_id|nn
+waka_printer_assignments|organizations|organization_id|nn
+waka_printer_assignments|shops|shop_id|nn
+waka_printer_assignments|subscriptions|subscription_id|nn
+waka_printer_units|shops|held_at_shop_id|nn

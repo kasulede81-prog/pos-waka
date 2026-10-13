@@ -51,6 +51,10 @@ const MIGRATION_CHAIN = [
   join(MIGRATIONS_DIR, "20261007250000_admin_mark_payment_guard.sql"),
   // Customer cancellation authority (supersedes the lock-order cancel body).
   join(MIGRATIONS_DIR, "20261008090000_subscription_payment_cancel_customer_authority.sql"),
+  // `is_waka_internal_admin()` — super_admin | operations_admin, delegating to
+  // `is_waka_internal_role` which the bootstrap already provides. Defines
+  // nothing else, and the printer inventory gate calls it.
+  join(MIGRATIONS_DIR, "20261009120000_define_is_waka_internal_admin.sql"),
   // Pricing-campaign discount audit actor (supersedes 113's broken
   // `profiles.user_id` lookup).
   join(MIGRATIONS_DIR, "20261009140000_fix_pricing_campaign_discount_audit_actor.sql"),
@@ -78,6 +82,19 @@ const MIGRATION_CHAIN = [
   // the monthly-discounted one. Supersedes the pricing primitive, all three
   // money paths, both admin reads and both setters, so it lands last.
   join(MIGRATIONS_DIR, "20261012100000_discount_interval_isolation.sql"),
+  // Printer inventory + fulfilment (2026-10-13). Depends on
+  // `_subscription_latest_for_org` (20261011150000) and
+  // `_pricing_require_billing_admin` (20261011120000), so it lands last.
+  //
+  // Its companion file, 20261013100100_printer_reset_classification.sql, is NOT
+  // applied here: it re-declares shop_reset_table_classification(), which calls
+  // shop_reset_business_plan() — a function this chain never creates. The
+  // shop-reset harness applies that one instead.
+  join(MIGRATIONS_DIR, "20261013100000_printer_inventory_and_fulfilment.sql"),
+  // Read-only additions (2026-10-13): handover history, eligibility preview,
+  // and the inventory re-declared with display names. Supersedes
+  // internal_ops_printer_inventory, so it must land after the file above.
+  join(MIGRATIONS_DIR, "20261013110000_printer_read_rpcs.sql"),
 ];
 
 function readSql(path: string): string {
@@ -109,6 +126,21 @@ const ENTITLEMENT_SHAPE = `
   ALTER TABLE public.organization_feature_entitlements
     ADD CONSTRAINT organization_feature_entitlements_feature_code_check
     CHECK (feature_code IN ('ai_stock_assistant', 'loyalty'));
+`;
+
+/**
+ * `shops.branch_status` (migration 130, "Shops remain branches under
+ * organizations"). The pre-M1 bootstrap predates the branch profile, and the
+ * printer RPCs validate a branch is live before holding stock at it or handing a
+ * unit over from it — so this harness needs the column to exist with the same
+ * shape production has. Applied here rather than by pulling in all of 130, which
+ * also builds the enterprise transfer/purchasing tables.
+ */
+const SHOP_BRANCH_SHAPE = `
+  ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS branch_status text NOT NULL DEFAULT 'active';
+  ALTER TABLE public.shops DROP CONSTRAINT IF EXISTS shops_branch_status_check;
+  ALTER TABLE public.shops ADD CONSTRAINT shops_branch_status_check
+    CHECK (branch_status IN ('active', 'disabled', 'archived'));
 `;
 
 /**
@@ -421,6 +453,7 @@ const PRE_DEPS = `
 async function applyChain(exec: SqlExec): Promise<void> {
   await exec.exec(readSql(BOOTSTRAP));
   await exec.exec(ENTITLEMENT_SHAPE);
+  await exec.exec(SHOP_BRANCH_SHAPE);
   await exec.exec(PRE_DEPS);
   await exec.exec(PRODUCTION_GRANTS);
   await exec.exec(PRE_M2_POSTURE);

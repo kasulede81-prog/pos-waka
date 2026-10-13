@@ -36,6 +36,7 @@ const NAV = [
   { href: "/home#solutions", label: "Solutions" },
   { href: "/home#pricing", label: "Pricing" },
   { href: "/home#hardware", label: "Hardware" },
+  { href: "/business-printer", label: "Free printer" },
   { href: "/about", label: "About" },
   { href: "/home#faq", label: "FAQ" },
   { href: "/contact", label: "Contact" },
@@ -45,6 +46,7 @@ const FOOTER = {
   product: [
     { to: "/home#features", label: "Features" },
     { to: "/home#pricing", label: "Pricing" },
+    { to: "/business-printer", label: "Free printer offer" },
     { to: "/home#hardware", label: "Hardware" },
     { to: "/demo", label: "Demo" },
   ],

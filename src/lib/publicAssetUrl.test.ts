@@ -19,6 +19,18 @@ describe("publicAssetUrl", () => {
     expect(url.endsWith("brand/w-icon-32-cream.png")).toBe(true);
   });
 
+  it("passes an absolute URL through untouched", () => {
+    // A hosted asset is already complete; joining it to BASE_URL would produce
+    // `/https://xyz.supabase.co/...`, which is not a URL.
+    const hosted = "https://ljaedextsenbkxzzgxcg.supabase.co/storage/v1/object/public/waka-marketing-media/waka-printer-setup.mp4";
+    expect(publicAssetUrl(hosted)).toBe(hosted);
+    expect(publicAssetUrl("//cdn.example.com/v.mp4")).toBe("//cdn.example.com/v.mp4");
+    expect(publicAssetUrl("blob:http://localhost/abc")).toBe("blob:http://localhost/abc");
+    expect(publicAssetUrl("data:video/mp4;base64,AAAA")).toBe("data:video/mp4;base64,AAAA");
+    // ...and it does not double up a scheme that is already there.
+    expect(publicAssetUrl(hosted)).not.toContain("//https:");
+  });
+
   it("WakaLogo no longer hard-codes root-absolute /waka-logo.png", () => {
     const src = readFileSync(join(ROOT, "src/components/brand/WakaLogo.tsx"), "utf8");
     expect(src).toContain("publicAssetUrl");

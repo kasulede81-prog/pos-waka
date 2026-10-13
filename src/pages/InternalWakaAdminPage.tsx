@@ -26,6 +26,7 @@ import { AdminReleaseManagementPage } from "../components/internal-admin/v2/page
 import { AdminPlatformSubscriptionSettingsPage } from "../components/internal-admin/v2/pages/AdminPlatformSubscriptionSettingsPage";
 import { AdminPosDisplayScalePage } from "../components/internal-admin/v2/pages/AdminPosDisplayScalePage";
 import { AdminRemoteSupportSettingsPage } from "../components/internal-admin/v2/pages/AdminRemoteSupportSettingsPage";
+import { AdminPrintersPage } from "../components/internal-admin/v2/pages/AdminPrintersPage";
 import { AdminLoyaltyPage } from "../components/internal-admin/v2/pages/AdminLoyaltyPage";
 
 type Props = {
@@ -54,6 +55,7 @@ function sectionFromPath(pathname: string): AdminSectionId {
   if (pathname === "/internal/waka/releases") return "releases";
   if (pathname === "/internal/waka/display-scale") return "display_scale";
   if (pathname === "/internal/waka/remote-support") return "remote_support";
+  if (pathname === "/internal/waka/printers") return "printers";
   return "overview";
 }
 
@@ -132,6 +134,11 @@ export function InternalWakaAdminPage({ lang, email }: Props) {
     body = <AdminPosDisplayScalePage adminRow={shellAdmin} previewMode={previewMode} />;
   } else if (section === "remote_support") {
     body = <AdminRemoteSupportSettingsPage adminRow={shellAdmin} previewMode={previewMode} />;
+  } else if (section === "printers") {
+    // The page itself narrows to `canManagePrinterFulfilment`; the nav entry is
+    // already hidden for anyone the server would refuse, so this is a guard for
+    // a direct URL, not the authorization boundary.
+    body = <AdminPrintersPage adminRow={shellAdmin} previewMode={previewMode} />;
   } else {
     body = (
       <AdminOverviewPage lang={lang} email={email} adminRow={shellAdmin} previewMode={previewMode} />

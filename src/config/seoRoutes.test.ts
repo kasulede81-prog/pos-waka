@@ -9,6 +9,7 @@ describe("seoRoutes", () => {
   it("indexes marketing and legal paths only", () => {
     expect(isMarketingIndexablePath("/home")).toBe(true);
     expect(isMarketingIndexablePath("/acceptable-use")).toBe(true);
+    expect(isMarketingIndexablePath("/business-printer")).toBe(true);
     expect(isMarketingIndexablePath("/solutions/pharmacy-pos-uganda")).toBe(true);
     expect(isMarketingIndexablePath("/solutions/inventory-management-uganda")).toBe(true);
     expect(isMarketingIndexablePath("/about/founder")).toBe(true);

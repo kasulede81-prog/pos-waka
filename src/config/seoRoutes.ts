@@ -5,6 +5,7 @@ export const MARKETING_INDEXABLE_PATHS = new Set([
   "/home",
   "/about",
   "/pricing",
+  "/business-printer",
   "/contact",
   "/founder",
   "/company",

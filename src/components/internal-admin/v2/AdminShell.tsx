@@ -17,7 +17,12 @@ import {
   type AdminNavGroupId,
 } from "../../../lib/adminNavState";
 import { themeUi } from "../../../lib/themeTokens";
-import { canManageAi, canManageLoyalty, normalizeAdminRole } from "./adminRoles";
+import {
+  canManageAi,
+  canManageLoyalty,
+  canManagePrinterFulfilment,
+  normalizeAdminRole,
+} from "./adminRoles";
 
 function useLockUnderlyingAppScroll(active: boolean) {
   useEffect(() => {
@@ -56,6 +61,7 @@ export type AdminSectionId =
   | "releases"
   | "display_scale"
   | "remote_support"
+  | "printers"
   | "shop";
 
 type TabDef = {
@@ -65,6 +71,7 @@ type TabDef = {
   superOnly?: boolean;
   aiAdmin?: boolean;
   loyaltyAdmin?: boolean;
+  printerAdmin?: boolean;
 };
 
 type NavGroup = {
@@ -82,6 +89,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: "shops", path: "/internal/waka/shops", label: "Shops" },
       { id: "support", path: "/internal/waka/support", label: "Support" },
       { id: "devices", path: "/internal/waka/devices", label: "Devices" },
+      { id: "printers", path: "/internal/waka/printers", label: "Printers", printerAdmin: true },
     ],
   },
   {
@@ -140,12 +148,13 @@ type Props = {
 
 function filterTabs(
   tabs: TabDef[],
-  opts: { isSuper: boolean; canManageAi: boolean; canManageLoyalty: boolean },
+  opts: { isSuper: boolean; canManageAi: boolean; canManageLoyalty: boolean; canManagePrinters: boolean },
 ): TabDef[] {
   return tabs.filter((tab) => {
     if (tab.superOnly && !opts.isSuper) return false;
     if (tab.aiAdmin && !opts.canManageAi) return false;
     if (tab.loyaltyAdmin && !opts.canManageLoyalty) return false;
+    if (tab.printerAdmin && !opts.canManagePrinters) return false;
     return true;
   });
 }
@@ -159,15 +168,23 @@ export function AdminShell({ lang, adminRow, loading, active, previewMode = fals
   const isSuper = adminRow?.role === "super_admin";
   const manageAi = canManageAi(normalizeAdminRole(adminRow?.role)) || previewMode;
   const manageLoyalty = canManageLoyalty(normalizeAdminRole(adminRow?.role)) || previewMode;
+  // Mirrors `_printer_require_fulfilment_admin()` — NOT canManageBillingOffers,
+  // which also admits finance_admin and would show a screen the server refuses.
+  const managePrinters = canManagePrinterFulfilment(normalizeAdminRole(adminRow?.role)) || previewMode;
   const tabTo = (path: string) => (previewMode ? internalAdminPreviewHref(path) : path);
 
   const visibleGroups = useMemo(
     () =>
       NAV_GROUPS.map((g) => ({
         ...g,
-        tabs: filterTabs(g.tabs, { isSuper, canManageAi: manageAi, canManageLoyalty: manageLoyalty }),
+        tabs: filterTabs(g.tabs, {
+          isSuper,
+          canManageAi: manageAi,
+          canManageLoyalty: manageLoyalty,
+          canManagePrinters: managePrinters,
+        }),
       })).filter((g) => g.tabs.length > 0),
-    [isSuper, manageAi, manageLoyalty],
+    [isSuper, manageAi, manageLoyalty, managePrinters],
   );
 
   const [expandedGroups, setExpandedGroups] = useState(readAdminNavGroupsExpanded);

@@ -147,6 +147,51 @@ describe("classification drift guard", () => {
   });
 });
 
+describe("WAKA printer inventory is registered with the reset guard", () => {
+  it("classifies both printer tables as RETAINED, with a reason", async () => {
+    const exec = await createShopResetHarness();
+    try {
+      const { rows } = await exec.query<{ tbl: string; disposition: string; reason: string }>(
+        `SELECT tbl, disposition, reason FROM public.shop_reset_table_classification()
+          WHERE tbl LIKE 'waka_printer%' ORDER BY tbl`,
+      );
+
+      // Both tables reference shops/organizations, so the drift guard above
+      // requires them to be classified. If this list is short, the printer
+      // migration is missing 20261013100100_printer_reset_classification.sql.
+      expect(rows.map((r) => r.tbl)).toEqual(["waka_printer_assignments", "waka_printer_units"]);
+
+      for (const row of rows) {
+        expect(row.disposition, row.tbl).toBe("retained");
+        expect(row.reason, row.tbl).toMatch(/asset/i);
+      }
+    } finally {
+      await exec.close();
+    }
+  });
+
+  it("does NOT reset printer history when a shop's business data is wiped", async () => {
+    // Retained on purpose: a business-data reset must not erase the record that
+    // WAKA handed a physical printer to that account, exactly as
+    // `org_billing_offers` is retained as billing.
+    const exec = await createShopResetHarness();
+    try {
+      const { rows } = await exec.query<{ tbl: string }>(
+        `SELECT tbl FROM public.shop_reset_business_plan() WHERE tbl LIKE 'waka_printer%'`,
+      );
+      expect(rows).toEqual([]);
+    } finally {
+      await exec.close();
+    }
+  });
+
+  it("knows both printer tables in the topology snapshot", async () => {
+    const children = new Set(readTopology().map((e) => e.child));
+    expect(children.has("waka_printer_units")).toBe(true);
+    expect(children.has("waka_printer_assignments")).toBe(true);
+  });
+});
+
 describe("admin_reset_shop_business_data (new)", () => {
   let exec: SqlExec;
   let admin: string;

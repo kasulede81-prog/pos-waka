@@ -52,6 +52,11 @@ const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage").then((m) =>
 import { MarketingHomePage } from "./pages/MarketingHomePage";
 const AboutPage = lazy(() => import("./pages/public/AboutPage").then((m) => ({ default: m.AboutPage })));
 const PricingPage = lazy(() => import("./pages/public/PricingPage").then((m) => ({ default: m.PricingPage })));
+// Lazy on purpose: the promotional page pulls framer-motion and two images, and
+// every signed-in POS user would otherwise carry it in the main bundle.
+const BusinessPrinterPage = lazy(() =>
+  import("./pages/public/BusinessPrinterPage").then((m) => ({ default: m.BusinessPrinterPage })),
+);
 const ContactPage = lazy(() => import("./pages/public/ContactPage").then((m) => ({ default: m.ContactPage })));
 const FounderPage = lazy(() => import("./pages/public/FounderPage").then((m) => ({ default: m.FounderPage })));
 const CompanyPage = lazy(() => import("./pages/public/CompanyPage").then((m) => ({ default: m.CompanyPage })));
@@ -483,6 +488,7 @@ function AppRoutes() {
           <Route path="/home" element={<MarketingHomePage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/about" element={<AboutPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/pricing" element={<PricingPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
+          <Route path="/business-printer" element={<BusinessPrinterPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/contact" element={<ContactPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/founder" element={<FounderPage lang={lang} setLang={setLang} isAuthenticated={auth.isAuthenticated} />} />
           <Route path="/about/founder" element={<Navigate to="/founder" replace />} />
@@ -587,6 +593,10 @@ function AppRoutes() {
                   />
                   <Route
                     path="internal/waka/remote-support"
+                    element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
+                  />
+                  <Route
+                    path="internal/waka/printers"
                     element={<InternalWakaAdminPage lang={lang} email={auth.email} />}
                   />
                   <Route path="internal/waka/shop/:shopId" element={<InternalShopOpsPage lang={lang} email={auth.email} />} />

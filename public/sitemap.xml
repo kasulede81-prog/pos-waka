@@ -3,6 +3,7 @@
   <url><loc>https://dkasu.com/home</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
   <url><loc>https://dkasu.com/about</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://dkasu.com/pricing</loc><changefreq>monthly</changefreq><priority>0.85</priority></url>
+  <url><loc>https://dkasu.com/business-printer</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
   <url><loc>https://dkasu.com/founder</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://dkasu.com/contact</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://dkasu.com/support</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>

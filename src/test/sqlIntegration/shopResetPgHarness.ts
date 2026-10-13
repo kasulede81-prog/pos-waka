@@ -136,6 +136,12 @@ const COLLECT_FNS = join(MIGRATIONS_DIR, "112_certified_hard_delete.sql");
  */
 const POST_PLAN_MIGRATIONS = [
   join(MIGRATIONS_DIR, "20260926092000_loyalty_enrollment_requests_reset_plan.sql"),
+  // Printer inventory (2026-10-13): the two WAKA printer tables reference shops
+  // and organizations, so they must be classified or this guard reports them as
+  // unknown. Only the classification file is applied — its companion,
+  // 20261013100000_printer_inventory_and_fulfilment.sql, carries table DDL that
+  // this harness builds from the topology snapshot instead.
+  join(MIGRATIONS_DIR, "20261013100100_printer_reset_classification.sql"),
 ];
 
 export async function createShopResetHarness(opts: { applyNewMigration?: boolean } = {}): Promise<SqlExec> {
