@@ -148,32 +148,33 @@ describe("the name step runs BEFORE acceptance and does not disturb it", () => {
     // Scoped to the ACCEPT EFFECT, not the whole file: the first occurrence of the identifier is
     // the import at the top, so searching globally would compare against the wrong thing.
     const effectStart = ACCEPT.lastIndexOf("const controller = attemptRef.current;");
-    const effectEnd = ACCEPT.indexOf("}, [initializing, isAuthenticated, token, awaitingName]");
+    const effectEnd = ACCEPT.indexOf("}, [initializing, isAuthenticated, token, nameConfirmedAt]");
     expect(effectStart).toBeGreaterThan(-1);
     expect(effectEnd).toBeGreaterThan(effectStart);
 
     const effect = ACCEPT.slice(effectStart, effectEnd);
-    const gate = effect.indexOf("if (awaitingName) return;");
-    const accept = effect.indexOf("shouldStartStaffInviteAccept");
+    const gate = effect.indexOf("needsNameReview({ kind: \"merchant\", hasTenancy: false, metadata })");
+    const begin = effect.indexOf("controller.tryBegin(token)");
 
-    expect(gate).toBeGreaterThan(-1);
-    expect(accept).toBeGreaterThan(-1);
-    expect(gate).toBeLessThan(accept);
+    expect(gate, "the name requirement is re-derived in the effect").toBeGreaterThan(-1);
+    expect(begin).toBeGreaterThan(-1);
+    // The gate is decided BEFORE any attempt begins, so nothing is in flight while it is open.
+    expect(gate).toBeLessThan(begin);
   });
 
   it("acceptance re-arms once the name is saved", () => {
     const handler = ACCEPT.slice(ACCEPT.indexOf("const submitName"));
-    expect(handler.slice(0, 900)).toMatch(/setAwaitingName\(false\)/);
-    // …and the effect depends on that flag, which is what re-runs it.
-    expect(ACCEPT).toMatch(/\}, \[initializing, isAuthenticated, token, awaitingName\]\);/);
+    expect(handler.slice(0, 900)).toMatch(/setNameConfirmedAt\(\(n\) => n \+ 1\)/);
+    // …and the effect depends on that counter, which is what re-runs it.
+    expect(ACCEPT).toMatch(/\}, \[initializing, isAuthenticated, token, nameConfirmedAt\]\);/);
   });
 
-  it("the gate is NOT `phase` — the effect must not re-run mid-attempt", () => {
-    // `phase` moves ready→accepting *inside* an in-flight attempt. Depending on it would re-run the
-    // effect while its own attempt is running; the narrow flag moves only at the two boundaries.
-    const effectStart = ACCEPT.lastIndexOf("const controller = attemptRef.current;");
-    const effect = ACCEPT.slice(effectStart, ACCEPT.indexOf("}, [initializing, isAuthenticated, token, awaitingName]"));
-    expect(effect).not.toMatch(/\bphase\b/);
+  it("the dependency is a re-run counter, NOT `phase`", () => {
+    // `phase` moves ready→accepting *inside* an in-flight attempt; depending on it would re-run the
+    // effect while its own attempt is running. The counter changes only when a name is confirmed.
+    const deps = ACCEPT.slice(ACCEPT.indexOf("}, [initializing, isAuthenticated, token"), ACCEPT.indexOf("}, [initializing, isAuthenticated, token") + 60);
+    expect(deps).toMatch(/nameConfirmedAt\]\);/);
+    expect(deps).not.toMatch(/\bphase\b/);
   });
 
   it("the token, the RPC and the Google-identity checks are untouched", () => {
@@ -187,6 +188,67 @@ describe("the name step runs BEFORE acceptance and does not disturb it", () => {
 
   it("runs even when the account is authenticated already — the step is about the NAME, not the session", () => {
     expect(ACCEPT).toMatch(/needsNameReview\(\{ kind: "merchant", hasTenancy: false, metadata \}\)/);
+  });
+});
+
+// ===========================================================================
+// THE DURABLE GATE — the fix for the remount/reload skip
+// ===========================================================================
+
+describe("the name requirement is derived from DURABLE state, never held in a component", () => {
+  const effectStart = ACCEPT.lastIndexOf("const controller = attemptRef.current;");
+  const effect = ACCEPT.slice(effectStart, ACCEPT.indexOf("}, [initializing, isAuthenticated, token, nameConfirmedAt]"));
+
+  it("1/2 — the effect RE-READS the session before deciding, so a remount re-derives the requirement", () => {
+    // This is the whole fix. The gate used to be `awaitingName`, a `useState`; everything it guards
+    // (the token in sessionStorage, the Supabase session) is durable, so after any remount the
+    // durable half returned and the volatile half did not — and acceptance ran mid-edit.
+    expect(effect).toMatch(/supabase\?\.auth\.getSession\(\)/);
+    expect(effect).toMatch(/needsNameReview\(\{ kind: "merchant", hasTenancy: false, metadata \}\)/);
+  });
+
+  it("2 — NO component-held gate exists anywhere on this page", () => {
+    // If one is reintroduced, the same bug returns on the next remount. Asserted on the CODE form:
+    // the effect's own comment names `awaitingName` to explain what used to be here.
+    expect(ACCEPT).not.toMatch(/setAwaitingName|const \[awaitingName/);
+  });
+
+  it("3 — the session read is local, not a network round trip that a flaky connection could fail", () => {
+    // `getUser()` would make a failed request look like an unconfirmed name and re-prompt someone
+    // who had already chosen one. `getSession()` reads what is already stored.
+    expect(effect).toMatch(/auth\.getSession\(\)/);
+    expect(effect).not.toMatch(/await supabase\?\.auth\.getUser\(\)[\s\S]{0,200}needsNameReview/);
+  });
+
+  it("4 — FAILS CLOSED: an unreadable session shows the step rather than accepting", () => {
+    // `?? { data: { session: null } }` → metadata null → readConfirmedWakaName(null) === null →
+    // needsNameReview true. The only way past is a name that is PROVABLY confirmed.
+    expect(effect).toMatch(/\?\? \{ data: \{ session: null \} \}/);
+    expect(needsNameReview({ kind: "merchant", hasTenancy: false, metadata: null })).toBe(true);
+  });
+
+  it("5 — a confirmed name lets acceptance through, and a raw Google name does not", () => {
+    expect(needsNameReview({ kind: "merchant", hasTenancy: false, metadata: ALREADY_CONFIRMED })).toBe(false);
+    expect(needsNameReview({ kind: "merchant", hasTenancy: false, metadata: GOOGLE_FIRST_TIME })).toBe(true);
+  });
+
+  it("6 — a remount cannot bypass it: nothing in the effect reads React state to decide", () => {
+    // The decision inputs are the session (durable) and constants. No `useState` value feeds it —
+    // only the re-run counter, which is a dependency, never a condition.
+    expect(effect).not.toMatch(/\bphase\b\s*===/);
+    expect(effect).not.toMatch(/if \(awaiting/);
+    expect(effect).toMatch(/const \{ data: sessionData \} = \(await supabase\?\.auth\.getSession\(\)\)/);
+  });
+
+  it("the partially typed name is preserved across a re-run, and Google only ever seeds an empty form", () => {
+    expect(effect).toMatch(/prev\.firstName\.trim\(\) \|\| prev\.lastName\.trim\(\) \? prev : reviewPrefill\(metadata\)/);
+  });
+
+  it("the sign-in handler decides nothing — there is no second path to keep in step", () => {
+    const handler = ACCEPT.slice(ACCEPT.indexOf("const signInWithGoogle"), ACCEPT.indexOf("const submitName"));
+    expect(handler).not.toMatch(/needsNameReview/);
+    expect(handler).not.toMatch(/setPhase\("name"\)/);
+    expect(handler).not.toMatch(/setPhase\("accepting"\)/);
   });
 });
 

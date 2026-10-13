@@ -53,15 +53,15 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
   const [busy, setBusy] = useState(false);
   const [wrongAccount, setWrongAccount] = useState<string | null>(null);
   /**
-   * A first-time Google user is naming themselves, so acceptance must wait.
+   * Bumped after `confirmWakaName` durably records the name, so the accept effect re-runs.
    *
-   * DELIBERATELY NOT `phase`. The accept effect must re-run when this releases, but `phase` changes
-   * on transitions the effect has no business reacting to — `ready → accepting` happens *inside* an
-   * in-flight attempt, and putting `phase` in the dependency list would re-run the effect while its
-   * own attempt is running. This flag moves exactly twice: set before the attempt exists, cleared to
-   * let it start. That is the whole dependency.
+   * THIS IS NOT THE GATE — deliberately not. A held flag ("still awaiting a name") is exactly what
+   * broke: it was `useState`, so a remount cleared it while the durable invitation token and session
+   * survived, and acceptance ran mid-edit. Whether a name is required is now re-derived from the
+   * session on every effect run; this counter only says "something changed, look again". Losing it
+   * to a remount is harmless, because the re-read finds the confirmed name anyway.
    */
-  const [awaitingName, setAwaitingName] = useState(false);
+  const [nameConfirmedAt, setNameConfirmedAt] = useState(0);
   /** The merchant name step's own state, identical in shape to `StartBusinessPage`'s. */
   const [parts, setParts] = useState<NameParts>({ firstName: "", lastName: "" });
   const [partError, setPartError] = useState<{ field: "firstName" | "lastName"; message: string } | null>(null);
@@ -99,16 +99,6 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
 
   useEffect(() => {
     const controller = attemptRef.current;
-    /**
-     * A FIRST-TIME Google user names themselves BEFORE the invitation is accepted.
-     *
-     * This is the merchant flow's own step, reused rather than reimplemented: `needsNameReview`
-     * decides, `confirmWakaName` writes `waka_full_name` — a key Google never touches — so the
-     * Google profile name can never become the DKASU staff name by default. It runs here, ahead of
-     * acceptance, because acceptance is what creates the staff/membership rows and the name should
-     * be settled before it. The invitation token is untouched either way.
-     */
-    if (awaitingName) return;
     if (
       !shouldStartStaffInviteAccept({
         initializing,
@@ -126,14 +116,56 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
       return;
     }
 
-    const attemptId = controller.tryBegin(token);
-    if (attemptId == null) return;
-
-    reportAuthIssue("invite_accept_start", {});
-    setPhase("accepting");
-    setMessage(null);
+    let cancelled = false;
 
     void (async () => {
+      /**
+       * ============================ THE DURABLE GATE ============================
+       * A first-time Google user names themselves BEFORE the invitation is accepted, and this
+       * decision is RE-READ FROM THE SESSION on every run rather than held in component state.
+       *
+       * WHY THIS SHAPE, SPECIFICALLY. The gate used to be `awaitingName`, a `useState`. Everything
+       * else in this flow is durable — the invitation token lives in sessionStorage precisely so it
+       * survives a reload, and the session lives in the Supabase client — so after ANY remount the
+       * durable half came back and the volatile half did not. The accept effect then ran and
+       * `shop_accept_staff_invite()` consumed the invitation while the person was still typing their
+       * name. A reload, a service-worker activation (`swReloadStaleClients.js` navigates every open
+       * window on deploy), a StrictMode double-mount, or a WebView recreation were all enough.
+       *
+       * `needsNameReview()` reads `waka_full_name` + `waka_name_confirmed_at` from the session's own
+       * metadata — the merchant flow's keys, which no provider ever touches. So the requirement is
+       * as durable as the token it guards: a fresh mount re-derives it and shows the step again.
+       * There is nothing left for a remount to clear.
+       *
+       * `getSession()` and NOT `getUser()`: the session is already in local storage with its
+       * metadata, so this needs no network. A network call here would make a flaky connection look
+       * like an unconfirmed name and re-prompt someone who had already chosen one.
+       *
+       * FAIL CLOSED. If the session cannot be read at all, `metadata` is null, `needsNameReview`
+       * returns true, and the step is shown. The only way past this line is a name that is
+       * PROVABLY confirmed — never an absence of information.
+       */
+      const { data: sessionData } = (await supabase?.auth.getSession()) ?? { data: { session: null } };
+      if (cancelled) return;
+
+      const metadata = (sessionData.session?.user?.user_metadata ?? null) as Record<string, unknown> | null;
+
+      if (needsNameReview({ kind: "merchant", hasTenancy: false, metadata })) {
+        // Seed the fields from Google as a SUGGESTION only, and never clobber what the person has
+        // already typed in this session. No attempt is begun, so nothing is in flight and the
+        // invitation token is untouched.
+        setParts((prev) => (prev.firstName.trim() || prev.lastName.trim() ? prev : reviewPrefill(metadata)));
+        setPhase("name");
+        return;
+      }
+
+      const attemptId = controller.tryBegin(token);
+      if (attemptId == null) return;
+
+      reportAuthIssue("invite_accept_start", {});
+      setPhase("accepting");
+      setMessage(null);
+
       reportAuthIssue("invite_rpc_start", {});
       const result = await runStaffInviteAcceptFlow({
         token,
@@ -182,7 +214,17 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
         setMessage(acceptErrorMessage(langRef.current, result.error));
       });
     })();
-  }, [initializing, isAuthenticated, token, awaitingName]);
+
+    return () => {
+      cancelled = true;
+    };
+    /**
+     * `nameConfirmedAt` is a COUNTER, not the gate. It exists only to re-run this effect once
+     * `confirmWakaName` has written the durable name, so acceptance can start. Losing it to a
+     * remount costs nothing: the durable re-read above then finds the confirmed name on its own.
+     * That is the whole point of the design — the trigger may be volatile, the requirement may not.
+     */
+  }, [initializing, isAuthenticated, token, nameConfirmedAt]);
 
   /**
    * Google-first sign-in. On success the auto-accept effect above runs (it watches
@@ -236,28 +278,17 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
       reportAuthIssue("invite_google_signin_ok", { platform: via });
 
       /**
-       * FIRST-TIME GOOGLE USER → their own name, from the merchant flow.
+       * NOTHING IS DECIDED HERE — and that is the fix, not an omission.
        *
-       * `needsNameReview` is the SAME decision the merchant signup makes: it is true only when this
-       * account has never CONFIRMED a DKASU name (`waka_full_name`), which is also why an existing
-       * DKASU user — merchant or previously-invited staff — skips straight through. `hasTenancy` is
-       * false here because acceptance is what creates the membership; that is exactly the point at
-       * which the merchant flow considers someone un-provisioned.
+       * Whether a name is still required, and whether to accept, are both owned by the accept effect
+       * above, which re-derives them from the session on every run. Deciding it here as well would
+       * put the answer back into component state, which is precisely what made the old gate vanish
+       * on a remount while the durable token and session survived.
        *
-       * `reviewPrefill` seeds the fields from Google as a SUGGESTION the person can overwrite; the
-       * suggested value is never written unless they submit it.
+       * The session has just landed, so `isAuthenticated` has flipped, so the effect is already
+       * running and will do the right thing. There is no second path to keep in step.
        */
-      const { data: userData } = await client.auth.getUser();
-      const metadata = (userData.user?.user_metadata ?? null) as Record<string, unknown> | null;
-      if (needsNameReview({ kind: "merchant", hasTenancy: false, metadata })) {
-        setParts(reviewPrefill(metadata));
-        setPartError(null);
-        setAwaitingName(true);
-        setPhase("name");
-        return;
-      }
-
-      setPhase("accepting");
+      reportAuthIssue("invite_google_signin_ready", { platform: via });
     } catch (err) {
       // Developer diagnostics. The provider's own code/status/message is the only thing that
       // identifies WHICH gate rejected the token (`invalid nonce` for a nonce mismatch, and so
@@ -306,8 +337,8 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
         return;
       }
       setPartError(null);
-      // Releasing this is what re-arms the accept effect; the phase only drives the UI.
-      setAwaitingName(false);
+      // The durable write above is the authority; this only makes the accept effect look again.
+      setNameConfirmedAt((n) => n + 1);
       setPhase("ready");
     } finally {
       setBusy(false);
@@ -324,7 +355,6 @@ export function StaffAcceptPage({ lang, isAuthenticated, initializing }: Props) 
       setBusy(false);
       setWrongAccount(null);
       setMessage(null);
-      setAwaitingName(false);
       setPartError(null);
       setPhase("ready");
       attemptRef.current = createStaffInviteAcceptAttemptController();

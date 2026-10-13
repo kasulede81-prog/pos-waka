@@ -291,13 +291,16 @@ describe("STAFF invite acceptance V3 — self-cancel + single-flight", () => {
      * The behaviour itself is exercised for real by V3-F/G above ("phase ready→accepting must not
      * cancel in-flight attempt"), which passes unchanged.
      */
-    expect(STAFF_ACCEPT).toMatch(/\[initializing, isAuthenticated, token, awaitingName\]/);
+    expect(STAFF_ACCEPT).toMatch(/\[initializing, isAuthenticated, token, nameConfirmedAt\]/);
     const effectStart = STAFF_ACCEPT.lastIndexOf("const controller = attemptRef.current;");
-    const effect = STAFF_ACCEPT.slice(effectStart, STAFF_ACCEPT.indexOf("}, [initializing, isAuthenticated, token, awaitingName]"));
-    expect(effect.indexOf("if (awaitingName) return;")).toBeGreaterThan(-1);
+    const effect = STAFF_ACCEPT.slice(effectStart, STAFF_ACCEPT.indexOf("}, [initializing, isAuthenticated, token, nameConfirmedAt]"));
+    // The gate is now DERIVED from the session rather than held — see `staffInviteNameStep.test.ts`.
+    expect(effect).toMatch(/needsNameReview\(/);
     expect(effect).toContain("shouldStartStaffInviteAccept");
-    // The narrow flag, NOT `phase` — see the note above.
-    expect(effect).not.toMatch(/\bphase\b/);
+    // Neither `phase` nor a held flag may be a decision input. Asserted on the CODE form, not the
+    // bare word — the effect's own comment names `awaitingName` to explain what used to be here.
+    expect(effect).not.toMatch(/if \(awaiting/);
+    expect(STAFF_ACCEPT).not.toMatch(/setAwaitingName|const \[awaitingName/);
     expect(STAFF_ACCEPT).not.toMatch(/phase === "accepting"\) return/);
     expect(STAFF_ACCEPT).toMatch(/createStaffInviteAcceptAttemptController/);
     expect(STAFF_ACCEPT).toMatch(/controller\.complete\(/);
