@@ -121,6 +121,21 @@ export type PublicPricingSnapshot = {
   globalDiscountActive: boolean;
   plans: ComputedPlanPrice[];
   asOf: string;
+  /**
+   * WHERE THE BOOK CAME FROM, which is not the same question as what is in it.
+   *
+   * `mapPublicPricingRpc` substitutes the canonical list book when the server
+   * returns no usable plan rows, so `plans` can be FULL of perfectly plausible
+   * list prices on a response that carried none. Nothing in the values
+   * distinguishes the two cases — a genuine book with no live discount looks
+   * identical to the substitute — so anything that must not present a list price
+   * as payable has to ask about provenance instead.
+   *
+   * `false` for the substitute, `true` only when the server actually sent rows.
+   * Absent is treated as `false` by consumers, so an un-updated producer hides a
+   * price rather than inventing one.
+   */
+  plansFromServer?: boolean;
 };
 
 export function buildDefaultPublicPricing(): PublicPricingSnapshot {
@@ -136,6 +151,8 @@ export function buildDefaultPublicPricing(): PublicPricingSnapshot {
       }),
     ),
     asOf: new Date().toISOString(),
+    // Nothing has been fetched yet, so these are list prices, not payable ones.
+    plansFromServer: false,
   };
 }
 
@@ -194,6 +211,10 @@ export function mapPublicPricingRpc(data: unknown): PublicPricingSnapshot {
         : plans.some((p) => (p.globalDiscountPercent ?? 0) > 0),
     plans: plans.length > 0 ? plans : buildDefaultPublicPricing().plans,
     asOf: typeof obj.as_of === "string" ? obj.as_of : new Date().toISOString(),
+    // Read from the SERVER rows, before the fallback above can mask an empty
+    // response. The fallback itself is unchanged — checkout and the pricing
+    // screens rely on it — it is only now labelled.
+    plansFromServer: plans.length > 0,
   };
 }
 

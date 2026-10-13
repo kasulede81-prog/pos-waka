@@ -2,7 +2,7 @@
  * Marketing website content — pricing and plan details align with
  * subscriptionPricing.ts and public PricingPage. Hardware prices from DKASU POS brochure.
  */
-import type { PaidPlanCode } from "../lib/subscriptionPricing";
+import type { PaidPlanCode, PublicPricingSnapshot } from "../lib/subscriptionPricing";
 import { CANONICAL_PLAN_PRICES, computePlanDisplayPrice } from "../lib/subscriptionPricing";
 
 export const MARKETING_HARDWARE_PACKAGES = [
@@ -273,6 +273,79 @@ export const MARKETING_FAQ = [
 
 export function formatMarketingUgx(amount: number): string {
   return `UGX ${amount.toLocaleString("en-UG")}`;
+}
+
+/**
+ * Whether a server price book has arrived and may be shown as PAYABLE.
+ *
+ * WHY THIS IS NOT JUST `!loading`, WHICH IS THE TRAP.
+ * `pricingForPlan` answers a plan missing from the snapshot with the
+ * UNDISCOUNTED canonical list, and the pricing hook's initial state is
+ * `buildDefaultPublicPricing()` — that same list. So a first load that FAILS
+ * leaves `loading === false` while the snapshot still holds list prices, and
+ * rendering them would advertise double what checkout charges under a live
+ * global discount (Business 36,000 against a real 18,000).
+ *
+ * `everLoaded` is what licenses a number. Once a genuine snapshot has arrived,
+ * a later refresh failure DELIBERATELY keeps the last good book (that is the
+ * hook's documented design: "stale is bad, fabricated is worse"), so those
+ * prices stay honest to show.
+ */
+export function isMarketingPriceLive(args: {
+  loading: boolean;
+  refreshError: string | null;
+  everLoaded: boolean;
+}): boolean {
+  return !args.loading && (args.everLoaded || args.refreshError === null);
+}
+
+/**
+ * The price to print on a marketing plan card, or `null` when none may be shown.
+ *
+ * `null` means "we do not know the payable price" — the caller renders a
+ * placeholder. It is never a fallback to a list price. Free is genuinely zero
+ * and needs no server value.
+ *
+ * NO ARITHMETIC HAPPENS HERE. The figure is read straight out of the snapshot,
+ * which the server already discounted; recomputing a discount in the browser is
+ * how a marketing page starts disagreeing with checkout.
+ *
+ * LOOKED UP, NOT ASKED FOR — AND THAT DISTINCTION IS THE WHOLE POINT.
+ * `pricingForPlan` answers a plan MISSING from the snapshot with the
+ * undiscounted canonical list price, so it can never be used to decide what is
+ * payable. The shared mapper substitutes `buildDefaultPublicPricing().plans`
+ * when the server sends an empty plan list — a list-price book delivered on a
+ * SUCCESSFUL response, with `refreshError` null — so `priceLive` is true and a
+ * fabricated figure would sail straight through. Reading the row directly makes
+ * an absent plan an absent price instead.
+ */
+export function marketingPlanPayableUgx(args: {
+  code: string;
+  yearly: boolean;
+  snapshot: PublicPricingSnapshot;
+  priceLive: boolean;
+}): number | null {
+  if (args.code === "free") return 0;
+  if (!args.priceLive) return null;
+
+  /*
+    PROVENANCE FIRST. The fallback book is full of plausible list prices, so a
+    missing row is not the only way to be lied to — the row can be present and
+    still not be something the server ever said. `plansFromServer` is the only
+    signal that survives that, and absent counts as false so an un-updated
+    producer hides a price rather than inventing one.
+  */
+  if (args.snapshot.plansFromServer !== true) return null;
+
+  const row = args.snapshot.plans.find((p) => p.planCode === args.code);
+  if (!row) return null;
+
+  const amount = args.yearly ? row.finalAnnualUgx : row.finalMonthlyUgx;
+  // A paid plan at zero — or a value that did not survive `Number()` on a
+  // malformed row — is not a payable price. The canonical book CHECKs prices
+  // above zero, and checkout refuses to create a zero-amount payment at all.
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return amount;
 }
 
 /** Verify canonical prices match marketing display. */

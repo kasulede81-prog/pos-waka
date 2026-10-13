@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import clsx from "clsx";
 import { ChevronDown, Star } from "lucide-react";
 import {
@@ -12,7 +12,10 @@ import {
   MARKETING_TESTIMONIALS,
   MARKETING_TRUST_PILLARS,
   formatMarketingUgx,
+  isMarketingPriceLive,
+  marketingPlanPayableUgx,
 } from "../../../config/marketingSiteData";
+import { usePublicPricing } from "../../../hooks/usePublicPricing";
 import { wakaSupportWhatsAppUrl } from "../../../config/company";
 import { HoverLift, Reveal } from "./MarketingMotion";
 import {
@@ -198,6 +201,22 @@ export function MarketingHardwareSection() {
 
 export function MarketingPricingSection() {
   const [yearly, setYearly] = useState(false);
+  /**
+   * THE HOMEPAGE SHOWS WHAT CHECKOUT CHARGES. `MARKETING_PLANS` still carries
+   * the canonical list prices — and still guards them via
+   * `assertMarketingPricingIntegrity` — but they are no longer what is printed.
+   * The figure now comes from the same server-backed book the app and the
+   * pricing page read (`usePublicPricing` → `public_subscription_pricing`), so
+   * a live global discount reaches this page instead of leaving it advertising
+   * double the payable price.
+   */
+  const { pricing, loading, refreshError } = usePublicPricing();
+  /** A genuine server book has arrived at least once — see `isMarketingPriceLive`. */
+  const [everLoaded, setEverLoaded] = useState(false);
+  useEffect(() => {
+    if (!loading && refreshError === null) setEverLoaded(true);
+  }, [loading, refreshError]);
+  const priceLive = isMarketingPriceLive({ loading, refreshError, everLoaded });
 
   return (
     <section id="pricing" className="py-16 sm:py-20">
@@ -234,7 +253,14 @@ export function MarketingPricingSection() {
       </Reveal>
 
       <div className="mt-10 grid gap-5 lg:grid-cols-4">
-        {MARKETING_PLANS.map((plan, i) => (
+        {MARKETING_PLANS.map((plan, i) => {
+          const payable = marketingPlanPayableUgx({
+            code: plan.code,
+            yearly,
+            snapshot: pricing,
+            priceLive,
+          });
+          return (
           <Reveal key={plan.code} delay={i * 0.05}>
             <article
               className={clsx(
@@ -249,11 +275,19 @@ export function MarketingPricingSection() {
               ) : null}
               <h3 className={clsx("text-xl font-black", mktHeading)}>{plan.name}</h3>
               <p className="mt-2 text-3xl font-black text-waka-600 dark:text-waka-400">
+                {/*
+                  `null` — not a list price — means the live book has not arrived.
+                  A dash matches PricingPage's own placeholder; printing the
+                  canonical figure here would advertise a price checkout will not
+                  charge. Free is genuinely zero and needs no server value.
+                */}
                 {plan.code === "free"
                   ? formatMarketingUgx(0)
-                  : yearly
-                    ? formatMarketingUgx(plan.annualUgx)
-                    : `${formatMarketingUgx(plan.monthlyUgx)}/mo`}
+                  : payable === null
+                    ? "—"
+                    : yearly
+                      ? formatMarketingUgx(payable)
+                      : `${formatMarketingUgx(payable)}/mo`}
               </p>
               {plan.code !== "free" && yearly ? (
                 <p className={clsx("mt-1 text-xs font-bold", mktSubtext)}>Billed yearly · 20% savings</p>
@@ -280,7 +314,8 @@ export function MarketingPricingSection() {
               </Link>
             </article>
           </Reveal>
-        ))}
+          );
+        })}
       </div>
       <p className={clsx("mt-6 text-center text-sm font-medium", mktSubtext)}>
         <Link to="/pricing" className="font-black text-waka-600 underline-offset-2 hover:underline dark:text-waka-400">
