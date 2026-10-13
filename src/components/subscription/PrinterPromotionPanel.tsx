@@ -182,17 +182,32 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
           </div>
         </>
       ) : status && !status.eligible ? (
+        /*
+          AN INELIGIBLE ACCOUNT STILL SEES THE WHOLE OFFER. The section is never
+          hidden for a refusal — the merchant is told the server's own reason,
+          given the way to fix it (the offer page, and the in-app upgrade), and
+          keeps the setup/collection link that is always rendered below.
+          (A bare block comment, not `{/* *\/}`: this is a JS expression position.)
+        */
         <div className="mt-3 rounded-xl bg-muted px-3 py-3">
           <p className="flex items-start gap-1.5 text-sm font-semibold text-foreground">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
             {ELIGIBILITY_REASON_LABELS[status.reason ?? ""] ?? t(lang, "printerNotEligible")}
           </p>
-          <Link
-            to="/upgrade"
-            className="mt-2 inline-flex min-h-[44px] items-center text-sm font-black text-waka-700 underline underline-offset-2"
-          >
-            {t(lang, "printerSeeBusinessAnnual")}
-          </Link>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+            <Link
+              to="/business-printer"
+              className="inline-flex min-h-[44px] items-center text-sm font-black text-waka-700 underline underline-offset-2"
+            >
+              {t(lang, "printerSeeOffer")}
+            </Link>
+            <Link
+              to="/upgrade"
+              className="inline-flex min-h-[44px] items-center text-sm font-black text-waka-700 underline underline-offset-2"
+            >
+              {t(lang, "printerSeeBusinessAnnual")}
+            </Link>
+          </div>
         </div>
       ) : null}
 
@@ -220,7 +235,20 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
         </p>
       ) : null}
 
-      <p className="mt-3 text-[11px] text-muted-foreground">{t(lang, "printerRequestNotReservation")}</p>
+      {/*
+        ALWAYS RENDERED, IN EVERY STATE. The offer page carries the setup video,
+        the branch-pickup steps and the WhatsApp route, so it is the one link a
+        merchant needs whatever their eligibility or request state. It is also
+        what keeps this section useful to an ineligible account rather than a
+        dead end.
+      */}
+      <p className="mt-3 text-xs font-semibold">
+        <Link to="/business-printer" className="text-waka-700 underline underline-offset-2">
+          {t(lang, "printerSetupInstructions")}
+        </Link>
+      </p>
+
+      <p className="mt-2 text-[11px] text-muted-foreground">{t(lang, "printerRequestNotReservation")}</p>
     </article>
   );
 }

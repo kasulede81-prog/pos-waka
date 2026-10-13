@@ -260,3 +260,62 @@ describe("the setup video section", () => {
     expect(existsSync(join(ROOT, "public/videos/waka-printer-setup.mp4.mp4"))).toBe(false);
   });
 });
+
+/**
+ * ONE CHOICE ON THE PROMOTION PAGE.
+ *
+ * The page previously rendered every plan as a live `<Link>` — Business to
+ * /register and the other two to /pricing — so a visitor could be sent into a
+ * checkout for a plan that does not carry the free printer. Verified against
+ * the live page before the fix: "See Starter" -> /pricing and "See Waka Plus"
+ * -> /pricing were both real anchors.
+ *
+ * Starter and Waka Plus must stay VISIBLE (they are real plans) but must not be
+ * selectable here. These assert the rendered shape, not just the intent.
+ */
+describe("the promotion page offers Business yearly only", () => {
+  /** The plan cards block, so assertions cannot be satisfied by other links. */
+  const plansBlock = page.slice(
+    page.indexOf("SHOWN_PLANS.map"),
+    page.indexOf("getting the printer"),
+  );
+
+  it("renders the promoted plan as a link to registration", () => {
+    expect(plansBlock).toContain('to="/register"');
+    expect(plansBlock).toContain("Choose Business yearly");
+    expect(plansBlock).toContain("plan.promoted ? (");
+  });
+
+  it("renders the other plans as DISABLED buttons, not links", () => {
+    // A disabled button cannot navigate…
+    expect(plansBlock).toContain("<button");
+    expect(plansBlock).toMatch(/disabled\s*\n?\s*aria-disabled="true"/);
+    expect(plansBlock).toContain("Not part of this offer");
+    // …and no per-plan link to the pricing page remains in this block.
+    expect(plansBlock).not.toContain('to="/pricing"');
+    expect(plansBlock).not.toContain("See ${plan.name}");
+  });
+
+  it("still SHOWS all three plans rather than hiding two", () => {
+    const page2 = read("src/pages/public/BusinessPrinterPage.tsx");
+    expect(page2).toMatch(/code: "starter"/);
+    expect(page2).toMatch(/code: "business"[^}]*promoted: true/);
+    expect(page2).toMatch(/code: "waka_plus"/);
+    expect(page2).toContain("SHOWN_PLANS.map");
+  });
+
+  it("explains the disabled cards without offering a second route into checkout", () => {
+    expect(page).toContain("The free WP-58 printer comes with");
+    // The explanation is prose, deliberately not another link.
+    const note = page.slice(page.indexOf("The free WP-58 printer comes with"));
+    const untilSection = note.slice(0, 400);
+    expect(untilSection).not.toContain("<Link");
+  });
+
+  it("leaves pricing, the video and the collection routes untouched", () => {
+    expect(page).toContain("usePublicPricing()");
+    expect(page).toContain("pricingForPlan(");
+    expect(page).toContain("<PrinterSetupVideo");
+    expect(page).toContain("<PrinterFulfilment");
+  });
+});

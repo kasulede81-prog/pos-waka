@@ -198,16 +198,35 @@ export function BusinessPrinterPage({ lang, setLang, isAuthenticated }: Props) {
                         )}
                       </div>
 
-                      <Link
-                        to={plan.promoted ? "/register" : "/pricing"}
-                        className={`mt-6 inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2 ${
-                          plan.promoted
-                            ? "bg-waka-600 text-white shadow-lg shadow-orange-600/20 hover:bg-waka-700"
-                            : "border-2 border-mkt-border bg-mkt-card text-mkt-text hover:border-waka-500"
-                        }`}
-                      >
-                        {plan.promoted ? "Choose Business yearly" : `See ${plan.name}`}
-                      </Link>
+                      {/*
+                        ONE CHOICE ON THIS PAGE. Business billed yearly is the
+                        only plan that carries the free printer, so it is the
+                        only thing a visitor can act on here. Starter and Waka
+                        Plus stay VISIBLE — they are real plans and hiding them
+                        would misrepresent the catalogue — but their cards render
+                        a DISABLED BUTTON rather than a link, so this page cannot
+                        send someone into a checkout that does not qualify for
+                        the offer. Their plans, prices and the app's own checkout
+                        are untouched; the pricing page still offers them.
+                      */}
+                      {plan.promoted ? (
+                        <Link
+                          to="/register"
+                          className="mt-6 inline-flex items-center justify-center gap-2 rounded-2xl bg-waka-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-orange-600/20 transition hover:bg-waka-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-waka-500 focus-visible:ring-offset-2"
+                        >
+                          Choose Business yearly
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled
+                          aria-disabled="true"
+                          title={`${plan.name} does not include the free printer. This offer is Business billed yearly.`}
+                          className="mt-6 inline-flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-2xl border-2 border-mkt-border bg-mkt-bg-secondary px-5 py-3 text-sm font-bold text-mkt-text-secondary opacity-70"
+                        >
+                          Not part of this offer
+                        </button>
+                      )}
 
                       {plan.promoted ? (
                         <p className={`mt-3 text-xs font-semibold leading-relaxed ${mktSubtext}`}>
@@ -220,6 +239,21 @@ export function BusinessPrinterPage({ lang, setLang, isAuthenticated }: Props) {
                 );
               })}
             </div>
+
+            {/*
+              Explains the disabled cards rather than leaving them looking
+              broken. Deliberately NOT a link: this page makes one offer, and
+              handing it a second route into checkout would undo the point of
+              disabling those cards. Starter and Waka Plus keep their own pages
+              and prices untouched.
+            */}
+            <Reveal delay={0.1}>
+              <p className={`mt-6 text-sm font-semibold leading-relaxed ${mktSubtext}`}>
+                The free WP-58 printer comes with <strong className="font-black">Business billed yearly</strong>, so
+                that is the only plan offered here. Starter and Waka Plus are unchanged — same plans, same prices, still
+                available in the app.
+              </p>
+            </Reveal>
           </section>
 
           {/* ---------------------------------------------------- getting the printer */}

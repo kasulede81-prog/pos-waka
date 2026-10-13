@@ -278,3 +278,56 @@ describe("the collection-request queue is wired to the desk", () => {
     expect(requestsPanel).toMatch(/may be incomplete/);
   });
 });
+
+/**
+ * THE CUSTOMER'S PRINTER SECTION IS NEVER A DEAD END.
+ *
+ * Two ways this went wrong or could: the section was unreachable entirely while
+ * `shop_get_effective_subscription` was missing, and an ineligible account could
+ * have been left with a refusal and nothing to do about it. An ineligible
+ * merchant must still see the offer and the setup/pickup instructions.
+ */
+describe("the merchant's printer section always tells them what to do next", () => {
+  const panel = read("src/components/subscription/PrinterPromotionPanel.tsx");
+
+  it("explains an ineligibility using the SERVER's reason, with a route to fix it", () => {
+    expect(panel).toContain("ELIGIBILITY_REASON_LABELS");
+    // The offer page — which carries the video and the collection steps — and
+    // the in-app upgrade, both offered on a refusal.
+    expect(panel).toMatch(/status && !status\.eligible/);
+    expect(panel).toContain('to="/business-printer"');
+    expect(panel).toContain('to="/upgrade"');
+  });
+
+  it("keeps the setup/pickup link OUTSIDE every conditional, so it renders in all states", () => {
+    const setupAt = panel.indexOf("printerSetupInstructions");
+    expect(setupAt).toBeGreaterThan(-1);
+    // It must appear after the last eligibility ternary closes and before the
+    // component returns — i.e. not inside a branch.
+    const ineligibleBranch = panel.indexOf("status && !status.eligible");
+    const requestsBlock = panel.indexOf("status.requests.length > 0");
+    expect(setupAt).toBeGreaterThan(requestsBlock);
+    expect(setupAt).toBeGreaterThan(ineligibleBranch);
+  });
+
+  it("never hides the section once a status has loaded", () => {
+    /*
+      THE PROPERTY THAT MATTERS: every early return requires `!status`, so a
+      loaded status — eligible or not — always reaches the render. An account is
+      never shown nothing because of how the server answered.
+    */
+    const guards = panel.match(/if \([^\n]*\) \{/g) ?? [];
+    const earlyGuards = guards.filter((g) => g.includes("!status"));
+    expect(earlyGuards.length).toBe(2);
+    // …and no guard branches on eligibility to drop the section.
+    for (const g of guards) expect(g).not.toMatch(/eligible/);
+    expect(panel).toContain("printerChecking");
+    expect(panel).toContain("printerStatusUnavailable");
+  });
+
+  it("does not hide the section because there is no open request", () => {
+    // A request list is additive; its absence must not gate anything.
+    expect(panel).toMatch(/status\.requests\.length > 0 \?/);
+    expect(panel).not.toMatch(/requests\.length > 0 \?[\s\S]{0,200}return null/);
+  });
+});

@@ -7721,6 +7721,8 @@ const en: Dict = {
   printerAskWhatsApp: "Ask on WhatsApp",
   printerNotEligible: "This account does not qualify for the free printer yet.",
   printerSeeBusinessAnnual: "See Business billed yearly →",
+  printerSeeOffer: "See the free printer offer →",
+  printerSetupInstructions: "Printer setup, pickup and delivery instructions →",
   printerYourRequests: "Your requests",
   printerChannelBranch: "Branch collection",
   printerChannelWhatsApp: "WhatsApp",
