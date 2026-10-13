@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Printer, Store, MessageCircle, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import { Printer, Store, MessageCircle, CheckCircle2, Clock, AlertTriangle, Gift } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 import { wakaSupportWhatsAppUrl } from "../../config/company";
@@ -11,6 +11,8 @@ import {
   requestPrinterCollection,
   type CustomerPrinterStatus,
 } from "../../lib/printerFulfilment";
+import { themeUi } from "../../lib/themeTokens";
+import { enterpriseTypeClass } from "../../lib/enterpriseTypography";
 
 /**
  * The free WP-58 printer, as the MERCHANT sees it.
@@ -79,12 +81,15 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
   };
 
   const claim = status?.open_claim ?? null;
-  const card = "rounded-2xl border border-border bg-card p-4 shadow-sm";
 
   if (loading && !status) {
     return (
-      <article className={card}>
-        <p className="text-sm text-muted-foreground">{t(lang, "printerChecking")}</p>
+      <article className={themeUi.surface}>
+        <div className="flex items-center gap-2">
+          <Printer className="h-4 w-4 text-waka-600" aria-hidden />
+          <p className={enterpriseTypeClass("caption")}>{t(lang, "printerPanelTitle")}</p>
+        </div>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "printerChecking")}</p>
       </article>
     );
   }
@@ -92,15 +97,19 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
   // A failed read is an ERROR, never a quiet "not eligible".
   if (error && !status) {
     return (
-      <article className={card}>
-        <p role="alert" className="text-sm font-semibold text-destructive">
+      <article className={themeUi.surface}>
+        <div className="flex items-center gap-2">
+          <Printer className="h-4 w-4 text-waka-600" aria-hidden />
+          <p className={enterpriseTypeClass("caption")}>{t(lang, "printerPanelTitle")}</p>
+        </div>
+        <p role="alert" className="mt-2 text-sm font-semibold text-destructive">
           {t(lang, "printerStatusUnavailable")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{error}</p>
         <button
           type="button"
           onClick={() => void load()}
-          className="mt-3 min-h-[44px] rounded-2xl bg-card px-4 text-sm font-black text-waka-800 ring-1 ring-border"
+          className="mt-3 min-h-[44px] rounded-2xl bg-card px-4 text-sm font-bold text-waka-800 ring-1 ring-border"
         >
           {t(lang, "printerRetry")}
         </button>
@@ -109,14 +118,20 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
   }
 
   return (
-    <article className={card}>
-      <div className="flex items-center gap-2">
-        <Printer className="h-4 w-4 text-waka-600" />
-        <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-          {t(lang, "printerPanelTitle")}
-        </p>
-      </div>
-      <p className="mt-1 text-sm font-semibold text-muted-foreground">{t(lang, "printerPanelSub")}</p>
+    <article className={themeUi.surface}>
+      {/* --- offer header: one coherent block, not a detached promo card ----- */}
+      <header className="flex items-start gap-3">
+        <span
+          aria-hidden
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-waka-100 text-waka-700"
+        >
+          <Gift className="h-5 w-5" strokeWidth={2.25} />
+        </span>
+        <div className="min-w-0">
+          <p className={enterpriseTypeClass("caption")}>{t(lang, "printerPanelTitle")}</p>
+          <p className="mt-0.5 text-sm font-semibold text-foreground">{t(lang, "printerPanelSub")}</p>
+        </div>
+      </header>
 
       {error && status ? (
         <p role="alert" className="mt-2 text-xs font-semibold text-amber-800">
@@ -127,11 +142,11 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
       {/* --- a printer already held -------------------------------------- */}
       {claim ? (
         <div className="mt-3 rounded-xl bg-muted px-3 py-3">
-          <p className="flex items-center gap-1.5 text-sm font-black text-foreground">
+          <p className="flex items-center gap-1.5 text-sm font-bold text-foreground">
             {claim.status === "handed_over" ? (
-              <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              <CheckCircle2 className="h-4 w-4 text-emerald-600" aria-hidden />
             ) : (
-              <Clock className="h-4 w-4 text-amber-600" />
+              <Clock className="h-4 w-4 text-amber-600" aria-hidden />
             )}
             {ASSIGNMENT_STATUS_LABELS[claim.status] ?? claim.status}
           </p>
@@ -162,9 +177,9 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
               type="button"
               disabled={asking}
               onClick={() => void ask("branch")}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-waka-600 px-4 text-sm font-black text-white disabled:opacity-60"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-waka-600 px-4 text-sm font-bold text-white disabled:opacity-60"
             >
-              <Store className="h-4 w-4" />
+              <Store className="h-4 w-4" aria-hidden />
               {t(lang, "printerAskBranch")}
             </button>
             <a
@@ -174,9 +189,9 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
               target="_blank"
               rel="noreferrer"
               onClick={() => void ask("whatsapp")}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-card px-4 text-sm font-black text-waka-800 ring-1 ring-border"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-2xl bg-card px-4 text-sm font-bold text-waka-800 ring-1 ring-border"
             >
-              <MessageCircle className="h-4 w-4" />
+              <MessageCircle className="h-4 w-4" aria-hidden />
               {t(lang, "printerAskWhatsApp")}
             </a>
           </div>
@@ -191,19 +206,19 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
         */
         <div className="mt-3 rounded-xl bg-muted px-3 py-3">
           <p className="flex items-start gap-1.5 text-sm font-semibold text-foreground">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
             {ELIGIBILITY_REASON_LABELS[status.reason ?? ""] ?? t(lang, "printerNotEligible")}
           </p>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
             <Link
               to="/business-printer"
-              className="inline-flex min-h-[44px] items-center text-sm font-black text-waka-700 underline underline-offset-2"
+              className="inline-flex min-h-[44px] items-center text-sm font-bold text-waka-700 underline underline-offset-2"
             >
               {t(lang, "printerSeeOffer")}
             </Link>
             <Link
               to="/upgrade"
-              className="inline-flex min-h-[44px] items-center text-sm font-black text-waka-700 underline underline-offset-2"
+              className="inline-flex min-h-[44px] items-center text-sm font-bold text-waka-700 underline underline-offset-2"
             >
               {t(lang, "printerSeeBusinessAnnual")}
             </Link>
@@ -218,11 +233,11 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
           <ul className="mt-1 space-y-1">
             {status.requests.slice(0, 4).map((r) => (
               <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <span className="font-semibold text-muted-foreground">{fmtDate(r.created_at)}</span>
-                <span className="font-bold">
+                <span className="font-medium text-muted-foreground">{fmtDate(r.created_at)}</span>
+                <span className="font-semibold">
                   {r.channel === "branch" ? t(lang, "printerChannelBranch") : t(lang, "printerChannelWhatsApp")}
                 </span>
-                <span className="font-black">{t(lang, `printerRequest_${r.status}` as "printerRequest_requested")}</span>
+                <span className="font-bold">{t(lang, `printerRequest_${r.status}` as "printerRequest_requested")}</span>
               </li>
             ))}
           </ul>
@@ -240,13 +255,18 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
         the branch-pickup steps and the WhatsApp route, so it is the one link a
         merchant needs whatever their eligibility or request state. It is also
         what keeps this section useful to an ineligible account rather than a
-        dead end.
+        dead end. Setup and pickup live here so the offer, the eligibility line
+        and the collection instructions read as one section.
       */}
-      <p className="mt-3 text-xs font-semibold">
-        <Link to="/business-printer" className="text-waka-700 underline underline-offset-2">
-          {t(lang, "printerSetupInstructions")}
-        </Link>
-      </p>
+      <div className="mt-3 rounded-xl border border-border bg-surface-muted/60 px-3 py-2.5">
+        <p className={enterpriseTypeClass("caption")}>{t(lang, "printerSetupSectionTitle")}</p>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "printerSetupSectionBody")}</p>
+        <p className="mt-2 text-xs font-semibold">
+          <Link to="/business-printer" className="text-waka-700 underline underline-offset-2">
+            {t(lang, "printerSetupInstructions")}
+          </Link>
+        </p>
+      </div>
 
       <p className="mt-2 text-[11px] text-muted-foreground">{t(lang, "printerRequestNotReservation")}</p>
     </article>

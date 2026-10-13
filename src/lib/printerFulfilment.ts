@@ -557,13 +557,22 @@ export type EligibilityPreview = {
   can_reserve: boolean;
 };
 
-/** Wording for the server's explanation codes. */
+/**
+ * Wording for the server's explanation codes.
+ *
+ * `not_business` is written to match the PROMOTION's own rule, not the account's
+ * displayed plan name. A shop can look like Business on the upgrade page because
+ * a promotional grant raises its effective tier, while the subscription ROW is
+ * still Starter/Free — and this offer is only on a purchased Business plan billed
+ * yearly. The verdict itself is never decided here; this is the explanation.
+ */
 export const ELIGIBILITY_REASON_LABELS: Record<string, string> = {
   shop_not_active: "That branch is not active.",
   no_subscription: "The account has no subscription at all.",
   subscription_not_active: "The subscription is not active — a trial or a lapsed plan does not qualify.",
   not_annual: "The subscription is billed monthly. The promotion requires yearly billing.",
-  not_business: "The subscription is not on the Business plan.",
+  not_business:
+    "The free printer is only included with a purchased Business plan billed yearly. Other plans — including promotional access — do not qualify.",
   period_ended: "The paid period has already ended.",
   not_eligible: "The account does not currently qualify.",
 };
