@@ -101,6 +101,9 @@ export function PrinterFulfilmentPanel({ adminRow, previewMode = false }: Props)
   // from the server; nothing here decides it.
   const [preview, setPreview] = useState<EligibilityPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  // A verdict that never ARRIVED is not the same as one that said "no". Tracked
+  // separately because `preview === null` also means "not asked yet".
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // ---- handover ----
   const [handoverFor, setHandoverFor] = useState<OpenAssignment | null>(null);
@@ -170,14 +173,19 @@ export function PrinterFulfilmentPanel({ adminRow, previewMode = false }: Props)
   useEffect(() => {
     if (!selectedShop) {
       setPreview(null);
+      setPreviewError(null);
       return;
     }
     let cancelled = false;
     setPreviewing(true);
+    setPreviewError(null);
     const timer = window.setTimeout(() => {
       void fetchPrinterEligibility({ shopId: selectedShop.id }).then((res) => {
         if (cancelled) return;
         setPreview(res.ok ? res.data : null);
+        // A FAILED preview is surfaced, never swallowed into `null`. Silently
+        // leaving no verdict on screen let an operator reserve blind.
+        setPreviewError(res.ok ? null : res.error);
         setPreviewing(false);
       });
     }, 200);
@@ -230,6 +238,9 @@ export function PrinterFulfilmentPanel({ adminRow, previewMode = false }: Props)
 
   const onAssign = async () => {
     if (!canAct || !selectedShop || assigning) return;
+    // The same rule the button enforces, restated where the write actually
+    // starts: with no verdict on screen there is nothing to reserve against.
+    if (!preview || preview.can_reserve === false) return;
     setAssigning(true);
     setError(null);
     try {
@@ -407,7 +418,18 @@ export function PrinterFulfilmentPanel({ adminRow, previewMode = false }: Props)
               type="button"
               className={primaryBtnCls}
               onClick={() => void onAssign()}
-              disabled={!canAct || !selectedShop || assigning || previewing || preview?.can_reserve === false}
+              disabled={
+                !canAct ||
+                !selectedShop ||
+                assigning ||
+                previewing ||
+                // NO VERDICT ON SCREEN, NO RESERVATION. `!preview` also covers a
+                // preview call that failed, so the operator cannot commit before
+                // the server has answered. The server stays the authority — this
+                // only stops the form submitting ahead of it.
+                !preview ||
+                preview?.can_reserve === false
+              }
             >
               {assigning ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Reserve for this account
@@ -420,6 +442,11 @@ export function PrinterFulfilmentPanel({ adminRow, previewMode = false }: Props)
             */}
             {selectedShop && previewing && !preview ? (
               <p className="text-xs font-semibold text-muted-foreground">Checking eligibility…</p>
+            ) : null}
+            {selectedShop && previewError && !previewing ? (
+              <p className={statusTokens.danger.banner} role="alert">
+                Eligibility could not be checked, so this printer cannot be reserved yet. {previewError}
+              </p>
             ) : null}
             {preview ? (
               preview.eligible ? (
