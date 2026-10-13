@@ -17,6 +17,7 @@ import {
 } from "../lib/subscriptionEntitlements";
 import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
 import { CheckoutFlow } from "../components/subscription/CheckoutFlow";
+import { PrinterPromotionPanel } from "../components/subscription/PrinterPromotionPanel";
 import { WakaButton } from "../components/ui/wakaPrimitives";
 import { HorizontalTabBar } from "../components/shared/HorizontalTabBar";
 import { enterpriseTypeClass } from "../lib/enterpriseTypography";
@@ -95,12 +96,10 @@ export function UpgradePage({ lang }: { lang: Language }) {
         Page header — same gradient family as the rest of the signed-in app, but
         tighter than the marketing hero so this still reads as a POS screen.
       */}
-      <header className="rounded-[1.75rem] bg-gradient-to-br from-waka-600 to-waka-500 px-5 py-6 text-white shadow-sm sm:px-7">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-waka-100">{t(lang, "wakaSlogan")}</p>
-        <h1 className={enterpriseTypeClass("display", "mt-2 text-white")}>{t(lang, "upgradeTitle")}</h1>
-        <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-waka-50 sm:text-base">
-          {t(lang, "upgradeSub")}
-        </p>
+      <header className="max-w-4xl px-1 py-2 sm:py-4">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-waka-700">{t(lang, "upgradePickTitle")}</p>
+        <h1 className={enterpriseTypeClass("display", "mt-2")}>Grow your shop with Business.</h1>
+        <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg">One plan, one clear price, and a WP-58 receipt printer included when you choose Business yearly.</p>
       </header>
 
       {authMode === "local" ? (
@@ -218,7 +217,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
               <div className="p-5 sm:p-7">
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-full bg-waka-600 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-white">Business yearly</span>
-                  <span className="rounded-full bg-waka-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-waka-900">Free WP-58 printer</span>
+                  <a href="#printer-steps" className="rounded-full bg-waka-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-waka-900 underline-offset-2 hover:underline">Free WP-58 printer</a>
                 </div>
                 <h3 className="mt-5 max-w-xl text-3xl font-black tracking-tight text-foreground sm:text-4xl">One plan for a growing shop. A printer for your counter.</h3>
                 <p className="mt-3 max-w-xl text-base leading-7 text-muted-foreground">{t(lang, "business_blurb")}</p>
@@ -233,10 +232,9 @@ export function UpgradePage({ lang }: { lang: Language }) {
                 <WakaButton type="button" id="plan-select-business-yearly" onClick={(event) => openCheckout("business", "yearly", event.currentTarget)} className="mt-5 min-h-[52px] w-full text-base">Choose Business yearly</WakaButton>
                 <p className="mt-3 text-xs leading-5 text-muted-foreground">The printer is included only with a purchased Business yearly plan. Promotional access does not qualify.</p>
               </div>
-              <aside className="border-t border-border bg-muted/50 p-5 sm:p-7 lg:border-l lg:border-t-0">
-                <p className="font-black text-foreground">Business for a growing shop</p>
-                <ul className="mt-4 flex flex-col gap-3 text-sm text-muted-foreground"><li>✓ Staff accounts and switching</li><li>✓ Cash drawer and shift tools</li><li>✓ Up to 4 devices</li><li>✓ Cloud sync and business reports</li></ul>
-                <Link to="/business-printer" className="mt-6 inline-flex font-black text-waka-700 underline underline-offset-4">How printer setup and pickup work →</Link>
+              <aside className="overflow-hidden border-t border-border bg-[#1d1a19] text-white lg:border-l lg:border-t-0">
+                <img src="/brand/waka-printer/wp58-hero.webp" alt="Waka POS WP-58 portable receipt printer" className="h-56 w-full object-cover sm:h-72 lg:h-64" />
+                <div className="p-5 sm:p-7"><p className="font-black">Meet the WP-58</p><p className="mt-2 text-sm leading-6 text-white/75">Compact 58mm thermal printing · Bluetooth · rechargeable battery</p></div>
               </aside>
             </div>
           </article>
@@ -245,6 +243,16 @@ export function UpgradePage({ lang }: { lang: Language }) {
             <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"><div><span className="text-xs font-black uppercase tracking-[0.16em] text-muted-foreground">Business monthly</span><h3 className="mt-2 text-2xl font-black">Keep the flexibility of monthly billing.</h3><p className="mt-2 text-sm text-muted-foreground">Business features, billed month to month. The WP-58 printer offer is for yearly billing.</p><div className="mt-4">{!pricingLoading ? <PlanPriceDisplay price={pricingForPlan(pricing, "business")} interval="month" size="lg" /> : null}</div></div><WakaButton type="button" id="plan-select-business-monthly" variant="secondary" onClick={(event) => openCheckout("business", "monthly", event.currentTarget)} className="min-h-[50px] shrink-0">Choose Business monthly</WakaButton></div>
           </article>
         )}
+      </section>
+
+      <section id="printer-steps" aria-labelledby="printer-steps-heading" className="rounded-[1.5rem] border border-border bg-card p-5 sm:p-7">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><h2 id="printer-steps-heading" className={enterpriseTypeClass("sectionTitle")}>Your printer, without leaving this page</h2><span className="text-sm text-muted-foreground">Four straightforward steps</span></div>
+        <ol className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {["Choose Business yearly", "Activate your paid subscription", "Check eligibility and request collection", "Collect and confirm handover"].map((step, index) => (
+            <li key={step} className="border-t border-waka-100 pt-4"><span className="grid size-8 place-items-center rounded-full bg-waka-100 text-xs font-black text-waka-800">0{index + 1}</span><p className="mt-3 font-black text-foreground">{step}</p><p className="mt-1 text-sm leading-6 text-muted-foreground">{index === 2 ? "Use the available collection method shown for your account." : index === 3 ? "The team records the printer handover against your account." : "The next step stays connected to your subscription."}</p></li>
+          ))}
+        </ol>
+        {shopId && authMode === "supabase" ? <div className="mt-6"><PrinterPromotionPanel lang={lang} shopId={shopId} /></div> : null}
       </section>
 
       {checkoutPlan && isPaidPlan(checkoutPlan) ? (
