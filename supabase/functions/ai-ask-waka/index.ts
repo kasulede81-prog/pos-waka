@@ -47,7 +47,7 @@ import {
   scrubInternalPathsFromAnswer,
   toClientSafeSources,
 } from "../_shared/askWakaCodeIntel.ts";
-import { WAKA_KNOWLEDGE_ARTIFACT } from "../_shared/wakaKnowledgeArtifactLoad.ts";
+import { getWakaKnowledgeArtifact } from "../_shared/wakaKnowledgeArtifactLoad.ts";
 import {
   createLlmChatProvider,
   type LlmChatMessage,
@@ -168,8 +168,20 @@ Deno.serve(async (req) => {
   let toolsFailed = false;
   let sources: AskWakaSourceRecord[] = [];
 
-  const knowledge = route.needsKnowledge
-    ? retrieveWakaKnowledge(messageCheck.message, route.lanes, WAKA_KNOWLEDGE_ARTIFACT, {
+  // Knowledge artifact now loads from PRIVATE Storage at runtime (deploy-size
+  // fix): await it here, degrade to "knowledge unavailable" (other lanes still
+  // answer) if the fetch/parse fails — retrieval semantics are unchanged.
+  const artifact = route.needsKnowledge
+    ? await getWakaKnowledgeArtifact().catch((err: unknown) => {
+        console.warn(
+          "ask_waka_knowledge_unavailable",
+          err instanceof Error ? err.message : String(err),
+        );
+        return null;
+      })
+    : null;
+  const knowledge = artifact
+    ? retrieveWakaKnowledge(messageCheck.message, route.lanes, artifact, {
         nowIso: dataAsOf,
       })
     : null;
