@@ -34,6 +34,7 @@ import {
   fetchShopSignupBuckets7d,
   fetchSubscriptionGrowthBuckets7d,
   fetchSupportTickets,
+  formatTotalShops,
   type BusinessTypeSlice,
   type DayBucket,
   type DistrictOpsRow,
@@ -550,7 +551,7 @@ export function useInternalOpsData(
     }
     const ended = (stats.lapsedTrials ?? 0) + (stats.expiredSubscriptions ?? 0);
     return {
-      total: String(stats.totalShops),
+      total: formatTotalShops(stats),
       active: String(stats.activeToday),
       paid: String(stats.paidSubscriptions),
       trial: String(stats.trialSubscriptions),
@@ -630,6 +631,8 @@ export function useInternalOpsData(
     pendingAnnualTickets,
     openSupportTickets,
     statGrid,
+    /** See `InternalDashboardStats.countsArePartial` — surface it, never hide it. */
+    statsPartial: Boolean(stats?.countsArePartial),
     fleetDevices,
     auditFeed,
     shopHealthById,

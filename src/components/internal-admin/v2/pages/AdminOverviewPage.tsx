@@ -132,6 +132,17 @@ export function AdminOverviewPage({ lang, email, adminRow, previewMode }: Props)
           <KpiPulseCard label={t(lang, "internalStat_paidSubs")} value={data.statGrid.paid} onOpen={() => go("/internal/waka/billing")} />
           <KpiPulseCard label="Devices online" value={data.statGrid.devices} onOpen={() => go("/internal/waka/devices")} />
         </div>
+        {/*
+          The dashboard-metrics RPC failed and these numbers were counted
+          directly instead — which is subject to RLS, so a viewer with district
+          restrictions sees only their own shops. Say so rather than letting a
+          partial number read as the platform total.
+        */}
+        {data.statsPartial ? (
+          <p className="mt-2 text-xs font-semibold text-amber-800" role="status">
+            {t(lang, "internalStatsPartialWarning")}
+          </p>
+        ) : null}
       </section>
 
       <InternalOpsQueuePanels

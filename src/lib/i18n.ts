@@ -7699,6 +7699,14 @@ const en: Dict = {
   internalShopActionConfirmSuspend: "Suspend this shop? They will lose access until reactivated.",
   internalShopActionConfirmLogout: "Sign out all devices on this shop?",
   internalShopActionConfirmCancelSub: "Cancel this subscription?",
+  internalStatsPartialWarning:
+    "Shop totals are incomplete: the dashboard metrics service did not respond, so these were counted directly and are limited to the shops you are allowed to see. The real totals may be higher.",
+  internalShopActionConfirmResetFree:
+    "Reset this shop to the Free plan?\n\n" +
+    "• The subscription is replaced with Free. Any OTHER subscription for this organization that is active, on trial, or past due is cancelled.\n" +
+    "• Active promotional grants are NOT revoked, so the shop may keep using a higher plan until they expire.\n" +
+    "• A manual admin discount, if one is set, is kept.\n" +
+    "• Payment history, sales, inventory and printer records are not affected.",
   internalAgentsGrant: "Grant agent",
   internalAgentsGrantTitle: "Grant field agent",
   internalAgentsGrantHint: "Pick the shop they own. They must already have registered on DKASU (usually with their phone). We link the agent to that shop and generate a referral code.",
@@ -15169,6 +15177,14 @@ const lgBase: Dict = {
   internalShopActionConfirmSuspend: "Situla dduuka lino? Tebalifuna mukisa okutuusa lwe balizzawo.",
   internalShopActionConfirmLogout: "Ggya abakozesa bonna ku dduuka lino?",
   internalShopActionConfirmCancelSub: "Sazaamu okwewandiisa kuno?",
+  internalStatsPartialWarning:
+    "Omuwendo gw'amatuka tegujjudde: obuweereza bwa dashboard tebwaddamu, kati bibaliddwa butereevu era buli ku matuka go gw'okkirizibwa okulaba. Omuwendo ogwa ddaawe guyinza okuba nga gusinga.",
+  internalShopActionConfirmResetFree:
+    "Okusazaamu edduuka lino ku pulani ya Free?\n\n" +
+    "• Okwewandiisa kusazibwamu ne Free. Okwewandiisa okulala kwonna ku kibiina kino okukyaliwo (active), okwa kugezesa (trial), oba okwa kusasula okwakedde (past due) kusazibwamu.\n" +
+    "• Ebirabo bya pulani (promotional grants) tebiddizibwa, kati edduuka liyinza okukozesa pulani ya waggulu okutuusa lwe bigwa.\n" +
+    "• Ssente ezikkakkanyizibwa (admin discount) zisigala nga ziri.\n" +
+    "• Ebyafaayo by'okusasula, ebyamaguzi, ebintu na printer tebikyusibwa.",
   internalAgentsGrant: "Grant agent",
   internalAgentsGrantTitle: "Grant field agent",
   internalAgentsGrantHint: "Londa edduuka lye. Alina okuba nga yawandiise ku DKASU (okusingira n'essimu). Tugatta agent ku dduuka lino era tukola code.",

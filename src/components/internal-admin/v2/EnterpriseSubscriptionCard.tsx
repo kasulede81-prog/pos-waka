@@ -326,15 +326,27 @@ export function EnterpriseSubscriptionCard({
               </button>
             </>
           ) : null}
+          {/*
+            Reset to Free — CONFIRMED, like Cancel, and gated on the broader
+            grant flag (`disabled`), which is what the RPC really allows.
+
+            The dialog carries the two side effects an operator cannot see from
+            this screen: active promotional grants are NOT revoked (so the shop
+            can keep using a higher EFFECTIVE plan — `shop_effective_plan_code`
+            resolves a grant above the subscription's base tier), and a manual
+            admin discount is retained rather than cleared. Both are deliberate;
+            see 20261013120100_admin_reset_to_free_normalise_interval.sql.
+          */}
           <button
             type="button"
             disabled={disabled}
             className={btn}
-            onClick={() =>
+            onClick={() => {
+              if (!window.confirm(t(lang, "internalShopActionConfirmResetFree"))) return;
               void runEngine("reset", () =>
                 subscriptionEngine.resetToFree({ shopId, reason: reason || "Admin reset to free" }),
-              )
-            }
+              );
+            }}
           >
             {t(lang, "billingResetFree")}
           </button>

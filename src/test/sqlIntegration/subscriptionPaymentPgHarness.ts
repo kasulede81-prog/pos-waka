@@ -95,6 +95,14 @@ const MIGRATION_CHAIN = [
   // and the inventory re-declared with display names. Supersedes
   // internal_ops_printer_inventory, so it must land after the file above.
   join(MIGRATIONS_DIR, "20261013110000_printer_read_rpcs.sql"),
+  // Reset-to-Free hygiene (2026-10-13): re-declares
+  // `admin_shop_set_subscription_plan` so the Free branch normalises
+  // `billing_interval` to 'month'. Supersedes 043's body, so it lands after it.
+  join(MIGRATIONS_DIR, "20261013120100_admin_reset_to_free_normalise_interval.sql"),
+  // ...and the consequence: with the interval normalised, a Free shop's refusal
+  // must still be explained as a PLAN problem, so the reason test asks about the
+  // plan before the interval. Supersedes the eligibility preview from 110000.
+  join(MIGRATIONS_DIR, "20261013120200_printer_eligibility_reason_prefers_plan.sql"),
 ];
 
 function readSql(path: string): string {

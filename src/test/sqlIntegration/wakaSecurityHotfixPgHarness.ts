@@ -17,6 +17,12 @@ const MIGRATION_185 = join(ROOT, "185_account_deletion_wrapper_anon_revoke.sql")
 const MIGRATION_186 = join(ROOT, "186_sales_status_stock_drop_legacy_reverse.sql");
 const MIGRATION_187 = join(ROOT, "187_internal_ops_search_shops.sql");
 const MIGRATION_188 = join(ROOT, "188_internal_ops_shop_sale_returns_voids_expenses.sql");
+// Re-declares internal_ops_search_shops with organization-name and owner
+// business-name matching. Applied AFTER 187, which is what production has.
+const MIGRATION_SEARCH_ORG_NAME = join(
+  ROOT,
+  "20261013120000_internal_ops_search_shops_org_name.sql",
+);
 
 function readSql(path: string): string {
   return readFileSync(path, "utf8");
@@ -510,6 +516,15 @@ export async function seedWakaSecurityCatalog(exec: SqlExec): Promise<void> {
 
 export async function applyWakaInternalOpsSearchShops(exec: SqlExec): Promise<void> {
   await exec.exec(readSql(MIGRATION_187));
+}
+
+/**
+ * Bring the search RPC up to the current production shape: 187 plus the
+ * org-name / business-name re-declaration. Kept separate from the 187 applier so
+ * the migration-187 suite keeps testing exactly what 187 ships.
+ */
+export async function applyInternalOpsSearchShopsOrgName(exec: SqlExec): Promise<void> {
+  await exec.exec(readSql(MIGRATION_SEARCH_ORG_NAME));
 }
 
 export async function applyWakaInternalOpsShopLedgers(exec: SqlExec): Promise<void> {

@@ -54,6 +54,14 @@ export type InternalDashboardStats = {
   /** Support requests in open or in_progress. */
   openSupportTickets: number;
   salesTotalUgx: number | null;
+  /**
+   * True when these counts came from the RLS-bound FALLBACK queries rather than
+   * `internal_ops_dashboard_metrics`. The fallback reads `shops` as the caller,
+   * so a viewer with district restrictions (field_agent) sees only their own
+   * shops — the number is then a floor, not a total, and the UI must say so
+   * instead of presenting it as the definitive count.
+   */
+  countsArePartial?: boolean;
   shopsByDistrict: { label: string; count: number }[];
   latestSignups: LatestSignupCard[];
 };
@@ -165,6 +173,20 @@ export async function internalAdminUpdateRoleAndDistricts({
   });
   if (error) return { ok: false, message: error.message };
   return { ok: true };
+}
+
+/**
+ * Render the shop total for the KPI tile.
+ *
+ * A count that came from the RLS-bound fallback is a FLOOR, not a total, so it
+ * is marked "80+" rather than being shown as a bare "80" the operator would read
+ * as the platform's real shop count. The accompanying caveat line explains it;
+ * this marker is the second signal, not the only one.
+ */
+export function formatTotalShops(
+  stats: Pick<InternalDashboardStats, "totalShops" | "countsArePartial">,
+): string {
+  return stats.countsArePartial ? `${stats.totalShops}+` : String(stats.totalShops);
 }
 
 function parseMetricsRpcPayload(raw: unknown): InternalDashboardStats | null {
@@ -326,6 +348,11 @@ export async function fetchInternalDashboardStats(): Promise<FetchInternalDashbo
   return {
     ok: true,
     stats: {
+      // The dashboard RPC failed, so these were counted as the caller against
+      // RLS. Any internal role except field_agent sees every shop, but a
+      // field_agent sees only their assigned districts — so this is a lower
+      // bound for them and must never be rendered as the plain total.
+      countsArePartial: true,
       totalShops: shopsAll.count ?? 0,
       activeToday: shopsActive.count ?? 0,
       shopsOnlineNow: shopsOnlineNow.error ? (shopsActive.count ?? 0) : (shopsOnlineNow.count ?? 0),

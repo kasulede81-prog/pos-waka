@@ -62,6 +62,28 @@ describe("the four narrowed gates are actually used", () => {
     }
   });
 
+  it("Reset to Free confirms first, and the copy names the grant caveat", () => {
+    const at = card.indexOf('runEngine("reset"');
+    expect(at).toBeGreaterThan(-1);
+    // The guard sits immediately before the mutation, not somewhere else in the
+    // component — Reset to Free replaces the organization's subscription on one
+    // click and previously had no confirmation at all.
+    const before = card.slice(Math.max(0, at - 400), at);
+    expect(before).toContain("window.confirm");
+    expect(before).toContain("internalShopActionConfirmResetFree");
+
+    // The dialog is only useful if it says the two things an operator cannot see
+    // from the screen: the reset happens, and grants survive it.
+    const i18n = read("../lib/i18n.ts");
+    const key = i18n.indexOf("internalShopActionConfirmResetFree:");
+    expect(key).toBeGreaterThan(-1);
+    const copy = i18n.slice(key, key + 900);
+    expect(copy).toMatch(/Free plan/i);
+    expect(copy).toMatch(/promotional grants are NOT revoked/i);
+    // ...and it must not promise the opposite.
+    expect(copy).not.toMatch(/grants (are|will be) revoked/i);
+  });
+
   it("the shop console's lifecycle actions are separated from mark-paid", () => {
     expect(shopPage).toContain("canSubsLifecycle");
     const block = shopPage.slice(shopPage.indexOf("if (subId && canSubs)"), shopPage.indexOf("if (canSubs) {"));
