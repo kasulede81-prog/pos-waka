@@ -331,3 +331,49 @@ describe("the merchant's printer section always tells them what to do next", () 
     expect(panel).not.toMatch(/requests\.length > 0 \?[\s\S]{0,200}return null/);
   });
 });
+
+/**
+ * THE UPGRADE CENTRE MUST CARRY THE OFFER TOO.
+ *
+ * The panel shipped mounted only through `AccountSubscriptionCenter`, so a
+ * signed-in merchant browsing plans on /upgrade saw prices and no printer offer
+ * at all — the one screen where someone is actively choosing Business yearly
+ * was the one screen that did not mention the free printer. Nothing failed; the
+ * component simply was not mounted there.
+ */
+describe("the upgrade centre mounts the printer panel", () => {
+  const upgrade = read("src/pages/UpgradePage.tsx");
+
+  it("imports the EXISTING panel rather than a second implementation", () => {
+    expect(upgrade).toContain(
+      'import { PrinterPromotionPanel } from "../components/subscription/PrinterPromotionPanel"',
+    );
+    // One component, two mount points — they cannot drift.
+    const mounts = (read("src/components/subscription/AccountSubscriptionCenter.tsx") + upgrade)
+      .match(/<PrinterPromotionPanel/g) ?? [];
+    expect(mounts.length).toBe(2);
+  });
+
+  it("renders it under the SAME guard the account page uses", () => {
+    expect(upgrade).toContain(
+      '{shopId && authMode === "supabase" ? <PrinterPromotionPanel lang={lang} shopId={shopId} /> : null}',
+    );
+  });
+
+  it("uses the shopId and authMode it ALREADY has, without new plumbing", () => {
+    // Both come from the existing useSubscription() call — no new hook, no prop.
+    expect(upgrade).toContain("useSubscription()");
+    expect(upgrade).toMatch(/const shopId = snapshot\.kind === "remote" && snapshot\.row\.shop_id/);
+    // It must not invent its own subscription source.
+    expect(upgrade).not.toMatch(/rpc\("my_org_printer_status"/);
+  });
+
+  it("sits directly beneath the yearly plans section", () => {
+    const yearly = upgrade.indexOf("upgradeYearlyTitle");
+    const mount = upgrade.indexOf("<PrinterPromotionPanel");
+    const back = upgrade.indexOf('to="/pilot-support"');
+    expect(yearly).toBeGreaterThan(-1);
+    expect(mount).toBeGreaterThan(yearly);
+    expect(back).toBeGreaterThan(mount);
+  });
+});

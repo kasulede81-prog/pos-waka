@@ -21,6 +21,7 @@ import {
 } from "../lib/subscriptionEntitlements";
 import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
 import { CheckoutFlow } from "../components/subscription/CheckoutFlow";
+import { PrinterPromotionPanel } from "../components/subscription/PrinterPromotionPanel";
 import { WakaButton } from "../components/ui/wakaPrimitives";
 import type { CheckoutCycle } from "../lib/paymentCheckout";
 
@@ -332,6 +333,22 @@ export function UpgradePage({ lang }: { lang: Language }) {
         */}
         <AnnualIntervalNote lang={lang} className="text-waka-900" />
       </section>
+
+      {/*
+        THE FREE PRINTER OFFER BELONGS HERE, directly under the yearly prices —
+        the reader has just seen the plan it comes with.
+
+        THE SAME COMPONENT, NOT A SECOND ONE. It is the panel already mounted on
+        the account page, so the two surfaces cannot drift apart, and all
+        eligibility stays server-derived (`my_org_printer_status` →
+        `_printer_promotion_eligible`). This page decides nothing.
+
+        `shopId` and `authMode` come from the `useSubscription()` call above —
+        the identical values, resolved the identical way, that
+        `AccountSubscriptionCenter` uses. When there is no shop to ask about the
+        line renders null, exactly as it does there.
+      */}
+      {shopId && authMode === "supabase" ? <PrinterPromotionPanel lang={lang} shopId={shopId} /> : null}
 
       <Link
         to="/pilot-support"
