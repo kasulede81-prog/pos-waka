@@ -36,6 +36,19 @@ import { enterpriseTypeClass } from "../../lib/enterpriseTypography";
 type Props = {
   lang: Language;
   shopId: string;
+  /**
+   * Set when this panel is rendered BY /upgrade itself.
+   *
+   * Every outbound link in this panel points at something /upgrade now carries
+   * on the page — the offer, the in-app upgrade button, the setup and pickup
+   * steps. Left as-is they become links that look actionable and go nowhere
+   * useful, which is exactly the detour the redesign removes. So on /upgrade
+   * they are dropped and the page's own controls do the work.
+   *
+   * Default `false`: /office/account passes nothing and keeps every link, which
+   * is what that surface needs.
+   */
+  onUpgradePage?: boolean;
 };
 
 function fmtDate(iso: string | null | undefined): string {
@@ -43,7 +56,7 @@ function fmtDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export function PrinterPromotionPanel({ lang, shopId }: Props) {
+export function PrinterPromotionPanel({ lang, shopId, onUpgradePage = false }: Props) {
   const [status, setStatus] = useState<CustomerPrinterStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -209,20 +222,29 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
             {ELIGIBILITY_REASON_LABELS[status.reason ?? ""] ?? t(lang, "printerNotEligible")}
           </p>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-            <Link
-              to="/business-printer"
-              className="inline-flex min-h-[44px] items-center text-sm font-bold text-waka-700 underline underline-offset-2"
-            >
-              {t(lang, "printerSeeOffer")}
-            </Link>
-            <Link
-              to="/upgrade"
-              className="inline-flex min-h-[44px] items-center text-sm font-bold text-waka-700 underline underline-offset-2"
-            >
-              {t(lang, "printerSeeBusinessAnnual")}
-            </Link>
-          </div>
+          {/*
+            ON /upgrade NEITHER LINK BELONGS. The offer is the page the merchant
+            is already reading, and the in-app upgrade is the button directly
+            above this panel — so both would look actionable and do nothing. On
+            /office/account both are genuinely useful and stay exactly as they
+            were.
+          */}
+          {onUpgradePage ? null : (
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              <Link
+                to="/business-printer"
+                className="inline-flex min-h-[44px] items-center text-sm font-bold text-waka-700 underline underline-offset-2"
+              >
+                {t(lang, "printerSeeOffer")}
+              </Link>
+              <Link
+                to="/upgrade"
+                className="inline-flex min-h-[44px] items-center text-sm font-bold text-waka-700 underline underline-offset-2"
+              >
+                {t(lang, "printerSeeBusinessAnnual")}
+              </Link>
+            </div>
+          )}
         </div>
       ) : null}
 
@@ -251,22 +273,30 @@ export function PrinterPromotionPanel({ lang, shopId }: Props) {
       ) : null}
 
       {/*
-        ALWAYS RENDERED, IN EVERY STATE. The offer page carries the setup video,
-        the branch-pickup steps and the WhatsApp route, so it is the one link a
-        merchant needs whatever their eligibility or request state. It is also
-        what keeps this section useful to an ineligible account rather than a
-        dead end. Setup and pickup live here so the offer, the eligibility line
-        and the collection instructions read as one section.
+        THE JOURNEY-AND-SETUP BLOCK, ON /office/account ONLY.
+
+        There it is what keeps an ineligible account from being a dead end — it
+        never depends on eligibility — and its link is the route to the setup
+        video and the pickup steps.
+
+        On /upgrade it is DROPPED ENTIRELY, not just its link: the page renders
+        that same journey inline a few hundred pixels above this panel, so
+        repeating it here would say the same thing twice in two different shapes.
+        What is left on /upgrade is what this panel is uniquely good for —
+        account-backed eligibility, the printer the merchant already holds, and
+        the real collection actions.
       */}
-      <div className="mt-3 rounded-xl border border-border bg-surface-muted/60 px-3 py-2.5">
-        <p className={enterpriseTypeClass("caption")}>{t(lang, "printerSetupSectionTitle")}</p>
-        <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "printerSetupSectionBody")}</p>
-        <p className="mt-2 text-xs font-semibold">
-          <Link to="/business-printer" className="text-waka-700 underline underline-offset-2">
-            {t(lang, "printerSetupInstructions")}
-          </Link>
-        </p>
-      </div>
+      {onUpgradePage ? null : (
+        <div className="mt-3 rounded-xl border border-border bg-surface-muted/60 px-3 py-2.5">
+          <p className={enterpriseTypeClass("caption")}>{t(lang, "printerSetupSectionTitle")}</p>
+          <p className="mt-1 text-xs font-medium text-muted-foreground">{t(lang, "printerSetupSectionBody")}</p>
+          <p className="mt-2 text-xs font-semibold">
+            <Link to="/business-printer" className="text-waka-700 underline underline-offset-2">
+              {t(lang, "printerSetupInstructions")}
+            </Link>
+          </p>
+        </div>
+      )}
 
       <p className="mt-2 text-[11px] text-muted-foreground">{t(lang, "printerRequestNotReservation")}</p>
     </article>

@@ -114,9 +114,16 @@ describe("the note is placed with the annual price, in both surfaces", () => {
     expect(pricingPage.slice(annualStart)).toContain("showIntervalNote");
   });
 
-  it("the upgrade page puts it inside the yearly card, once for all three plans", () => {
+  it("the upgrade page puts it inside the Business card, exactly once", () => {
+    /*
+      The upgrade centre no longer renders a three-plan yearly comparison — it
+      makes ONE offer (Business billed yearly). The note still belongs with the
+      annual price, so it now lives in that single card, and the property this
+      test has always protected is unchanged: one note for one annual offer,
+      inside the card rather than stranded after it.
+    */
     const upgradePage = read("src/pages/UpgradePage.tsx");
-    const yearlyCard = upgradePage.slice(upgradePage.indexOf("upgradeYearlyTitle"));
+    const yearlyCard = upgradePage.slice(upgradePage.indexOf('aria-labelledby="upgrade-business-heading"'));
 
     const note = yearlyCard.indexOf("<AnnualIntervalNote");
     expect(note, "the yearly card renders the note").toBeGreaterThan(-1);

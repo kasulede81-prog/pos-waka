@@ -13,7 +13,6 @@ import { pricingForPlan, type PaidPlanCode } from "../lib/subscriptionPricing";
 import {
   getPaidPlanRenewalCountdown,
   resolveEffectivePlanTier,
-  shouldShowFreeUpgradePitch,
   type SubscriptionPlanCode,
 } from "../lib/subscriptionEntitlements";
 import { fetchMyOrgBillingOffers, type OrgBillingOfferRow } from "../lib/orgBillingOffers";
@@ -23,14 +22,8 @@ import { WakaButton } from "../components/ui/wakaPrimitives";
 import { HorizontalTabBar } from "../components/shared/HorizontalTabBar";
 import { enterpriseTypeClass } from "../lib/enterpriseTypography";
 import type { CheckoutCycle } from "../lib/paymentCheckout";
-
-const PLAN_ORDER: SubscriptionPlanCode[] = ["free", "starter", "business", "waka_plus"];
-
-const PAID_ANNUAL: { plan: SubscriptionPlanCode; annualKey: string; saveKey: string }[] = [
-  { plan: "starter", annualKey: "planStarterAnnual", saveKey: "planStarterAnnualSave" },
-  { plan: "business", annualKey: "planBusinessAnnual", saveKey: "planBusinessAnnualSave" },
-  { plan: "waka_plus", annualKey: "planWakaPlusAnnual", saveKey: "planWakaPlusAnnualSave" },
-];
+import { publicAssetUrl } from "../lib/publicAssetUrl";
+import { formatUgx } from "../lib/subscriptionPricing";
 
 function planLabelKey(plan: SubscriptionPlanCode): string {
   if (plan === "free") return "planFreeName";
@@ -39,35 +32,14 @@ function planLabelKey(plan: SubscriptionPlanCode): string {
   return "planWakaPlusName";
 }
 
-function planPriceKey(plan: SubscriptionPlanCode): string {
-  if (plan === "free") return "planFreePrice";
-  if (plan === "starter") return "planStarterPrice";
-  if (plan === "business") return "planBusinessPrice";
-  return "planWakaPlusPrice";
-}
-
 function isPaidPlan(plan: SubscriptionPlanCode): plan is PaidPlanCode {
   return plan !== "free";
-}
-
-function planTextKey(plan: SubscriptionPlanCode, suffix: "blurb" | "features" | "goodFor" | "note" | "cta"): string {
-  const prefix = plan === "waka_plus" ? "wakaPlus" : plan;
-  return `${prefix}_${suffix}`;
-}
-
-/** Short highlight list — the scan-friendly subset of the full feature string. */
-function planBulletsKey(plan: SubscriptionPlanCode): string {
-  if (plan === "free") return "free_features";
-  if (plan === "starter") return "starter_bullets";
-  if (plan === "business") return "business_bullets";
-  return "waka_plus_bullets";
 }
 
 export function UpgradePage({ lang }: { lang: Language }) {
   const { snapshot, authMode, loading, refetch } = useSubscription();
   const { pricing, loading: pricingLoading } = usePublicPricing();
   const current = resolveEffectivePlanTier(snapshot);
-  const showFreePitch = shouldShowFreeUpgradePitch(snapshot);
   const effective = useMemo(() => resolveEffectiveSubscription(snapshot), [snapshot]);
   const isBusinessTrial = effective.isTrial && effective.planCode === "business";
   const trialDaysRemaining = effective.daysRemaining;
@@ -76,12 +48,14 @@ export function UpgradePage({ lang }: { lang: Language }) {
   const [checkoutPlan, setCheckoutPlan] = useState<SubscriptionPlanCode | null>(null);
   const [checkoutCycle, setCheckoutCycle] = useState<CheckoutCycle>("monthly");
   const checkoutTriggerRef = useRef<HTMLElement | null>(null);
-  // Monthly is the default scan path; yearly stays one tap away and is also
-  // summarized in its own section below, where the free printer lives.
-  const [billingView, setBillingView] = useState<"monthly" | "yearly">("monthly");
-  const [expandedPlans, setExpandedPlans] = useState<Record<string, boolean>>({});
+  // YEARLY IS THE OFFER. It carries the printer, so it is what the page opens
+  // on; monthly stays a tap away as the quieter alternative.
+  const [billingView, setBillingView] = useState<"monthly" | "yearly">("yearly");
   // Shop pinned at checkout start; the server keeps the payment bound to it.
   const shopId = snapshot.kind === "remote" && snapshot.row.shop_id ? snapshot.row.shop_id : null;
+  // Live prices from the same book checkout charges from. Never hardcoded.
+  const businessPrice = pricingForPlan(pricing, "business");
+  const businessMonthly = pricingLoading ? null : businessPrice;
 
   const openCheckout = useCallback(
     (nextPlan: SubscriptionPlanCode, cycle: CheckoutCycle, trigger?: HTMLElement | null) => {
@@ -112,14 +86,6 @@ export function UpgradePage({ lang }: { lang: Language }) {
     return () => window.removeEventListener("waka:subscription-updated", on);
   }, [authMode, refetch]);
 
-  const whyRows: { q: string; plan: string }[] = [
-    { q: t(lang, "upgradeWhyMoreProducts"), plan: t(lang, "upgradeWhyMoreProductsPlan") },
-    { q: t(lang, "upgradeWhyBackup"), plan: t(lang, "upgradeWhyBackupPlan") },
-    { q: t(lang, "upgradeWhyStaff"), plan: t(lang, "upgradeWhyStaffPlan") },
-    { q: t(lang, "upgradeWhyDevices"), plan: t(lang, "upgradeWhyDevicesPlan") },
-    { q: t(lang, "upgradeWhyPlus"), plan: t(lang, "upgradeWhyPlusPlan") },
-  ];
-
   return (
     <EnterprisePageContainer className="space-y-4 sm:space-y-6">
       <PageBackBar lang={lang} fallbackTo="/settings/account" label={t(lang, "officeCardAccount")} />
@@ -128,11 +94,17 @@ export function UpgradePage({ lang }: { lang: Language }) {
         Page header — same gradient family as the rest of the signed-in app, but
         tighter than the marketing hero so this still reads as a POS screen.
       */}
-      <header className="rounded-[1.75rem] bg-gradient-to-br from-waka-600 to-waka-500 px-5 py-6 text-white shadow-sm sm:px-7">
-        <p className="text-xs font-bold uppercase tracking-[0.22em] text-waka-100">{t(lang, "wakaSlogan")}</p>
-        <h1 className={enterpriseTypeClass("display", "mt-2 text-white")}>{t(lang, "upgradeTitle")}</h1>
-        <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-waka-50 sm:text-base">
-          {t(lang, "upgradeSub")}
+      {/*
+        ONE OFFER, STATED ONCE. The page used to open with a full-width gradient
+        hero and then ask the reader to compare four plans — so the one thing
+        this page exists to sell (Business yearly, with the printer) was the
+        fourth thing they read. The heading now names the offer, and the card
+        below it is the offer.
+      */}
+      <header>
+        <h1 className={enterpriseTypeClass("display")}>{t(lang, "upgradeBusinessHeading")}</h1>
+        <p className="mt-2 max-w-2xl text-base font-medium leading-relaxed text-muted-foreground">
+          {t(lang, "upgradeBusinessSubtitle")}
         </p>
       </header>
 
@@ -146,13 +118,12 @@ export function UpgradePage({ lang }: { lang: Language }) {
       {!loading && authMode === "supabase" ? (
         <section
           aria-labelledby="upgrade-current-plan-heading"
-          className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5"
+          className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm"
         >
-          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-            {t(lang, "upgradeCurrentLabel")}
-          </p>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <h2 id="upgrade-current-plan-heading" className={enterpriseTypeClass("pageTitle")}>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+            <p className="text-sm font-semibold text-muted-foreground">{t(lang, "upgradeCurrentLabel")}</p>
+            <h2 id="upgrade-current-plan-heading" className="text-sm font-black text-foreground">
               {isBusinessTrial ? t(lang, "officePremiumBusinessTrialPlan") : t(lang, planLabelKey(current))}
             </h2>
             {effective.promotionalGrant ? (
@@ -216,152 +187,90 @@ export function UpgradePage({ lang }: { lang: Language }) {
         </section>
       ) : null}
 
-      {!loading && showFreePitch ? (
-        <section className="rounded-2xl border border-border bg-muted p-4 shadow-sm sm:p-5">
-          <h2 className={enterpriseTypeClass("sectionTitle")}>{t(lang, "upgradeWhyTitle")}</h2>
-          <ul className="mt-3 space-y-2">
-            {whyRows.map((row) => (
-              <li key={row.q} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                <span className="font-medium text-muted-foreground">{row.q}</span>
-                <span className="font-bold text-waka-800">→ {row.plan}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
       {/* --- plans -------------------------------------------------------- */}
-      <section aria-labelledby="upgrade-plans-heading" className="space-y-4">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+      {/*
+        THE OFFER. Business billed yearly, priced from the live book, with the
+        printer as PART of it rather than a detached promotion. Monthly is a
+        real option and stays one tap away, but it is the quieter one because
+        the printer offer is yearly-only - and that is stated plainly rather
+        than left to be inferred from two competing cards.
+      */}
+      <section
+        aria-labelledby="upgrade-business-heading"
+        className="rounded-[1.75rem] border-2 border-waka-300 bg-card p-4 shadow-sm sm:p-6"
+      >
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
           <div>
-            <h2 id="upgrade-plans-heading" className={enterpriseTypeClass("sectionTitle")}>
-              {t(lang, "upgradePickTitle")}
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-waka-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-waka-900">
+                {t(lang, "upgradeBusinessYearlyBadge")}
+              </span>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-amber-900">
+                {t(lang, "upgradePrinterBadge")}
+              </span>
+            </div>
+
+            <h2 id="upgrade-business-heading" className={enterpriseTypeClass("pageTitle", "mt-3")}>
+              {t(lang, "upgradeBusinessCardTitle")}
             </h2>
-            <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "upgradeCycleHint")}</p>
+            <p className="mt-2 text-sm font-medium leading-relaxed text-muted-foreground">
+              {t(lang, "upgradeBusinessCardBody")}
+            </p>
+
+            <div className="mt-5 min-h-[72px]">
+              {businessPrice && !pricingLoading ? (
+                <PlanPriceDisplay
+                  price={businessPrice}
+                  interval={billingView === "yearly" ? "year" : "month"}
+                  lang={lang}
+                />
+              ) : (
+                <p className="text-2xl font-black text-muted-foreground">
+                  {pricingLoading ? t(lang, "billingLoading") : t(lang, "upgradePriceUnavailable")}
+                </p>
+              )}
+            </div>
+
+            <HorizontalTabBar
+              ariaLabel={t(lang, "upgradeCycleTabsLabel")}
+              activeId={billingView}
+              onChange={(id) => setBillingView(id === "yearly" ? "yearly" : "monthly")}
+              tabs={[
+                { id: "yearly", label: t(lang, "checkoutAnnual") },
+                { id: "monthly", label: t(lang, "checkoutMonthly") },
+              ]}
+              className="mt-3 max-w-full"
+            />
+            {billingView === "monthly" ? (
+              <p className="mt-2 text-xs font-semibold text-amber-900">{t(lang, "upgradeMonthlyNoPrinter")}</p>
+            ) : null}
+
+            <WakaButton
+              type="button"
+              onClick={(event) =>
+                openCheckout("business", billingView === "yearly" ? "yearly" : "monthly", event.currentTarget)
+              }
+              className="mt-4 w-full min-h-[52px]"
+            >
+              {billingView === "yearly" ? t(lang, "upgradeChooseYearly") : t(lang, "upgradeChooseMonthly")}
+            </WakaButton>
+            <p className="mt-2 text-xs font-semibold leading-relaxed text-muted-foreground">
+              {t(lang, "upgradeYearlyRequirement")}
+            </p>
+            <AnnualIntervalNote lang={lang} className="mt-3 text-muted-foreground" />
           </div>
-          <HorizontalTabBar
-            ariaLabel={t(lang, "upgradeCycleTabsLabel")}
-            activeId={billingView}
-            onChange={(id) => setBillingView(id === "yearly" ? "yearly" : "monthly")}
-            tabs={[
-              { id: "monthly", label: t(lang, "checkoutMonthly") },
-              { id: "yearly", label: t(lang, "checkoutAnnual") },
-            ]}
-            className="max-w-full"
-          />
+
+          <div>
+            <img
+              src={publicAssetUrl("brand/waka-printer/wp58-hero.webp")}
+              alt={t(lang, "upgradePrinterImageAlt")}
+              loading="lazy"
+              className="w-full rounded-2xl border border-border bg-black object-cover"
+            />
+            <p className="mt-3 text-base font-black text-foreground">{t(lang, "upgradeMeetPrinter")}</p>
+            <p className="mt-1 text-xs font-semibold text-muted-foreground">{t(lang, "upgradePrinterSpecs")}</p>
+          </div>
         </div>
-
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {PLAN_ORDER.map((plan) => {
-            const isCurrent = plan === current;
-            const isPaid = plan !== "free";
-            const expanded = expandedPlans[plan] === true;
-            const bulletSource = t(lang, planBulletsKey(plan));
-            const fullFeatures = t(lang, planTextKey(plan, "features"));
-            const bullets = bulletSource.split("|").filter(Boolean);
-            const extraFeatures = fullFeatures
-              .split("|")
-              .filter((line) => line && !bullets.includes(line));
-            const visibleBullets = expanded ? [...bullets, ...extraFeatures] : bullets.slice(0, 4);
-            const hiddenCount = bullets.length + extraFeatures.length - visibleBullets.length;
-            const showYearlyPrice = billingView === "yearly" && isPaid;
-            return (
-              <li
-                key={plan}
-                className={`flex flex-col rounded-2xl border p-4 shadow-sm sm:p-5 ${
-                  isCurrent ? "border-waka-500 bg-waka-50/80" : "border-border bg-card"
-                }`}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-lg font-bold text-foreground">{t(lang, planLabelKey(plan))}</p>
-                    {isPaid && !pricingLoading ? (
-                      <div className="mt-1">
-                        <PlanPriceDisplay
-                          price={pricingForPlan(pricing, plan)}
-                          interval={showYearlyPrice ? "year" : "month"}
-                          size="sm"
-                        />
-                      </div>
-                    ) : (
-                      <p className="mt-1 text-xl font-bold text-waka-700">{t(lang, planPriceKey(plan))}</p>
-                    )}
-                    {isPaid && !pricingLoading && billingView === "monthly" ? (
-                      <p className="mt-1 text-xs font-semibold text-muted-foreground">
-                        {tTemplate(lang, "upgradeOrYearly", {
-                          price: pricingForPlan(pricing, plan).finalAnnualUgx.toLocaleString("en-UG"),
-                        })}
-                      </p>
-                    ) : null}
-                    <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, planTextKey(plan, "blurb"))}</p>
-                  </div>
-                  {isCurrent ? (
-                    <span className="rounded-full bg-waka-600 px-3 py-1 text-xs font-bold text-white">
-                      {t(lang, "upgradeCurrentBadge")}
-                    </span>
-                  ) : null}
-                </div>
-
-                {/*
-                  Scan-first features: a short highlight list on the card, with the
-                  full marketing list one disclosure away — never deleted, just
-                  out of the first glance.
-                */}
-                <div className="mt-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-                    {t(lang, "upgradeFeaturesLabel")}
-                  </p>
-                  <ul className="mt-1.5 space-y-1.5 text-sm font-medium text-muted-foreground">
-                    {visibleBullets.map((line) => (
-                      <li key={line} className="flex gap-2">
-                        <span aria-hidden className="text-waka-600">
-                          ✓
-                        </span>
-                        <span>{line}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  {hiddenCount > 0 || expanded ? (
-                    <button
-                      type="button"
-                      aria-expanded={expanded}
-                      onClick={() =>
-                        setExpandedPlans((prev) => ({ ...prev, [plan]: !expanded }))
-                      }
-                      className="mt-2 min-h-[44px] text-sm font-bold text-waka-700 underline underline-offset-2"
-                    >
-                      {expanded ? t(lang, "upgradeHideFeatures") : tTemplate(lang, "upgradeShowFeatures", { count: String(hiddenCount) })}
-                    </button>
-                  ) : null}
-                </div>
-
-                <div className="mt-3 rounded-xl bg-muted px-3 py-2.5 text-xs text-muted-foreground">
-                  <p className="font-semibold text-foreground">{t(lang, "upgradeGoodForLabel")}</p>
-                  <p className="mt-0.5 font-medium">{t(lang, planTextKey(plan, "goodFor"))}</p>
-                  {/* One limits line: `*_note` already carries devices, users and
-                      the product cap. Repeating the same numbers here is the
-                      wall-of-text this card is meant to avoid. */}
-                  <p className="mt-1.5 font-semibold">{t(lang, planTextKey(plan, "note"))}</p>
-                </div>
-
-                {isPaid ? (
-                  <WakaButton
-                    type="button"
-                    id={`plan-select-${plan}`}
-                    onClick={(event) =>
-                      openCheckout(plan, billingView === "yearly" ? "yearly" : "monthly", event.currentTarget)
-                    }
-                    className="mt-4 w-full min-h-[48px]"
-                  >
-                    {t(lang, isCurrent ? "checkoutRenew" : "checkoutSelect")}
-                  </WakaButton>
-                ) : (
-                  <div className="mt-4 min-h-[48px]" />
-                )}
-              </li>
-            );
-          })}
-        </ul>
       </section>
 
       {checkoutPlan && isPaidPlan(checkoutPlan) ? (
@@ -383,78 +292,50 @@ export function UpgradePage({ lang }: { lang: Language }) {
         offer are one story: the printer is a benefit of Business billed yearly,
         so it sits on that option rather than in a detached promo card.
       */}
+      {/*
+        THE JOURNEY, ON THE PAGE. "How do I actually get it?" used to leave
+        /upgrade entirely. These four steps are the real sequence the server
+        enforces, and the link at the end scrolls to the live panel below rather
+        than to another page. Nothing here promises a printer: step 3 says the
+        options APPEAR when eligible and step 4 says the team RECORDS the
+        handover - statements of process, not of outcome.
+      */}
       <section
-        aria-labelledby="upgrade-yearly-heading"
-        className="overflow-hidden rounded-2xl border-2 border-waka-200 bg-waka-50/90 shadow-sm"
+        aria-labelledby="upgrade-printer-journey-heading"
+        className="rounded-[1.75rem] border border-border bg-card p-4 shadow-sm sm:p-6"
       >
-        <div className="border-b border-waka-200/80 px-4 py-4 sm:px-5">
-          <h2 id="upgrade-yearly-heading" className={enterpriseTypeClass("sectionTitle", "text-waka-950")}>
-            {t(lang, "upgradeYearlyTitle")}
-          </h2>
-          <p className="mt-1 text-sm font-semibold text-waka-900">{t(lang, "upgradeYearlySub")}</p>
-          {/* Plan-wide discount: the prices below already include it. An account's
-              own discount is separate and private, so it is not described here. */}
-          {pricing.globalDiscountActive ? (
-            <p className="mt-2 text-sm font-bold text-waka-950">
-              A discount is currently applied to these plan prices.
-            </p>
-          ) : null}
-        </div>
+        <h2 id="upgrade-printer-journey-heading" className={enterpriseTypeClass("sectionTitle")}>
+          {t(lang, "upgradeJourneyTitle")}
+        </h2>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "upgradeJourneySub")}</p>
 
-        <div className="grid gap-3 px-4 py-4 sm:px-5 lg:grid-cols-3">
-          {PAID_ANNUAL.map(({ plan, annualKey, saveKey }) => {
-            const price = isPaidPlan(plan) ? pricingForPlan(pricing, plan) : null;
-            const isBusinessYearly = plan === "business";
-            return (
-              <div
-                key={plan}
-                className={`flex flex-col rounded-2xl border bg-card px-4 py-3 ${
-                  isBusinessYearly ? "border-waka-400 shadow-sm" : "border-waka-200"
-                }`}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-bold text-foreground">{t(lang, planLabelKey(plan))}</p>
-                  {isBusinessYearly ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-waka-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                      {t(lang, "upgradePrinterBadge")}
-                    </span>
-                  ) : null}
-                </div>
-                {price && !pricingLoading ? (
-                  <div className="mt-1">
-                    <PlanPriceDisplay price={price} interval="year" size="sm" />
-                  </div>
-                ) : (
-                  <>
-                    <p className="mt-1 text-lg font-bold text-waka-800">{t(lang, annualKey)}</p>
-                    <p className="mt-1 text-xs font-bold text-emerald-800">{t(lang, saveKey)}</p>
-                  </>
-                )}
-                {isBusinessYearly ? (
-                  <p className="mt-2 rounded-xl border border-waka-200 bg-waka-100/70 px-3 py-2 text-xs font-bold text-waka-950">
-                    {t(lang, "upgradePrinterIncluded")}
-                  </p>
-                ) : null}
-                <WakaButton
-                  type="button"
-                  onClick={(event) => openCheckout(plan, "yearly", event.currentTarget)}
-                  className="mt-3 w-full min-h-[48px]"
-                >
-                  {t(lang, plan === current ? "checkoutRenew" : "checkoutSelect")}
-                </WakaButton>
-              </div>
-            );
-          })}
-        </div>
-        {/*
-          Once for the card, not once per plan: the three yearly prices above are
-          one offer described by one rule, and repeating the sentence under each
-          figure would read as three separate caveats. It is not conditional on a
-          discount being live — it states how the annual price is priced, so it
-          has to be true and legible whether or not a promotion is running.
-        */}
-        <div className="px-4 pb-4 sm:px-5">
-          <AnnualIntervalNote lang={lang} className="text-waka-900" />
+        <ol className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {(["1", "2", "3", "4"] as const).map((n) => (
+            <li key={n}>
+              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-waka-100 text-xs font-black text-waka-900">
+                {`0${n}`}
+              </span>
+              <p className="mt-2 text-sm font-black text-foreground">
+                {t(lang, `upgradeStep${n}Title` as "upgradeStep1Title")}
+              </p>
+              <p className="mt-1 text-xs font-medium leading-relaxed text-muted-foreground">
+                {t(lang, `upgradeStep${n}Body` as "upgradeStep1Body")}
+              </p>
+            </li>
+          ))}
+        </ol>
+
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-emerald-50 px-4 py-3">
+          <div>
+            <p className="text-sm font-black text-emerald-900">{t(lang, "upgradePrinterStatusTitle")}</p>
+            <p className="mt-0.5 text-xs font-medium text-emerald-800">{t(lang, "upgradePrinterStatusBody")}</p>
+          </div>
+          <a
+            href="#printer-status"
+            className="inline-flex min-h-[44px] items-center text-sm font-black text-emerald-900 underline underline-offset-2"
+          >
+            {t(lang, "upgradeCheckStatus")}
+          </a>
         </div>
       </section>
 
@@ -472,7 +353,54 @@ export function UpgradePage({ lang }: { lang: Language }) {
         `AccountSubscriptionCenter` uses. When there is no shop to ask about the
         line renders null, exactly as it does there.
       */}
-      {shopId && authMode === "supabase" ? <PrinterPromotionPanel lang={lang} shopId={shopId} /> : null}
+      {/*
+        THE LIVE PANEL, ANCHORED. Same component as the account page, not a
+        copy, so the two cannot drift; all eligibility stays server-derived
+        (`my_org_printer_status` -> `_printer_promotion_eligible`). This page
+        decides nothing.
+
+        `onUpgradePage` drops the panel's outbound links — the offer, the
+        in-app upgrade and the setup/pickup steps are all carried by this page
+        already, so leaving them would be a detour back to where the reader
+        started.
+      */}
+      <div id="printer-status" className="scroll-mt-24">
+        {shopId && authMode === "supabase" ? (
+          <PrinterPromotionPanel lang={lang} shopId={shopId} onUpgradePage />
+        ) : null}
+      </div>
+
+      {/*
+        MONTHLY IS STATED, NOT SOLD. A real option, with the single thing that
+        changes named outright, and no second card competing with the offer.
+      */}
+      <section className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+        <p className="text-sm font-black text-foreground">{t(lang, "upgradePreferMonthlyTitle")}</p>
+        <p className="mt-1 text-sm font-medium text-muted-foreground">
+          {businessMonthly && !pricingLoading
+            ? tTemplate(lang, "upgradePreferMonthlyBody", { price: formatUgx(businessMonthly.finalMonthlyUgx) })
+            : t(lang, "upgradePrinterYearlyOnly")}
+        </p>
+      </section>
+
+      {/*
+        PLUS IS DEFERRED, NOT HIDDEN. A shop weighing branches is not shopping
+        for a receipt printer, so a collapsed disclosure keeps the plan findable
+        without putting a second comparison in front of everyone else. Its
+        availability and price are untouched; the link goes to the pricing page
+        that already lists every plan.
+      */}
+      <details className="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+        <summary className="cursor-pointer text-sm font-black text-foreground">
+          {t(lang, "upgradePlusDisclosure")}
+        </summary>
+        <p className="mt-2 text-sm font-medium text-muted-foreground">{t(lang, "upgradePlusBody")}</p>
+        <p className="mt-2 text-sm font-semibold">
+          <Link to="/pricing" className="text-waka-700 underline underline-offset-2">
+            {t(lang, "upgradePlusCta")}
+          </Link>
+        </p>
+      </details>
 
       <Link
         to="/pilot-support"

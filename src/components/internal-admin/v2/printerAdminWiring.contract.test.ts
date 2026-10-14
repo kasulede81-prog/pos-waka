@@ -11,7 +11,7 @@
  * wiring is pinned by reading the source — the same approach
  * `liveRefreshWiring.contract.test.ts` takes.
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -299,15 +299,21 @@ describe("the merchant's printer section always tells them what to do next", () 
     expect(panel).toContain('to="/upgrade"');
   });
 
-  it("keeps the setup/pickup link OUTSIDE every conditional, so it renders in all states", () => {
-    const setupAt = panel.indexOf("printerSetupInstructions");
+  it("keeps the setup block off /upgrade, where the page already renders that journey", () => {
+    /*
+      THIS ASSERTION USED TO SAY THE OPPOSITE — that the setup block rendered
+      unconditionally. It has to be gated now: /upgrade renders the same journey
+      inline above the panel, so an ungated block would state it twice. The
+      block still never depends on ELIGIBILITY, which was its original point.
+    */
+    const setupAt = panel.indexOf("printerSetupSectionTitle");
     expect(setupAt).toBeGreaterThan(-1);
-    // It must appear after the last eligibility ternary closes and before the
-    // component returns — i.e. not inside a branch.
-    const ineligibleBranch = panel.indexOf("status && !status.eligible");
-    const requestsBlock = panel.indexOf("status.requests.length > 0");
-    expect(setupAt).toBeGreaterThan(requestsBlock);
-    expect(setupAt).toBeGreaterThan(ineligibleBranch);
+    const gateAt = panel.lastIndexOf("{onUpgradePage ? null : (", setupAt);
+    expect(gateAt, "the setup block is gated").toBeGreaterThan(-1);
+    // Inside that block, and NOT behind an eligibility test.
+    const block = panel.slice(gateAt, panel.indexOf("printerRequestNotReservation", gateAt));
+    expect(block).toContain("printerSetupInstructions");
+    expect(block).not.toMatch(/status\.eligible|status\.can_request/);
   });
 
   it("never hides the section once a status has loaded", () => {
@@ -355,9 +361,10 @@ describe("the upgrade centre mounts the printer panel", () => {
   });
 
   it("renders it under the SAME guard the account page uses", () => {
-    expect(upgrade).toContain(
-      '{shopId && authMode === "supabase" ? <PrinterPromotionPanel lang={lang} shopId={shopId} /> : null}',
-    );
+    expect(upgrade).toContain('shopId && authMode === "supabase" ? (');
+    expect(upgrade).toContain("<PrinterPromotionPanel lang={lang} shopId={shopId} onUpgradePage />");
+    // The guard must still be the account page's, not a re-invented one.
+    expect(upgrade).not.toMatch(/shopId && authMode === "local"/);
   });
 
   it("uses the shopId and authMode it ALREADY has, without new plumbing", () => {
@@ -368,12 +375,128 @@ describe("the upgrade centre mounts the printer panel", () => {
     expect(upgrade).not.toMatch(/rpc\("my_org_printer_status"/);
   });
 
-  it("sits directly beneath the yearly plans section", () => {
-    const yearly = upgrade.indexOf("upgradeYearlyTitle");
+  it("sits beneath the Business offer, and is the page's only printer block", () => {
+    // The page makes ONE offer now; the panel follows it.
+    const offer = upgrade.indexOf('aria-labelledby="upgrade-business-heading"');
     const mount = upgrade.indexOf("<PrinterPromotionPanel");
     const back = upgrade.indexOf('to="/pilot-support"');
-    expect(yearly).toBeGreaterThan(-1);
-    expect(mount).toBeGreaterThan(yearly);
+    expect(offer).toBeGreaterThan(-1);
+    expect(mount).toBeGreaterThan(offer);
     expect(back).toBeGreaterThan(mount);
+    // Exactly one live panel — no second, competing printer block.
+    expect(upgrade.split("<PrinterPromotionPanel").length - 1).toBe(1);
+  });
+
+  it("anchors the on-page journey to that same panel, not to another page", () => {
+    // The journey's CTA must scroll within /upgrade.
+    expect(upgrade).toContain('href="#printer-status"');
+    expect(upgrade).toContain('id="printer-status"');
+    // …and the printer detour to the marketing page is gone from this page.
+    expect(upgrade).not.toContain('to="/business-printer"');
+  });
+});
+
+/**
+ * THE UPGRADE CENTRE MAKES ONE OFFER.
+ *
+ * It used to open with a full-width hero and then ask the reader to compare
+ * four plans, so the thing the page exists to sell — Business yearly, with the
+ * printer — was the fourth thing they read, and "how do I get the printer?"
+ * left the page entirely. These pin the shape that replaced it.
+ */
+describe("the upgrade centre presents a single Business offer", () => {
+  const upgrade = read("src/pages/UpgradePage.tsx");
+
+  it("no longer renders the four-plan comparison", () => {
+    // The comparison is gone from the DEFAULT view; the plans themselves are
+    // untouched and still listed on the pricing page.
+    expect(upgrade).not.toContain("PLAN_ORDER");
+    expect(upgrade).not.toContain("upgradePickTitle");
+    expect(upgrade).not.toContain("expandedPlans");
+    expect(upgrade).toContain('to="/pricing"'); // Plus disclosure still reaches them
+  });
+
+  it("opens on YEARLY, because yearly is what carries the printer", () => {
+    expect(upgrade).toMatch(/useState<"monthly" \| "yearly">\("yearly"\)/);
+  });
+
+  it("says outright that the printer offer is yearly-only when monthly is chosen", () => {
+    expect(upgrade).toContain("upgradeMonthlyNoPrinter");
+    expect(upgrade).toContain("upgradeYearlyRequirement");
+  });
+
+  it("shows the real WP-58 product image, through the asset helper, with alt text", () => {
+    expect(upgrade).toContain('publicAssetUrl("brand/waka-printer/wp58-hero.webp")');
+    expect(upgrade).toMatch(/alt=\{t\(lang, "upgradePrinterImageAlt"\)\}/);
+    // Never a bare root path — the native/Electron builds resolve via the helper.
+    expect(upgrade).not.toMatch(/src="\/brand\/waka-printer/);
+    expect(existsSync(join(ROOT, "public/brand/waka-printer/wp58-hero.webp"))).toBe(true);
+  });
+
+  it("prices the offer from the LIVE book, never a literal", () => {
+    expect(upgrade).toContain('pricingForPlan(pricing, "business")');
+    expect(upgrade).not.toMatch(/UGX ?345[,_]?600/);
+    expect(upgrade).not.toMatch(/345_600|172_800/);
+  });
+
+  it("does not promise a printer — the steps describe process, not outcome", () => {
+    // No hard guarantee anywhere in the journey copy.
+    const i18n = read("src/lib/i18n.ts");
+    for (const key of ["upgradeStep3Body", "upgradeStep4Body", "upgradeYearlyRequirement"]) {
+      const at = i18n.indexOf(`${key}:`);
+      expect(at, key).toBeGreaterThan(-1);
+    }
+    expect(upgrade).not.toMatch(/guarantee|will receive|we deliver/i);
+  });
+});
+
+/**
+ * NO DETOURS FROM /upgrade.
+ *
+ * Every outbound link in the panel points at something /upgrade now carries on
+ * the page. Left ungated they become links that look actionable and go nowhere
+ * useful — the exact detour the redesign exists to remove. On /office/account
+ * the same links are genuinely useful and must survive.
+ */
+describe("the panel's outbound links follow the surface it is on", () => {
+  const panel = read("src/components/subscription/PrinterPromotionPanel.tsx");
+  const centre = read("src/components/subscription/AccountSubscriptionCenter.tsx");
+  const upgrade = read("src/pages/UpgradePage.tsx");
+
+  it("gates EVERY away-link on onUpgradePage, and defaults to showing them", () => {
+    expect(panel).toContain("onUpgradePage?: boolean;");
+    // Default false — the account page passes nothing and keeps every link.
+    expect(panel).toContain("onUpgradePage = false");
+    // One gate per link block: the ineligible pair, and the setup link.
+    expect(panel.split("{onUpgradePage ? null : (").length - 1).toBe(2);
+  });
+
+  it("still offers the offer, the upgrade and the instructions on the account page", () => {
+    expect(panel).toContain('to="/business-printer"');
+    expect(panel).toContain('to="/upgrade"');
+    // The account page passes no prop, so nothing there is hidden.
+    expect(centre).toContain("<PrinterPromotionPanel lang={lang} shopId={shopId} />");
+    expect(centre).not.toContain("onUpgradePage");
+  });
+
+  it("drops them on /upgrade, where the page carries all three", () => {
+    expect(upgrade).toContain("<PrinterPromotionPanel lang={lang} shopId={shopId} onUpgradePage />");
+    // The page itself never links out to the marketing offer.
+    expect(upgrade).not.toContain('to="/business-printer"');
+    // …because it renders the offer, the image and the steps itself.
+    expect(upgrade).toContain('aria-labelledby="upgrade-business-heading"');
+    expect(upgrade).toContain("wp58-hero.webp");
+    expect(upgrade).toContain('id="printer-status"');
+  });
+
+  it("keeps the REAL request actions on both surfaces", () => {
+    // Hiding navigation must never hide the branch/WhatsApp actions.
+    expect(panel).toContain("requestPrinterCollection");
+    expect(panel).toContain("printerAskBranch");
+    expect(panel).toContain("printerAskWhatsApp");
+    // Gating appears ONLY on the two link blocks — the type declaration, the
+    // parameter default, and two gates. If an action ever moved inside one,
+    // this count would drop and the test would say so.
+    expect(panel.match(/onUpgradePage/g)?.length).toBe(4);
   });
 });
