@@ -28,6 +28,10 @@ export const swOverrides: Record<string, string> = {
   printerRequest_fulfilled: "Imekamilika",
   printerRequest_cancelled: "Imefutwa",
 
+  upgradeBusinessSectionTitle: "Business kwa duka lako",
+  upgradePrinterStepsNote: "Hatua za kusanidi na kuchukua ziko wazi kabla ya kujiandikisha.",
+  upgradeBusinessMonthlyBadge: "Business kwa mwezi",
+  upgradeMonthlyCardTitle: "Hifadhi unyumbufu wa malipo ya kila mwezi.",
   upgradeBusinessHeading: "Kuza duka lako na Business.",
   upgradeBusinessSubtitle:
     "Mpango mmoja, bei moja wazi, na printa ya WP-58 ya risiti inajumuishwa unapochagua Business kwa mwaka.",

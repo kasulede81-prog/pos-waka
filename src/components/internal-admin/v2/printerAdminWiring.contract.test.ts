@@ -361,7 +361,7 @@ describe("the upgrade centre mounts the printer panel", () => {
   });
 
   it("renders it under the SAME guard the account page uses", () => {
-    expect(upgrade).toContain('shopId && authMode === "supabase" ? (');
+    expect(upgrade).toMatch(/shopId && authMode === "supabase" \?/);
     expect(upgrade).toContain("<PrinterPromotionPanel lang={lang} shopId={shopId} onUpgradePage />");
     // The guard must still be the account page's, not a re-invented one.
     expect(upgrade).not.toMatch(/shopId && authMode === "local"/);
@@ -377,7 +377,7 @@ describe("the upgrade centre mounts the printer panel", () => {
 
   it("sits beneath the Business offer, and is the page's only printer block", () => {
     // The page makes ONE offer now; the panel follows it.
-    const offer = upgrade.indexOf('aria-labelledby="upgrade-business-heading"');
+    const offer = upgrade.indexOf('aria-labelledby="upgrade-plans-heading"');
     const mount = upgrade.indexOf("<PrinterPromotionPanel");
     const back = upgrade.indexOf('to="/pilot-support"');
     expect(offer).toBeGreaterThan(-1);
@@ -389,8 +389,8 @@ describe("the upgrade centre mounts the printer panel", () => {
 
   it("anchors the on-page journey to that same panel, not to another page", () => {
     // The journey's CTA must scroll within /upgrade.
-    expect(upgrade).toContain('href="#printer-status"');
-    expect(upgrade).toContain('id="printer-status"');
+    expect(upgrade).toContain('href="#printer-steps"');
+    expect(upgrade).toContain('id="printer-steps"');
     // …and the printer detour to the marketing page is gone from this page.
     expect(upgrade).not.toContain('to="/business-printer"');
   });
@@ -411,9 +411,14 @@ describe("the upgrade centre presents a single Business offer", () => {
     // The comparison is gone from the DEFAULT view; the plans themselves are
     // untouched and still listed on the pricing page.
     expect(upgrade).not.toContain("PLAN_ORDER");
-    expect(upgrade).not.toContain("upgradePickTitle");
+    expect(upgrade).not.toContain("PLAN_ORDER");
+    expect(upgrade).not.toContain("plan-select-starter");
+    expect(upgrade).not.toContain("plan-select-waka_plus");
     expect(upgrade).not.toContain("expandedPlans");
-    expect(upgrade).toContain('to="/pricing"'); // Plus disclosure still reaches them
+    // Plus is reached through the existing checkout, from its disclosure —
+    // not by listing it as a fourth comparison card.
+    expect(upgrade).toContain('openCheckout("waka_plus"');
+    expect(upgrade).toContain("<details");
   });
 
   it("opens on YEARLY, because yearly is what carries the printer", () => {
@@ -484,9 +489,9 @@ describe("the panel's outbound links follow the surface it is on", () => {
     // The page itself never links out to the marketing offer.
     expect(upgrade).not.toContain('to="/business-printer"');
     // …because it renders the offer, the image and the steps itself.
-    expect(upgrade).toContain('aria-labelledby="upgrade-business-heading"');
+    expect(upgrade).toContain('aria-labelledby="upgrade-plans-heading"');
     expect(upgrade).toContain("wp58-hero.webp");
-    expect(upgrade).toContain('id="printer-status"');
+    expect(upgrade).toContain('id="printer-steps"');
   });
 
   it("keeps the REAL request actions on both surfaces", () => {

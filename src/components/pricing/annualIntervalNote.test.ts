@@ -123,7 +123,7 @@ describe("the note is placed with the annual price, in both surfaces", () => {
       inside the card rather than stranded after it.
     */
     const upgradePage = read("src/pages/UpgradePage.tsx");
-    const yearlyCard = upgradePage.slice(upgradePage.indexOf('aria-labelledby="upgrade-business-heading"'));
+    const yearlyCard = upgradePage.slice(upgradePage.indexOf('aria-labelledby="upgrade-plans-heading"'));
 
     const note = yearlyCard.indexOf("<AnnualIntervalNote");
     expect(note, "the yearly card renders the note").toBeGreaterThan(-1);

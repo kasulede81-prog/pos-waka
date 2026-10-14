@@ -7734,6 +7734,10 @@ const en: Dict = {
   printerRequest_acknowledged: "Being arranged",
   printerRequest_fulfilled: "Completed",
   printerRequest_cancelled: "Cancelled",
+  upgradeBusinessSectionTitle: "Business for your shop",
+  upgradePrinterStepsNote: "Setup and collection steps are clear before you subscribe.",
+  upgradeBusinessMonthlyBadge: "Business monthly",
+  upgradeMonthlyCardTitle: "Keep the flexibility of monthly billing.",
   upgradeBusinessHeading: "Grow your shop with Business.",
   upgradeBusinessSubtitle:
     "One plan, one clear price, and a WP-58 receipt printer included when you choose Business yearly.",
@@ -15320,6 +15324,10 @@ const lgBase: Dict = {
   upgradePrinterIncluded: "Eriŋŋaanya kyuma ya WP-58 ya bbere — ginnawukule oluvannyuma lw'omwaka gwo ogwasiddwa.",
   upgradePromoGrantBadge: "Obuyambi bwa promo",
   upgradePromoGrantNote: "Obuyambi bwo bw'okufuluma buŋŋaanyizibwamu n'okukkirizibwa kwa promo.",
+  upgradeBusinessSectionTitle: "Business ku dduuka lyo",
+  upgradePrinterStepsNote: "Entegeka n'okutwala bijja labika bulungi nga tonnawandiisa.",
+  upgradeBusinessMonthlyBadge: "Business buli mwezi",
+  upgradeMonthlyCardTitle: "Kuumira obwangu bw'okusasula buli mwezi.",
   upgradeBusinessHeading: "Kuza dduuka lyo ne Business.",
   upgradeBusinessSubtitle:
     "Pulani emu, omuwendo gumu ogulangibwa, ne kyuma ya WP-58 ey'okuwandiisa ekuweebwa bw'olonda Business buli mwaka.",
