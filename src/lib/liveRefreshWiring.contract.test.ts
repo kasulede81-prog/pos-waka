@@ -24,6 +24,9 @@ const pricing = read("src/hooks/usePublicPricing.ts");
 const checkout = read("src/components/subscription/CheckoutFlow.tsx");
 const deviceLimit = read("src/pages/DeviceLimitReachedPage.tsx");
 const accountCenter = read("src/components/subscription/AccountSubscriptionCenter.tsx");
+const nudge = read("src/lib/subscriptionRealtimeNudge.ts");
+const refreshLib = read("src/lib/foregroundRefresh.ts");
+const upgrade = read("src/pages/UpgradePage.tsx");
 
 describe("live refresh — one mechanism, not several", () => {
   it("1. the subscription context no longer registers its own visibility listener", () => {
@@ -116,6 +119,82 @@ describe("live refresh — a failure never fabricates data", () => {
     const diagnostics = read("src/lib/liveRefreshDiagnostics.ts");
     expect(diagnostics).toContain("if (reason === lastReason) return;");
     expect(diagnostics).toContain("reportSwallowedSyncFailure(");
+  });
+});
+
+/**
+ * A Realtime event is a doorbell, not a value. These pin the two halves of that: the nudge
+ * has no way to write a plan, and its signal is handed to the shared scheduler rather than
+ * becoming a way to read on its own.
+ */
+describe("live refresh — realtime only ever asks for a re-read", () => {
+  it("18. the nudge module has no write path and never sees the row", () => {
+    const src = nudge.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    expect(src).not.toMatch(/\.insert\(|\.update\(|\.delete\(|\.upsert\(|rpc\(|setSnapshot/);
+    // The changed row must not reach a caller who could apply it as the truth.
+    expect(src).not.toMatch(/payload\.(new|old)|payload\?\.(new|old)/);
+    expect(src).toContain('event: "*"');
+    // RLS is the boundary; a filter would imply the client narrows the audience itself.
+    expect(src).not.toContain("filter:");
+    expect(src).toContain('if (status === "SUBSCRIBED") onSignal("subscribed")');
+  });
+
+  it("19. the nudge's signal lands on the shared scheduler, not a private read", () => {
+    expect(subscription).toContain("startSubscriptionPlanNudge(");
+    expect(subscription).toContain("() => poke()");
+    // Still exactly one writer, still sequence-guarded.
+    expect(subscription).toContain("const seq = ++requestSeqRef.current;");
+    expect(subscription).toContain("if (seq !== requestSeqRef.current) return;");
+  });
+
+  it("20. the nudge is created by an effect that returns its own teardown", () => {
+    // The React cleanup IS the lifecycle. A module-level singleton would make correctness
+    // depend on the order React destroys one provider tree and creates the next, and
+    // SubscriptionProvider is mounted from more than one place.
+    expect(subscription).toMatch(/return startSubscriptionPlanNudge\(/);
+    expect(subscription).toMatch(/if \(authMode !== "supabase" \|\| !user\?\.id\) return;/);
+    expect(nudge).toMatch(/return \(\) => \{[\s\S]*?removeChannel\(/);
+  });
+
+  it("21. a poke can never wake a hidden surface or arm the tick", () => {
+    expect(refreshLib).toContain("poke: () => void");
+    expect(refreshLib).toContain("if (stopped || !visible) return;");
+    // One timer shared with resume(): an Android resume and an event in the same
+    // window must be one read, not two.
+    expect(refreshLib).toContain("scheduleRun()");
+    expect(refreshLib).not.toContain("const poke = (): void => {\n    resume()");
+  });
+
+  it("22. a confirmed checkout re-reads the plan without re-broadcasting the admin signal", () => {
+    expect(checkout).toContain("useSubscription()");
+    expect(checkout).toMatch(/if \(state\.phase !== "confirmed"\) return;[\s\S]{0,160}?refetchSubscription\(\)/);
+    // `waka:subscription-updated` is the same-tab ADMIN mirror; a customer paying is
+    // not an admin acting, and its listeners include the internal ops hook.
+    expect(checkout).not.toContain('dispatchEvent(new Event("waka:subscription-updated")');
+  });
+});
+
+describe("live refresh — nothing is displayed that the records do not say", () => {
+  it("23. the plan card does not show an invented renewal date", () => {
+    // Two tiles rendered the same `effective.expiresAt`, one of them labelled
+    // "Renewal date" — but nothing renews automatically and no renewal date is
+    // recorded anywhere. The duplicate is gone; if it returns, so does the claim.
+    expect(accountCenter).not.toContain('t(lang, "billingRenewalDate")');
+    expect(accountCenter).toContain('t(lang, "billingSubscriptionEnds")');
+  });
+
+  it("24. a cancellation date is only ever read through the guarded resolver", () => {
+    expect(accountCenter).toContain("resolveSubscriptionCancelledAt(");
+    // Reaching into metadata directly would skip the "only while still cancelled"
+    // guard, which is what stops a pause stamp being shown as a cancellation date.
+    expect(accountCenter).not.toContain("status_set_at");
+  });
+
+  it("25. fixing the upgrade page's display did not widen checkout eligibility", () => {
+    // `hasFuturePeriodEnd` is handed to CheckoutFlow. It must keep deriving from the
+    // status-gated countdown, NOT from the display-only value added beside it.
+    expect(upgrade).toContain("hasFuturePeriodEnd={Boolean(renewalCountdown)}");
+    expect(upgrade).not.toContain("hasFuturePeriodEnd={Boolean(lapsedAccessDays)}");
   });
 });
 

@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
 import {
   createForegroundRefresher,
   DEFAULT_REFRESH_INTERVAL_MS,
+  type ForegroundRefresher,
 } from "../lib/foregroundRefresh";
 
 type Options = {
@@ -25,8 +26,18 @@ type Options = {
  *
  * `run` is read through a ref, so a caller may pass an inline closure without
  * re-arming the listeners on every render.
+ *
+ * WHEN THE SIGNAL COMES FROM SOMEWHERE ELSE — a Realtime event, say — call the
+ * returned `poke`. Do NOT open your own channel and call `run` yourself: that is the
+ * second mechanism this hook exists to prevent, it would skip the coalescing that
+ * turns a burst of events into one read, and it would run on a hidden surface. `poke`
+ * feeds the same scheduler as everything else, never arms the tick, and does nothing
+ * at all while the surface is hidden.
  */
-export function useForegroundRefresh(run: () => void | Promise<void>, options?: Options): void {
+export function useForegroundRefresh(
+  run: () => void | Promise<void>,
+  options?: Options,
+): () => void {
   const enabled = options?.enabled ?? true;
   const intervalMs = options?.intervalMs ?? DEFAULT_REFRESH_INTERVAL_MS;
 
@@ -34,6 +45,13 @@ export function useForegroundRefresh(run: () => void | Promise<void>, options?: 
   useEffect(() => {
     runRef.current = run;
   }, [run]);
+
+  const refresherRef = useRef<ForegroundRefresher | null>(null);
+
+  /** Stable across renders, and a no-op whenever the surface is disabled or unmounted. */
+  const poke = useCallback((): void => {
+    refresherRef.current?.poke();
+  }, []);
 
   const onErrorRef = useRef(options?.onError);
   useEffect(() => {
@@ -48,6 +66,7 @@ export function useForegroundRefresh(run: () => void | Promise<void>, options?: 
       intervalMs,
       onError: (error) => onErrorRef.current?.(error),
     });
+    refresherRef.current = refresher;
 
     const isVisible = (): boolean =>
       typeof document === "undefined" || document.visibilityState === "visible";
@@ -99,7 +118,13 @@ export function useForegroundRefresh(run: () => void | Promise<void>, options?: 
         document.removeEventListener("visibilitychange", onVisibility);
       }
       removeNative?.();
+      // Cleared BEFORE stop(), so a poke arriving during teardown has nothing to
+      // reach: `stop()` is what makes the refresher inert, and dropping the handle
+      // first means a stale `poke` can never address a stopped surface.
+      refresherRef.current = null;
       refresher.stop();
     };
   }, [enabled, intervalMs]);
+
+  return poke;
 }

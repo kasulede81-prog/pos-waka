@@ -237,7 +237,10 @@ export async function fetchRemoteSubscriptionForUser(
 
   const { data: sub, error: subErr } = await supabase
     .from("subscriptions")
-    .select("id, organization_id, shop_id, status, trial_ends_at, current_period_start, current_period_end, plan_id, created_at")
+    // `metadata` carries a recorded cancellation date for rows cancelled through
+    // `admin_subscription_set_status`. Read via `resolveSubscriptionCancelledAt`, which
+    // refuses to interpret the stamp as a cancellation unless the row is still cancelled.
+    .select("id, organization_id, shop_id, status, trial_ends_at, current_period_start, current_period_end, plan_id, created_at, metadata")
     .eq("organization_id", orgShop.organizationId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -272,6 +275,7 @@ export async function fetchRemoteSubscriptionForUser(
     max_pos_users: plan.max_pos_users ?? null,
     max_shops: plan.max_shops ?? null,
     max_devices: maxDevices,
+    metadata: (sub.metadata as Record<string, unknown> | null) ?? null,
   };
   return row;
 }

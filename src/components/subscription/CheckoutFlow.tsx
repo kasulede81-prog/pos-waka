@@ -20,6 +20,7 @@ import type { Language } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { usePublicPricing } from "../../hooks/usePublicPricing";
 import { useForegroundRefresh } from "../../hooks/useForegroundRefresh";
+import { useSubscription } from "../../context/SubscriptionContext";
 import { WakaButton } from "../ui/wakaPrimitives";
 import { ConfirmationDialog } from "../layout/ConfirmationDialog";
 import {
@@ -87,6 +88,7 @@ export function CheckoutFlow({
   const pollerRef = useRef<PaymentPoller | null>(null);
   const backend = useMemo(() => createCheckoutBackend(), []);
   const { pricing, loading: pricingLoading } = usePublicPricing();
+  const { refetch: refetchSubscription } = useSubscription();
 
   // Keep the reducer's plan in sync with the (parent-owned) selection — but
   // never while a payment flow is in flight (RESUMED/intent states own it).
@@ -250,6 +252,31 @@ export function CheckoutFlow({
     // No "nonce": an explicit Check status calls the provider directly rather
     // than re-arming this effect, so there is one path, not two.
   }, [backend, state.phase, state.intent?.paymentId]);
+
+  /**
+   * RETURNING FROM THE FLOW WITH A SETTLED PAYMENT: re-read the plan from the server.
+   *
+   * NOT WHAT MAKES THE PLAN TRUE. `confirmed` is only reached from a provider-verified
+   * status, and the Edge Function that reported it had already settled the subscription
+   * row server-side by then — so this activates nothing and is not payment confirmation.
+   * It exists because the customer is looking at this screen right now, and the
+   * alternatives are the realtime nudge or up to a minute of the tick. If the socket is
+   * blocked, refused by RLS, or paused because this is a backgrounded WebView, this is
+   * the read that still happens.
+   *
+   * `refetch()` rather than re-broadcasting `waka:subscription-updated`: that event is
+   * the same-tab ADMIN mirror (dispatched by the internal-action runner alongside
+   * `waka:internal-ops-changed`), and a customer's payment is not an admin acting. This
+   * reaches the same single writer through the context instead, and is a no-op outside a
+   * provider rather than an unhandled event.
+   *
+   * Fires once per confirmation: `refetch` is stable on [authMode, user?.id] and the
+   * phase only enters `confirmed` once.
+   */
+  useEffect(() => {
+    if (state.phase !== "confirmed") return;
+    void refetchSubscription();
+  }, [state.phase, refetchSubscription]);
 
   // A server-side sync is requested (payment_not_pending / conflict): adopt
   // the real ledger state instead of guessing.

@@ -3241,6 +3241,9 @@ const en: Dict = {
   billingCycle: "Billing cycle",
   billingTrialEnds: "Trial ends",
   billingSubscriptionEnds: "Subscription ends",
+  // Shown only when a cancellation date was actually recorded — see
+  // src/lib/subscriptionCancellationDate.ts. English only; `t()` falls back to `en`.
+  billingCancelledOn: "Cancelled on",
   billingRenewalDate: "Renewal date",
   billingDaysRemaining: "Days remaining",
   billingPromotionalOverlay: "Promotional overlay",
@@ -3299,6 +3302,10 @@ const en: Dict = {
   officePremiumRenewalVip: "Expires in {{d}} days",
   officePremiumRenewalBusiness: "Expires in {{d}} days",
   officePremiumRenewalStarter: "Starter renews in {{d}} days",
+  // A subscription that is cancelled or paused but still inside its paid-through period.
+  // Says "access continues" rather than "renews", because nothing renews — see the note in
+  // src/components/subscription/AccountSubscriptionCenter.tsx. English only; `t()` falls back.
+  upgradeLapsedAccessRemaining: "Cancelled — access continues for {{d}} days",
   officePremiumRenewalDue: "Plan expired",
   officePremiumRenewalIdle: "Renewal countdown appears when Business or VIP billing is active.",
   officePremiumRenewalVipWaiting: "VIP is active — renewal dates will show here after billing is updated.",

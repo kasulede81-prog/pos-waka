@@ -45,6 +45,28 @@ export function UpgradePage({ lang }: { lang: Language }) {
   const isBusinessTrial = effective.isTrial && effective.planCode === "business";
   const trialDaysRemaining = effective.daysRemaining;
   const renewalCountdown = getPaidPlanRenewalCountdown(snapshot);
+  /**
+   * Remaining access for a subscription that is cancelled or paused but still inside its
+   * paid-through period.
+   *
+   * `getPaidPlanRenewalCountdown` returns null unless status is exactly "active", so a
+   * cancelled subscription with time left showed nothing at all here — even though the
+   * resolver deliberately preserves that period (`expiresAt` falls back to
+   * `current_period_end` for cancelled/paused) and already computes `daysRemaining` from it.
+   * Reusing the resolver rather than re-deriving keeps the day count consistent with the
+   * account page.
+   *
+   * DELIBERATELY SEPARATE FROM `renewalCountdown`, which also feeds `hasFuturePeriodEnd`
+   * below. That flag is handed to CheckoutFlow, so widening it would change checkout
+   * eligibility — out of scope. This is display only and must never be folded into it.
+   */
+  const lapsedAccessDays =
+    !renewalCountdown &&
+    (effective.status === "cancelled" || effective.status === "paused") &&
+    !effective.isExpired &&
+    effective.daysRemaining != null
+      ? effective.daysRemaining
+      : null;
   const [billingOffers, setBillingOffers] = useState<OrgBillingOfferRow[]>([]);
   const [checkoutPlan, setCheckoutPlan] = useState<SubscriptionPlanCode | null>(null);
   const [checkoutCycle, setCheckoutCycle] = useState<CheckoutCycle>("monthly");
@@ -159,6 +181,11 @@ export function UpgradePage({ lang }: { lang: Language }) {
                 : renewalCountdown.plan === "starter"
                   ? t(lang, "officePremiumRenewalStarter").replace("{{d}}", String(renewalCountdown.days))
                   : t(lang, "officePremiumRenewalBusiness").replace("{{d}}", String(renewalCountdown.days))}
+            </p>
+          ) : null}
+          {lapsedAccessDays != null ? (
+            <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">
+              {t(lang, "upgradeLapsedAccessRemaining").replace("{{d}}", String(lapsedAccessDays))}
             </p>
           ) : null}
           <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{t(lang, "upgradeTrustLine")}</p>

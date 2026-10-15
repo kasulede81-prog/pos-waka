@@ -7,6 +7,7 @@ import type { SubscriptionSnapshot } from "../lib/subscriptionEntitlements";
 import { setStoreSubscriptionContext } from "../lib/storeSubscriptionContext";
 import { createRefreshFailureReporter } from "../lib/liveRefreshDiagnostics";
 import { useForegroundRefresh } from "../hooks/useForegroundRefresh";
+import { startSubscriptionPlanNudge } from "../lib/subscriptionRealtimeNudge";
 
 export type SubscriptionContextValue = {
   authMode: "supabase" | "local";
@@ -162,27 +163,46 @@ export function SubscriptionProvider({
   }, [refresh]);
 
   /**
-   * AN ADMIN CHANGES THE PLAN FROM ANOTHER DEVICE, AND NOTHING PUSHES IT HERE.
+   * AN ADMIN CHANGES THE PLAN FROM ANOTHER DEVICE. Two things now carry that here.
    *
-   * There is no realtime channel for `subscriptions`, and `waka:subscription-updated` is a
-   * same-tab event — so a terminal that was already running kept showing the old plan (and the old
-   * price) until someone reloaded the app. That is the whole of the "admin changed the plan but the
-   * shop still sees the old one" report: the database was right the entire time.
+   * 1. THE SHARED SCHEDULER. Re-reading on `visibilitychange` alone covered a tab that is
+   *    switched away from and back — but a POS terminal sits in the foreground, on one
+   *    screen, for a whole shift, and never fires that event at all. It also never reached
+   *    the Android app, whose bundle is baked into the APK and does not follow a web
+   *    deploy. So the signals are the shared ones (`useForegroundRefresh`): native resume,
+   *    browser visibility, and a bounded tick while visible, which is the only one of them
+   *    that reaches a terminal nobody ever backgrounds. `refresh` is sequence-guarded, so
+   *    a signal that lands during an in-flight read cannot be overwritten by it.
    *
-   * THE FIRST FIX WAS ONLY HALF OF IT. Re-reading on `visibilitychange` covers a tab that is
-   * switched away from and back — but a POS terminal sits in the foreground, on one screen, for a
-   * whole shift, and never fires that event at all. It also never reached the Android app, whose
-   * bundle is baked into the APK and does not follow a web deploy.
+   * 2. THE REALTIME NUDGE, below — which turns that minute into a moment. It is a
+   *    doorbell: the channel carries no row (the payload is discarded in the nudge
+   *    module), and every event ends in this same `refresh()`. So it cannot activate a
+   *    plan, and it is not evidence that anything was paid; the server settled that
+   *    already, and this only asks the server what it decided.
    *
-   * So the signal is now the shared one (`useForegroundRefresh`): native resume, browser
-   * visibility, AND a bounded tick while visible, which is the only one of the three that reaches
-   * a terminal nobody ever backgrounds. `refresh` is sequence-guarded, so a resume that lands
-   * during an in-flight read cannot be overwritten by it.
+   * `poke`, NOT `resume`: a poke must not arm the tick, and must do nothing at all while
+   * this surface is hidden — the socket keeps delivering whether or not anyone is looking,
+   * and waking a backgrounded terminal to do database work is exactly what `hide()` exists
+   * to prevent.
    */
-  useForegroundRefresh(() => refresh({ silent: true }), {
+  const poke = useForegroundRefresh(() => refresh({ silent: true }), {
     // Nothing remote to keep current when signed out, or in the offline-only mode.
     enabled: authMode === "supabase" && Boolean(user?.id),
   });
+
+  /**
+   * DECLARED AFTER THE HOOK ABOVE, ON PURPOSE. React runs effects in registration order,
+   * and `useForegroundRefresh` registers the effect that sets the refresher's visibility —
+   * so by the time the first SUBSCRIBED signal can arrive, `poke` has something live to
+   * reach. Declared first, that first nudge would be silently dropped.
+   *
+   * Keyed on `user?.id` as well as `authMode` so a sign-out/sign-in cycles the socket with
+   * the session it is authorised by, rather than leaving one bound to a dead JWT.
+   */
+  useEffect(() => {
+    if (authMode !== "supabase" || !user?.id) return;
+    return startSubscriptionPlanNudge(() => poke());
+  }, [authMode, user?.id, poke]);
 
   const value = useMemo(
     () => ({

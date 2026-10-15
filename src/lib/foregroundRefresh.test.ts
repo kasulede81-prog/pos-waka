@@ -180,6 +180,194 @@ describe("foregroundRefresh — visibility", () => {
   });
 });
 
+/**
+ * `poke` is the signal a REMOTE source sends — a Realtime event, today. It differs from
+ * every other signal in one way that matters: it can arrive while the surface is hidden,
+ * because the socket does not care whether anyone is looking. These tests pin that a poke
+ * can never wake a hidden surface, and can never arm the tick.
+ */
+describe("foregroundRefresh — poke (a remote source signalled a change)", () => {
+  it("does nothing while the surface is hidden", () => {
+    const c = createTestClock();
+    let runs = 0;
+    const refresher = createForegroundRefresher({
+      run: () => void (runs += 1),
+      intervalMs: 60_000,
+      clock: c.clock,
+      coalesceMs: 0,
+    });
+
+    refresher.start(false);
+    refresher.poke();
+
+    expect(c.timeouts()).toBe(0);
+    expect(c.intervals()).toBe(0);
+    expect(runs).toBe(0);
+  });
+
+  it("does nothing on a refresher nobody has started", () => {
+    const c = createTestClock();
+    const refresher = createForegroundRefresher({
+      run: () => {},
+      intervalMs: 60_000,
+      clock: c.clock,
+      coalesceMs: 0,
+    });
+
+    refresher.poke();
+
+    expect(c.timeouts()).toBe(0);
+  });
+
+  it("never arms the tick", () => {
+    const c = createTestClock();
+    const refresher = createForegroundRefresher({
+      run: () => {},
+      intervalMs: 60_000,
+      clock: c.clock,
+      coalesceMs: 0,
+    });
+
+    // The shape of the real hazard: a poke delivered to a surface that HAS gone
+    // hidden. Arming the tick here would leave it polling once a minute until
+    // unmount, because `hide()` already ran for that transition and nothing will
+    // call it again.
+    refresher.start(true);
+    refresher.hide();
+    refresher.poke();
+
+    expect(refresher.polling()).toBe(false);
+    expect(c.intervals()).toBe(0);
+    expect(c.timeouts()).toBe(0);
+  });
+
+  it("coalesces a burst into a single read", () => {
+    const c = createTestClock();
+    let runs = 0;
+    const refresher = createForegroundRefresher({
+      run: () => void (runs += 1),
+      intervalMs: 60_000,
+      clock: c.clock,
+      coalesceMs: 400,
+    });
+
+    refresher.start(true);
+    refresher.poke();
+    refresher.poke();
+    refresher.poke();
+
+    expect(c.timeouts()).toBe(1);
+    c.fireTimeout();
+    expect(runs).toBe(1);
+  });
+
+  it("shares one coalesce timer with resume, so a pair of signals is one read", () => {
+    const c = createTestClock();
+    let runs = 0;
+    const refresher = createForegroundRefresher({
+      run: () => void (runs += 1),
+      intervalMs: 60_000,
+      clock: c.clock,
+      coalesceMs: 400,
+    });
+
+    // Capacitor fires appStateChange AND visibilitychange on Android resume, and a
+    // remote event often lands in the same window. One timer collapses all of them.
+    refresher.start(true);
+    refresher.poke();
+    refresher.resume();
+
+    expect(c.timeouts()).toBe(1);
+    expect(c.intervals()).toBe(1);
+    c.fireTimeout();
+    expect(runs).toBe(1);
+  });
+
+  it("drops a replayed read when the surface goes hidden mid-flight", async () => {
+    const c = createTestClock();
+    let pending = deferred();
+    let calls = 0;
+    const refresher = createForegroundRefresher({
+      run: () => {
+        calls += 1;
+        pending = deferred();
+        return pending.promise;
+      },
+      intervalMs: 60_000,
+      clock: c.clock,
+      coalesceMs: 0,
+    });
+
+    refresher.resume();
+    c.fireTimeout();
+    expect(calls).toBe(1);
+
+    // A remote event arrives while that read is still out, and its coalesce window
+    // elapses — which is what marks a replay as wanted (`execute` finds the run in
+    // flight). THEN the user leaves, mid-flight.
+    refresher.poke();
+    c.fireTimeout();
+    refresher.hide();
+
+    pending.resolve();
+    await flush();
+
+    // Without the fix this is 2: the requested replay fires into a hidden surface
+    // moments after it went away.
+    expect(calls).toBe(1);
+  });
+
+  it("bounds a flood to one queued read, not one read per event", async () => {
+    const c = createTestClock();
+    let pending = deferred();
+    let calls = 0;
+    const refresher = createForegroundRefresher({
+      run: () => {
+        calls += 1;
+        pending = deferred();
+        return pending.promise;
+      },
+      intervalMs: 60_000,
+      clock: c.clock,
+      coalesceMs: 0,
+    });
+
+    refresher.resume();
+    c.fireTimeout();
+    expect(calls).toBe(1);
+
+    // A bulk admin update emits one event per row. Event volume must not become
+    // read volume: the five pokes share one coalesce window (the first armed it,
+    // the rest found it already armed), and that window elapses while the read is
+    // still out — which asks for ONE replay, not five.
+    for (let i = 0; i < 5; i += 1) refresher.poke();
+    expect(c.timeouts()).toBe(1);
+
+    c.fireTimeout();
+    pending.resolve();
+    await flush();
+
+    expect(calls).toBe(2);
+  });
+
+  it("ignores a poke that arrives after stop()", () => {
+    const c = createTestClock();
+    const refresher = createForegroundRefresher({
+      run: () => {},
+      intervalMs: 60_000,
+      clock: c.clock,
+      coalesceMs: 0,
+    });
+
+    refresher.start(true);
+    refresher.stop();
+    refresher.poke();
+
+    expect(c.timeouts()).toBe(0);
+    expect(c.intervals()).toBe(0);
+  });
+});
+
 describe("foregroundRefresh — native resume coalescing", () => {
   it("collapses a visibility/resume pair into a single read", () => {
     const c = createTestClock();

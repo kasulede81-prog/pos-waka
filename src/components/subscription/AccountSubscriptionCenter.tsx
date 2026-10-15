@@ -11,6 +11,7 @@ import {
 import { BillingTimeline } from "./BillingTimeline";
 import { createCheckoutBackend, paymentStatusKey, toDisplayPayments, type DisplayPayment } from "../../lib/paymentCheckout";
 import { SubscriptionHistoryPanel } from "./SubscriptionHistoryPanel";
+import { resolveSubscriptionCancelledAt } from "../../lib/subscriptionCancellationDate";
 import { PrinterPromotionPanel } from "./PrinterPromotionPanel";
 
 type Props = {
@@ -46,6 +47,17 @@ export function AccountSubscriptionCenter({ lang, shopId: shopIdProp, showHistor
     if (snapshot.kind === "none" && !snapshot.promotionalGrant) return null;
     return resolveEffectiveSubscription(snapshot);
   }, [authMode, snapshot]);
+
+  /**
+   * Only ever a date the records actually carry. Null for a row that is not cancelled, and
+   * null for the cancellations that were written without a stamp (the plan-RPC sibling
+   * sweep, a reset to free) — in both cases the card shows the status with no date rather
+   * than inventing one. See src/lib/subscriptionCancellationDate.ts.
+   */
+  const cancelledAt = useMemo(
+    () => (snapshot.kind === "remote" ? resolveSubscriptionCancelledAt(snapshot.row) : null),
+    [snapshot],
+  );
 
   /**
    * Tagged with the shop the rows were fetched for, and gated on still being the
@@ -166,10 +178,22 @@ export function AccountSubscriptionCenter({ lang, shopId: shopIdProp, showHistor
             <p className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "billingSubscriptionEnds")}</p>
             <p className="text-sm font-bold text-foreground">{fmtDate(effective?.expiresAt)}</p>
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "billingRenewalDate")}</p>
-            <p className="text-sm font-bold text-foreground">{fmtDate(effective?.expiresAt)}</p>
-          </div>
+          {/*
+            A "Renewal date" tile used to sit here, rendering the SAME
+            `effective.expiresAt` as "Subscription ends" directly above it. There is
+            no next-renewal date to show: nothing in the schema records one
+            (`current_period_end` is the only date that exists), and nothing renews
+            automatically — a period advances only when a NEW payment settles through
+            `subscription_payment_confirm`, and the hourly lifecycle tick only ever
+            expires rows. So the second tile did not report a fact the first one
+            omitted; it restated the access-expiry date under a more promising name.
+          */}
+          {cancelledAt ? (
+            <div>
+              <p className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "billingCancelledOn")}</p>
+              <p className="text-sm font-bold text-foreground">{fmtDate(cancelledAt)}</p>
+            </div>
+          ) : null}
           {effective?.daysRemaining != null ? (
             <div>
               <p className="text-[10px] font-black uppercase text-muted-foreground">{t(lang, "billingDaysRemaining")}</p>

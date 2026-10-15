@@ -24,6 +24,18 @@ export type RemoteSubscriptionRow = {
   max_shops: number | null;
   /** From subscription_plans.features.devices when present. */
   max_devices: number | null;
+  /**
+   * The raw `subscriptions.metadata` object, when the read path carries it.
+   *
+   * Optional because not every path can supply it: the shop-scoped RPC
+   * (`shop_get_effective_subscription`) returns a closed JSON shape with no metadata,
+   * so a cashier's snapshot has this absent while an owner's does not. Consumers must
+   * treat `undefined` as "not recorded here", never as "no metadata exists".
+   *
+   * Read through `resolveSubscriptionCancelledAt` rather than reaching in directly —
+   * the one date worth extracting from it needs guard rails (see that function).
+   */
+  metadata?: Record<string, unknown> | null;
 };
 
 /**
