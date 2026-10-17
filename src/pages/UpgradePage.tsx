@@ -104,14 +104,6 @@ export function UpgradePage({ lang }: { lang: Language }) {
     return () => window.removeEventListener("waka:subscription-updated", on);
   }, [authMode, refetch]);
 
-  const whyRows: { q: string; plan: string }[] = [
-    { q: t(lang, "upgradeWhyMoreProducts"), plan: t(lang, "upgradeWhyMoreProductsPlan") },
-    { q: t(lang, "upgradeWhyBackup"), plan: t(lang, "upgradeWhyBackupPlan") },
-    { q: t(lang, "upgradeWhyStaff"), plan: t(lang, "upgradeWhyStaffPlan") },
-    { q: t(lang, "upgradeWhyDevices"), plan: t(lang, "upgradeWhyDevicesPlan") },
-    { q: t(lang, "upgradeWhyPlus"), plan: t(lang, "upgradeWhyPlusPlan") },
-  ];
-
   return (
     <EnterprisePageContainer className="space-y-4 sm:space-y-6">
       <PageBackBar lang={lang} fallbackTo="/settings/account" label={t(lang, "officeCardAccount")} />
@@ -120,7 +112,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
         Page header — same gradient family as the rest of the signed-in app, but
         tighter than the marketing hero so this still reads as a POS screen.
       */}
-      <header className="max-w-4xl px-1 py-2 sm:py-4">
+      <header className="max-w-4xl px-1 py-1 sm:py-2">
         <p className="text-xs font-black uppercase tracking-[0.2em] text-waka-700">{t(lang, "upgradePickTitle")}</p>
         <h1 className={enterpriseTypeClass("display", "mt-2")}>{t(lang, "upgradeBusinessHeading")}</h1>
         <p className="mt-3 max-w-3xl text-base leading-7 text-muted-foreground sm:text-lg">One plan, one clear price, and a WP-58 receipt printer included when you choose Business yearly.</p>
@@ -136,7 +128,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
       {!loading && authMode === "supabase" ? (
         <section
           aria-labelledby="upgrade-current-plan-heading"
-          className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5"
+          className="rounded-2xl border border-border bg-card p-3 shadow-sm sm:p-4"
         >
           <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
             {t(lang, "upgradeCurrentLabel")}
@@ -170,7 +162,11 @@ export function UpgradePage({ lang }: { lang: Language }) {
             to a purchased one when the two disagree.
           */}
           {effective.promotionalGrant ? (
-            <p className="mt-2 text-xs font-semibold text-muted-foreground">{t(lang, "upgradePromoGrantNote")}</p>
+            <p className="mt-2 rounded-xl bg-violet-50 px-3 py-2 text-xs font-semibold leading-5 text-violet-950">
+              {t(lang, "upgradePromoGrantNote")}
+              <br />
+              {t(lang, "upgradePromoGrantPrinterNote")}
+            </p>
           ) : null}
           {renewalCountdown ? (
             <p className="mt-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-900">
@@ -212,17 +208,9 @@ export function UpgradePage({ lang }: { lang: Language }) {
       ) : null}
 
       {!loading && showFreePitch ? (
-        <section className="rounded-2xl border border-border bg-muted p-4 shadow-sm sm:p-5">
-          <h2 className={enterpriseTypeClass("sectionTitle")}>{t(lang, "upgradeWhyTitle")}</h2>
-          <ul className="mt-3 space-y-2">
-            {whyRows.map((row) => (
-              <li key={row.q} className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                <span className="font-medium text-muted-foreground">{row.q}</span>
-                <span className="font-bold text-waka-800">→ {row.plan}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        <p className="rounded-xl border border-border bg-muted px-4 py-3 text-sm font-semibold text-muted-foreground">
+          {t(lang, "upgradeWhyTitle")} — {t(lang, "upgradeWhyMoreProducts")} {t(lang, "upgradeWhyMoreProductsPlan")}; {t(lang, "upgradeWhyBackup")} {t(lang, "upgradeWhyBackupPlan")}.
+        </p>
       ) : null}
 
       <section aria-labelledby="upgrade-plans-heading" className="space-y-4">
@@ -277,7 +265,7 @@ export function UpgradePage({ lang }: { lang: Language }) {
         )}
       </section>
 
-      <section id="printer-steps" aria-labelledby="printer-steps-heading" className="rounded-[1.5rem] border border-border bg-card p-5 sm:p-7">
+      <section id="printer-steps" aria-labelledby="printer-steps-heading" className="scroll-mt-4 rounded-[1.5rem] border border-border bg-card p-5 pb-[calc(var(--waka-bottom-nav-h)+var(--waka-safe-bottom)+4rem)] sm:p-7 sm:pb-7">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><h2 id="printer-steps-heading" className={enterpriseTypeClass("sectionTitle")}>{t(lang, "upgradeJourneyTitle")}</h2><span className="text-sm text-muted-foreground">{t(lang, "upgradeJourneySub")}</span></div>
         <ol className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {["Choose Business yearly", "Activate your paid subscription", "Check eligibility and request collection", "Collect and confirm handover"].map((step, index) => (
