@@ -311,6 +311,22 @@ body {
     }
   }
 
+  /** Hospitality — warm service workspace surface shared by floor, kitchen, expo and reservations. */
+  .app-shell--hospitality-nav,
+  .app-shell--floor-nav {
+    background: #fbf8f3;
+  }
+  .app-shell--hospitality-nav .scroll-main-chrome,
+  .app-shell--floor-nav .scroll-main-chrome {
+    background: linear-gradient(180deg, #fbf8f3 0%, #f7f2eb 100%);
+  }
+  .dark .app-shell--hospitality-nav,
+  .dark .app-shell--floor-nav,
+  .dark .app-shell--hospitality-nav .scroll-main-chrome,
+  .dark .app-shell--floor-nav .scroll-main-chrome {
+    background: #1c1917;
+  }
+
   /** POS sell — bounded flex column so the catalog scroll pane gets a real height on Android WebView. */
   .app-shell--sell-focus .scroll-main-chrome > div {
     flex: 1 1 0%;

@@ -22,8 +22,8 @@ export function FloorPlanBottomBar({ lang, active, onFloor, onReservations, onDo
       className={clsx(
         "flex min-h-12 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 text-[10px] font-black uppercase tracking-wide sm:min-h-14 sm:flex-row sm:gap-2 sm:text-xs",
         active === tab
-          ? "bg-sky-700 text-white shadow-inner"
-          : "bg-sky-600 text-sky-50 active:bg-sky-700",
+          ? "bg-orange-600 text-white shadow-[0_6px_18px_rgba(234,88,12,0.22)]"
+          : "bg-orange-50 text-orange-950 active:bg-orange-100 dark:bg-orange-950/30 dark:text-orange-100 dark:active:bg-orange-950/50",
       )}
     >
       <Icon className="h-4 w-4 shrink-0" />

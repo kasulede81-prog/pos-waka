@@ -37,7 +37,7 @@ export function FloorPlanRightPanel({
   ];
 
   return (
-    <aside className="hidden shrink-0 flex-col border-l border-border bg-muted lg:flex lg:w-56 xl:w-64">
+    <aside className="hidden shrink-0 flex-col border-l border-orange-100 bg-[#fbf8f3] dark:border-orange-950/40 dark:bg-stone-950 lg:flex lg:w-56 xl:w-64">
       <div className="border-b border-border bg-card p-2">
         {filters.map((f, i) => (
           <button
@@ -46,7 +46,7 @@ export function FloorPlanRightPanel({
             onClick={() => onViewFilterChange(f.id)}
             className={clsx(
               "flex w-full items-center justify-between rounded px-2 py-2 text-left text-xs font-bold",
-              viewFilter === f.id ? "bg-sky-100 text-sky-900" : "text-muted-foreground hover:bg-muted",
+              viewFilter === f.id ? "bg-orange-100 text-orange-950 dark:bg-orange-950/40 dark:text-orange-100" : "text-muted-foreground hover:bg-orange-50 dark:hover:bg-orange-950/25",
             )}
           >
             <span>{t(lang, f.labelKey as "floorFilterAll")}</span>
