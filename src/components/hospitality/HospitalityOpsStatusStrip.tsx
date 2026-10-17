@@ -30,7 +30,7 @@ export function HospitalityOpsStatusStrip({ lang, className }: Props) {
       <span
         className={clsx(
           "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide",
-          isOnline ? "bg-emerald-100 text-emerald-900" : "bg-amber-100 text-amber-950",
+          isOnline ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200" : "bg-amber-100 text-amber-950 dark:bg-amber-950/40 dark:text-amber-200",
         )}
       >
         {isOnline ? <Wifi className="h-3 w-3" aria-hidden /> : <WifiOff className="h-3 w-3" aria-hidden />}
