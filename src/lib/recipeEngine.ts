@@ -1,4 +1,15 @@
-import type { IngredientShortage, PrepBatch, PrepRecipeSnapshot, Product, Recipe, RecipeLine, SaleLine, SaleLineModifier } from "../types";
+import type {
+  IngredientShortage,
+  PrepBatch,
+  PrepBatchCostBasis,
+  PrepBatchYieldBasis,
+  PrepRecipeSnapshot,
+  Product,
+  Recipe,
+  RecipeLine,
+  SaleLine,
+  SaleLineModifier,
+} from "../types";
 import { productMenuConfig, resolveProductVariant } from "./menuModifiers";
 export function effectiveRecipe(product: Product, variantId?: string | null): Recipe | null {
   const menu = productMenuConfig(product);
@@ -151,6 +162,96 @@ export function prepRequirementsForPortions(product: Product, portions: number):
 /** Historical per-portion recipe cost at preparation time (frozen on the batch). */
 export function prepBatchUnitCostUgx(product: Product, products: Product[]): number {
   return computeMenuItemFoodCostUgx(product, products);
+}
+
+/** Cost of a requirement map at the current product cost prices. */
+export function requirementsFoodCostUgx(
+  requirements: Map<string, number>,
+  products: Product[],
+): number {
+  let total = 0;
+  for (const [ingredientId, qty] of requirements) {
+    if (qty <= 0) continue;
+    const ingredient = products.find((p) => p.id === ingredientId);
+    if (!ingredient) continue;
+    total += qty * ingredient.costPricePerUnitUgx;
+  }
+  return Math.round(total);
+}
+
+/** Scale a requirement map without mutating the caller's map. */
+export function scaleRequirements(
+  requirements: Map<string, number>,
+  factor: number,
+): Map<string, number> {
+  const scaled = new Map<string, number>();
+  if (!Number.isFinite(factor) || factor <= 0) return scaled;
+  for (const [ingredientId, qty] of requirements) {
+    const next = qty * factor;
+    if (next > 0) scaled.set(ingredientId, next);
+  }
+  return scaled;
+}
+
+/**
+ * Ingredient ids referenced by the product's recipe that no longer resolve to a
+ * product. Preparation must surface these instead of silently treating them as
+ * zero cost / zero stock.
+ */
+export function missingRecipeIngredientIds(product: Product, products: Product[]): string[] {
+  const recipe = effectiveRecipe(product);
+  if (!recipe) return [];
+  const known = new Set(products.map((p) => p.id));
+  return [...new Set(recipe.lines.map((l) => l.ingredientProductId))].filter((id) => !known.has(id));
+}
+
+export type PrepBatchProjection = {
+  /** Always true: this is a sell-out what-if, not recorded revenue or accounting profit. */
+  isProjection: true;
+  portions: number;
+  sellingPriceUgx: number;
+  projectedRevenueUgx: number;
+  projectedCostUgx: number;
+  projectedProfitUgx: number;
+  projectedMarginPct: number;
+  yieldBasis: PrepBatchYieldBasis;
+  costBasis: PrepBatchCostBasis;
+};
+
+/**
+ * Sell-out projection for a batch that carries frozen batch-cost fields.
+ * Legacy batches have no total batch cost and return null, so callers keep
+ * showing the existing unit-cost display instead of inventing a projection.
+ */
+export function computePrepBatchProjection(
+  batch: PrepBatch,
+  product: Product,
+): PrepBatchProjection | null {
+  if (batch.totalCostUgx == null || !Number.isFinite(batch.totalCostUgx) || batch.portionsPrepared <= 0) {
+    return null;
+  }
+  const portions = batch.portionsPrepared;
+  // Project at the current menu price; the prep-time price is kept on the batch
+  // as a historical reference but should not make an active projection stale.
+  const sellingPriceUgx =
+    product.sellingPricePerUnitUgx > 0
+      ? product.sellingPricePerUnitUgx
+      : (batch.sellingPriceUgx ?? 0);
+  const projectedRevenueUgx = Math.round(sellingPriceUgx * portions);
+  const projectedCostUgx = Math.round(batch.totalCostUgx);
+  const projectedProfitUgx = projectedRevenueUgx - projectedCostUgx;
+  return {
+    isProjection: true,
+    portions,
+    sellingPriceUgx,
+    projectedRevenueUgx,
+    projectedCostUgx,
+    projectedProfitUgx,
+    projectedMarginPct:
+      projectedRevenueUgx > 0 ? (projectedProfitUgx / projectedRevenueUgx) * 100 : 0,
+    yieldBasis: batch.yieldBasis ?? (batch.actualPortions != null ? "actual" : "estimated"),
+    costBasis: batch.costBasis ?? "recipe_estimate",
+  };
 }
 
 /**

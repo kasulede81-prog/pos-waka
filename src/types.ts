@@ -729,6 +729,19 @@ export type PrepRecipeSnapshot = {
  */
 export type PrepBatchStatus = "active" | "depleted" | "wasted" | "cancelled";
 
+/** Whether the plates produced were measured or are still the recipe expectation. */
+export type PrepBatchYieldBasis = "estimated" | "actual";
+
+/** Whether the ingredient cost was entered as actual or derived from recipe costs. */
+export type PrepBatchCostBasis = "recipe_estimate" | "actual";
+
+/** A non-ingredient batch cost (charcoal/gas, labour, packaging, …). */
+export type PrepBatchAdditionalCost = {
+  id?: string;
+  label: string;
+  amountUgx: number;
+};
+
 export type PrepBatch = {
   id: string;
   /** Finished-menu product this batch was prepared for. */
@@ -736,8 +749,41 @@ export type PrepBatch = {
   preparedAt: string;
   portionsPrepared: number;
   remainingPortions: number;
-  /** Historical recipe cost per portion at preparation time — never rewritten. */
+  /** Historical ingredient COGS per portion at preparation time — never rewritten. */
   unitCostUgx: number;
+  /**
+   * Plates the recipe batch was expected to produce. This is the ingredient
+   * basis: a full pot deducts the full recipe, even when fewer plates came out.
+   * Absent on legacy batches, which keep the old portions-as-basis behavior.
+   */
+  expectedPortions?: number;
+  /** Measured plates produced. Null/absent when yield is still an estimate. */
+  actualPortions?: number | null;
+  /** Actual vs estimated yield, frozen at preparation time. */
+  yieldBasis?: PrepBatchYieldBasis;
+  /** Extra batch costs entered by the merchant (not ingredients). */
+  additionalCosts?: PrepBatchAdditionalCost[];
+  /** Frozen sum of additionalCosts. */
+  additionalCostUgx?: number;
+  /** Frozen ingredient cost for the whole batch. */
+  ingredientCostUgx?: number;
+  /** Actual vs recipe-estimated ingredient cost. */
+  costBasis?: PrepBatchCostBasis;
+  /** Frozen total batch cost: ingredientCostUgx + additionalCostUgx. */
+  totalCostUgx?: number;
+  /**
+   * Full batch cost per plate (ingredients + additional costs), for Hospitality
+   * management projections and waste/remaining valuation. This is deliberately
+   * separate from `unitCostUgx`, which remains the ingredient COGS used by the
+   * existing sale financial snapshot and global Profit page.
+   */
+  batchCostPerPlateUgx?: number;
+  /** Selling price per plate frozen at preparation time, used for projection. */
+  sellingPriceUgx?: number;
+  /** Portions written off from this batch. */
+  wastedPortions?: number;
+  /** Value of those portions at this batch's frozen full batch cost per plate. */
+  wasteCostUgx?: number;
   /** Frozen recipe (ratios, yield, waste) used at preparation time (Phase 5.1). */
   recipeSnapshot?: PrepRecipeSnapshot | null;
   status: PrepBatchStatus;

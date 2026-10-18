@@ -327,7 +327,9 @@ import {
   prepSnapshotRequirements,
   preparedPortionsAvailable,
   productPrepMode,
+  requirementsFoodCostUgx,
   requirementsFromSaleLines,
+  scaleRequirements,
   saleLineConsumesIngredientsAtSale,
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
@@ -1387,16 +1389,25 @@ export type PosState = {
    */
   prepareMenuBatch: (input: {
     productId: string;
+    /** Backward-compatible stock count; new callers pass the actual or expected plates. */
     portions: number;
+    /** Expected plates (ingredient basis). Absent keeps the legacy portions-only path. */
+    expectedPortions?: number;
+    /** Measured plates produced; absent/null keeps yield estimated. */
+    actualPortions?: number | null;
+    /** Merchant-confirmed ingredient cost for the whole batch; absent uses recipe cost. */
+    actualIngredientCostUgx?: number | null;
+    /** Non-ingredient batch costs (charcoal/gas, labour, packaging). */
+    additionalCosts?: import("../types").PrepBatchAdditionalCost[];
     note?: string | null;
     batchId?: string;
-  }) => { ok: boolean; errorKey?: string; batchId?: string };
+  }) => { ok: boolean; errorKey?: string; batchId?: string; missingIngredientIds?: string[] };
   /** Phase 5 — waste prepared portions from a batch. No ingredient restore. */
   wastePreparedPortions: (input: {
     batchId: string;
     portions: number;
     reason: string;
-  }) => { ok: boolean; errorKey?: string };
+  }) => { ok: boolean; errorKey?: string; lossValueUgx?: number };
   /** Phase 5 — cancel an active batch, restoring ingredients for unsold portions only. */
   cancelPrepBatch: (input: { batchId: string; note?: string | null }) => { ok: boolean; errorKey?: string };
   pharmacySupplierReturn: (input: {
@@ -7203,7 +7214,16 @@ export const usePosStore = create<PosState>((set, get) => {
     return { ok: true, lossValueUgx };
   },
 
-  prepareMenuBatch: ({ productId, portions, note, batchId: inputBatchId }) => {
+  prepareMenuBatch: ({
+    productId,
+    portions,
+    expectedPortions,
+    actualPortions,
+    actualIngredientCostUgx,
+    additionalCosts,
+    note,
+    batchId: inputBatchId,
+  }) => {
     const denied = denyUnlessEffectivePermission("stock.adjust", "prepareMenuBatch");
     if (denied) return { ok: false, errorKey: denied.errorKey };
 
@@ -7216,6 +7236,33 @@ export const usePosStore = create<PosState>((set, get) => {
     const qty = Math.floor(Number(portions) || 0);
     if (qty <= 0) return { ok: false, errorKey: "invalidQty" };
 
+    const actualIngredientCostProvided =
+      actualIngredientCostUgx !== undefined && actualIngredientCostUgx !== null;
+    if (
+      actualIngredientCostProvided &&
+      (!Number.isFinite(Number(actualIngredientCostUgx)) || Number(actualIngredientCostUgx) < 0)
+    ) {
+      return { ok: false, errorKey: "menuPrepInvalidCost" };
+    }
+
+    // Explicit batch-costing path. With no optional fields this is the legacy
+    // path: entered portions are both the stock count and the ingredient basis.
+    const usesBatchCosting =
+      expectedPortions !== undefined ||
+      actualPortions !== undefined ||
+      actualIngredientCostProvided ||
+      additionalCosts !== undefined;
+
+    const expectedQty = usesBatchCosting
+      ? Math.max(1, Math.floor(Number(expectedPortions ?? qty) || qty))
+      : qty;
+    const actualQty =
+      usesBatchCosting && actualPortions !== undefined && actualPortions !== null && Number(actualPortions) > 0
+        ? Math.max(1, Math.floor(Number(actualPortions)))
+        : null;
+    const preparedQty = usesBatchCosting ? (actualQty ?? expectedQty) : qty;
+    if (preparedQty <= 0) return { ok: false, errorKey: "invalidQty" };
+
     // Idempotency: a retry with the same caller-supplied batchId is a no-op.
     const batchId = inputBatchId?.trim() || crypto.randomUUID();
     const existing = (p.menu?.prepBatches ?? []).find((b) => b.id === batchId);
@@ -7224,8 +7271,16 @@ export const usePosStore = create<PosState>((set, get) => {
     const at = new Date().toISOString();
     const actor = state.sessionActor;
 
-    // 1–2. Requirements + availability (exact sale-time recipe math, incl. yield + waste).
-    const requirements = prepRequirementsForPortions(p, qty);
+    // 1–2. Requirements + availability. The expected yield is the ingredient
+    // basis: a full pot deducts the full recipe even when fewer plates came out.
+    const ingredientBasisQty = usesBatchCosting ? expectedQty : qty;
+    const requirements = prepRequirementsForPortions(p, ingredientBasisQty);
+    const missingIngredientIds = [...new Set(
+      [...requirements.keys()].filter((id) => !state.products.some((x) => x.id === id)),
+    )];
+    if (missingIngredientIds.length > 0) {
+      return { ok: false, errorKey: "menuPrepMissingIngredient", missingIngredientIds };
+    }
     const shortages = checkIngredientAvailability(requirements, state.products);
     if (shortages.length > 0) return { ok: false, errorKey: "ingredientShortage" };
 
@@ -7251,18 +7306,69 @@ export const usePosStore = create<PosState>((set, get) => {
       });
     }
 
-    // 5–7. Batch record with historical per-portion recipe cost; prepared stock += portions.
-    const unitCostUgx = prepBatchUnitCostUgx(p, state.products);
+    // 5–7. Batch record. Legacy batches keep the historical per-portion recipe
+    // cost. Explicit batches freeze the whole batch cost and divide it by the
+    // actual plates produced, or by the expected yield while actual is unknown.
+    let unitCostUgx: number;
+    let expectedPortionsField: number | undefined;
+    let actualPortionsField: number | null | undefined;
+    let yieldBasis: import("../types").PrepBatchYieldBasis | undefined;
+    let additionalCostsField: import("../types").PrepBatchAdditionalCost[] | undefined;
+    let additionalCostUgx: number | undefined;
+    let ingredientCostUgx: number | undefined;
+    let costBasis: import("../types").PrepBatchCostBasis | undefined;
+    let totalCostUgx: number | undefined;
+    let batchCostPerPlateUgx: number | undefined;
+    let sellingPriceUgx: number | undefined;
+
+    if (usesBatchCosting) {
+      const cleanedAdditionalCosts = (additionalCosts ?? [])
+        .map((cost) => ({
+          id: cost.id,
+          label: cost.label.trim() || "Other",
+          amountUgx: Math.max(0, Math.floor(Number(cost.amountUgx) || 0)),
+        }))
+        .filter((cost) => cost.amountUgx > 0);
+      additionalCostUgx = cleanedAdditionalCosts.reduce((sum, cost) => sum + cost.amountUgx, 0);
+      ingredientCostUgx = actualIngredientCostProvided
+        ? Math.round(Number(actualIngredientCostUgx))
+        : requirementsFoodCostUgx(requirements, state.products);
+      totalCostUgx = ingredientCostUgx + additionalCostUgx;
+      // Existing sale COGS semantics stay untouched: the sale snapshot keeps the
+      // recipe-basis per-portion cost. The actual-yield, all-costs figure is
+      // stored separately as Hospitality management information.
+      unitCostUgx = prepBatchUnitCostUgx(p, state.products);
+      batchCostPerPlateUgx = Math.max(0, Math.round(totalCostUgx / preparedQty));
+      expectedPortionsField = expectedQty;
+      actualPortionsField = actualQty;
+      yieldBasis = actualQty ? "actual" : "estimated";
+      additionalCostsField = cleanedAdditionalCosts.length > 0 ? cleanedAdditionalCosts : undefined;
+      costBasis = actualIngredientCostProvided ? "actual" : "recipe_estimate";
+      sellingPriceUgx = Math.max(0, Math.floor(p.sellingPricePerUnitUgx));
+    } else {
+      unitCostUgx = prepBatchUnitCostUgx(p, state.products);
+    }
+
     const recipeAtPrep = effectiveRecipe(p);
     const batch: PrepBatch = {
       id: batchId,
       menuProductId: p.id,
       preparedAt: at,
-      portionsPrepared: qty,
-      remainingPortions: qty,
+      portionsPrepared: preparedQty,
+      remainingPortions: preparedQty,
       unitCostUgx,
+      ...(expectedPortionsField !== undefined ? { expectedPortions: expectedPortionsField } : {}),
+      ...(actualPortionsField !== undefined ? { actualPortions: actualPortionsField } : {}),
+      ...(yieldBasis ? { yieldBasis } : {}),
+      ...(additionalCostsField ? { additionalCosts: additionalCostsField } : {}),
+      ...(additionalCostUgx !== undefined ? { additionalCostUgx } : {}),
+      ...(ingredientCostUgx !== undefined ? { ingredientCostUgx } : {}),
+      ...(costBasis ? { costBasis } : {}),
+      ...(totalCostUgx !== undefined ? { totalCostUgx } : {}),
+      ...(batchCostPerPlateUgx !== undefined ? { batchCostPerPlateUgx } : {}),
+      ...(sellingPriceUgx !== undefined ? { sellingPriceUgx } : {}),
       // Immutable prep-time recipe copy: cancellation restores exactly what THIS
-      // preparation consumed per portion, even if the live recipe later changes.
+      // preparation consumed, even if the live recipe later changes.
       recipeSnapshot: recipeAtPrep
         ? {
             yieldQty: recipeAtPrep.yieldQty,
@@ -7282,7 +7388,7 @@ export const usePosStore = create<PosState>((set, get) => {
     const base = deduction.products.find((x) => x.id === p.id)!;
     const preparedProduct: Product = {
       ...base,
-      stockOnHand: Math.max(0, base.stockOnHand) + qty,
+      stockOnHand: Math.max(0, base.stockOnHand) + preparedQty,
       menu: { ...base.menu, prepBatches: [...(base.menu?.prepBatches ?? []), batch] },
       updatedAt: at,
       version: base.version + 1,
@@ -7296,9 +7402,9 @@ export const usePosStore = create<PosState>((set, get) => {
       at,
       productId: p.id,
       productName: p.name,
-      deltaBaseUnits: qty,
+      deltaBaseUnits: preparedQty,
       kind: "adjust_use",
-      summary: `Prep +${qty} portions`,
+      summary: `Prep +${preparedQty} portions`,
       refId: batchId,
       supplierId: null,
     };
@@ -7328,21 +7434,31 @@ export const usePosStore = create<PosState>((set, get) => {
       "pending_stock_updates",
       r3AdjustmentStockPayload({
         productId: p.id,
-        delta: qty,
+        delta: preparedQty,
         adjustmentId: batchId,
         note: `prep_batch:${batchId}`,
         baseUpdatedAt: baseBefore?.updatedAt,
         baseStockOnHand: baseBefore?.stockOnHand,
       }),
     );
+    // Batch metadata lives inside products.metadata.menu. The stock channel does
+    // not carry it, so queue the existing per-product catalog upsert as well.
+    void queueRemote("product", { id: p.id, catalogOnly: true });
 
-    pushAudit("hospitality_prep_batch", `Prep ${p.name} +${qty} portions @ UGX ${unitCostUgx.toLocaleString()}`, {
+    pushAudit("hospitality_prep_batch", `Prep ${p.name} +${preparedQty} portions @ UGX ${unitCostUgx.toLocaleString()}`, {
       batchId,
       menuProductId: p.id,
       productName: p.name,
-      portions: qty,
+      portions: preparedQty,
+      expectedPortions: expectedPortionsField,
+      actualPortions: actualPortionsField ?? undefined,
+      yieldBasis,
+      ingredientCostUgx,
+      additionalCostUgx,
+      totalCostUgx: totalCostUgx ?? unitCostUgx * preparedQty,
+      batchCostPerPlateUgx,
+      costBasis,
       unitCostUgx,
-      totalCostUgx: unitCostUgx * qty,
       note: note?.trim() || null,
       actorUserId: actor?.userId ?? null,
     });
@@ -7374,11 +7490,19 @@ export const usePosStore = create<PosState>((set, get) => {
     if (qty <= 0 || qty > batch.remainingPortions + 0.0001) return { ok: false, errorKey: "invalidQty" };
 
     const nextRemaining = Math.round((batch.remainingPortions - qty) * 10000) / 10000;
+    // Management information only: value the write-off at this batch's frozen
+    // full batch cost per plate. It does not post an expense or alter the Profit page.
+    const lossValueUgx = Math.max(
+      0,
+      Math.round(qty * (batch.batchCostPerPlateUgx ?? batch.unitCostUgx)),
+    );
     const nextBatches = (product.menu?.prepBatches ?? []).map((b) =>
       b.id === batchId
         ? {
             ...b,
             remainingPortions: nextRemaining,
+            wastedPortions: Math.round(((b.wastedPortions ?? 0) + qty) * 10000) / 10000,
+            wasteCostUgx: Math.round((b.wasteCostUgx ?? 0) + lossValueUgx),
             status: (nextRemaining <= 0.0001 ? "wasted" : "active") as PrepBatch["status"],
             updatedAt: at,
             version: (b.version ?? 1) + 1,
@@ -7432,17 +7556,21 @@ export const usePosStore = create<PosState>((set, get) => {
         baseStockOnHand: before,
       }),
     );
+    void queueRemote("product", { id: product.id, catalogOnly: true });
 
     pushAudit("hospitality_prep_waste", `Prep waste ${product.name} −${qty} (${wasteReason})`, {
       batchId,
       menuProductId: product.id,
       productName: product.name,
       portions: qty,
+      unitCostUgx: batch.unitCostUgx,
+      batchCostPerPlateUgx: batch.batchCostPerPlateUgx,
+      lossValueUgx,
       reason: wasteReason,
       actorUserId: actor?.userId ?? null,
     });
 
-    return { ok: true };
+    return { ok: true, lossValueUgx };
   },
 
   cancelPrepBatch: ({ batchId, note }) => {
@@ -7471,10 +7599,23 @@ export const usePosStore = create<PosState>((set, get) => {
     const reversePortions = batch.remainingPortions;
     // Quantities restored come from the IMMUTABLE prep-time recipe snapshot when
     // present (Phase 5.1), so a later recipe edit never changes what a cancel
-    // returns; legacy batches without a snapshot fall back to the current recipe.
-    const requirements = batch.recipeSnapshot
-      ? prepSnapshotRequirements(batch.recipeSnapshot, reversePortions)
-      : prepRequirementsForPortions(product, reversePortions);
+    // returns. Explicit batches used the EXPECTED yield as the ingredient basis,
+    // so restore that batch's full-pot share for the unsold plates. Legacy
+    // batches keep the original per-portion snapshot scaling.
+    let requirements: Map<string, number>;
+    if (
+      batch.recipeSnapshot &&
+      batch.expectedPortions != null &&
+      batch.expectedPortions > 0 &&
+      batch.portionsPrepared > 0
+    ) {
+      const fullBatchRequirements = prepSnapshotRequirements(batch.recipeSnapshot, batch.expectedPortions);
+      requirements = scaleRequirements(fullBatchRequirements, reversePortions / batch.portionsPrepared);
+    } else if (batch.recipeSnapshot) {
+      requirements = prepSnapshotRequirements(batch.recipeSnapshot, reversePortions);
+    } else {
+      requirements = prepRequirementsForPortions(product, reversePortions);
+    }
 
     const shopKey = inventoryMovementNamespace();
     const movements: StockMovement[] = [];
@@ -7573,6 +7714,7 @@ export const usePosStore = create<PosState>((set, get) => {
         baseStockOnHand: menuBefore,
       }),
     );
+    void queueRemote("product", { id: product.id, catalogOnly: true });
 
     pushAudit("hospitality_prep_cancel", `Prep cancel ${product.name} −${reversePortions} portions`, {
       batchId,

@@ -1,11 +1,26 @@
 import { useState } from "react";
-import type { Language, ModifierGroup, ModifierOption, PrepBatch, Product, ProductMenuConfig, ProductVariant, RecipeLine, ComboSlot } from "../../types";
-import { t } from "../../lib/i18n";
+import type {
+  Language,
+  ModifierGroup,
+  ModifierOption,
+  PrepBatch,
+  PrepBatchAdditionalCost,
+  Product,
+  ProductMenuConfig,
+  ProductVariant,
+  RecipeLine,
+  ComboSlot,
+} from "../../types";
+import { t, tTemplate } from "../../lib/i18n";
 import { DEFAULT_MENU_SECTIONS } from "../../lib/menuModifiers";
 import {
+  computeMenuItemFoodCostUgx,
   computeMenuItemMargin,
+  computePrepBatchProjection,
+  missingRecipeIngredientIds,
   prepRequirementsForPortions,
   preparedPortionsAvailable,
+  requirementsFoodCostUgx,
 } from "../../lib/recipeEngine";
 import { formatUgx } from "../../lib/formatUgx";
 import { usePosStore } from "../../store/usePosStore";
@@ -24,19 +39,37 @@ function newId(prefix: string) {
 
 const WASTE_REASONS = ["spoiled", "burnt", "damaged", "unsold", "other"] as const;
 
+type PrepCostDraft = {
+  id: string;
+  label: string;
+  amount: string;
+};
+
+const prepCostAmount = (value: string): number =>
+  Math.max(0, Math.floor(Number(value.replace(/[^\d]/g, "")) || 0));
+
+const positiveIntOrNull = (value: string): number | null => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+};
+
 export function ProductMenuConfigFields({ lang, product, ingredientProducts, onSave }: Props) {
   const [menu, setMenu] = useState<ProductMenuConfig>(
     product.menu ?? { productKind: "finished_menu", modifierGroups: [], variants: [], recipe: { lines: [] } },
   );
   // Phase 5 — preparation workflow state (batch truth always read from the store product).
   const [prepOpen, setPrepOpen] = useState(false);
-  const [prepQty, setPrepQty] = useState("");
+  const [prepExpectedQty, setPrepExpectedQty] = useState("");
+  const [prepActualQty, setPrepActualQty] = useState("");
+  const [prepActualIngredientCost, setPrepActualIngredientCost] = useState("");
+  const [prepExtraCosts, setPrepExtraCosts] = useState<PrepCostDraft[]>([]);
   const [wasteFor, setWasteFor] = useState<string | null>(null);
   const [wasteQty, setWasteQty] = useState("");
   const [wasteReason, setWasteReason] = useState<(typeof WASTE_REASONS)[number]>("spoiled");
   const [cancelFor, setCancelFor] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const allProducts = usePosStore((s) => s.products);
   const storeProduct = usePosStore((s) => s.products.find((p) => p.id === product.id)) ?? product;
   const storePrepMode = storeProduct.menu?.prepMode ?? "made_to_order";
   const storeBatches = storeProduct.menu?.prepBatches ?? [];
@@ -51,20 +84,30 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
     return result.ok;
   };
 
-  const confirmPrepare = () => {
-    const portions = Math.floor(Number(prepQty) || 0);
-    if (portions <= 0) {
-      setActionError(t(lang, "invalidQty"));
-      return;
-    }
-    // The action validates against the SAVED product — persist prepMode first if needed.
-    if (storePrepMode !== "batch_prepared") {
-      onSave({ ...menu, prepMode: "batch_prepared", prepBatches: storeBatches });
-    }
-    if (runAction(() => prepareMenuBatch({ productId: product.id, portions }))) {
-      setPrepOpen(false);
-      setPrepQty("");
-    }
+  const defaultExtraCosts = (): PrepCostDraft[] => [
+    { id: "charcoal", label: t(lang, "menuPrepCostCharcoal"), amount: "" },
+    { id: "labour", label: t(lang, "menuPrepCostLabour"), amount: "" },
+    { id: "packaging", label: t(lang, "menuPrepCostPackaging"), amount: "" },
+  ];
+
+  const resetPrepDraft = () => {
+    setPrepExpectedQty("");
+    setPrepActualQty("");
+    setPrepActualIngredientCost("");
+    setPrepExtraCosts([]);
+  };
+
+  const openPrep = () => {
+    setActionError(null);
+    setPrepExpectedQty(String(storeProduct.menu?.recipe?.yieldQty ?? 1));
+    setPrepActualQty("");
+    setPrepActualIngredientCost("");
+    setPrepExtraCosts(defaultExtraCosts());
+    setPrepOpen(true);
+  };
+
+  const updatePrepExtraCost = (id: string, patch: Partial<PrepCostDraft>) => {
+    setPrepExtraCosts((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   };
 
   const confirmWaste = (batchId: string) => {
@@ -81,14 +124,74 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
     }
   };
 
-  const prepPreviewPortions = Math.max(1, Math.floor(Number(prepQty) || storeProduct.menu?.recipe?.yieldQty || 1));
-  const prepPreview = prepRequirementsForPortions({ ...product, menu }, prepPreviewPortions);
+  // The expected yield is the ingredient basis. Actual plates, when known, only
+  // change the stock count and the denominator for cost per plate.
+  const prepExpectedQtyValue =
+    positiveIntOrNull(prepExpectedQty) ??
+    Math.max(1, Math.floor(storeProduct.menu?.recipe?.yieldQty ?? 1));
+  const prepActualQtyValue = positiveIntOrNull(prepActualQty);
+  const prepPreparedQty = prepActualQtyValue ?? prepExpectedQtyValue;
+  const prepPreview = prepRequirementsForPortions({ ...product, menu }, prepExpectedQtyValue);
   const prepPreviewRows = [...prepPreview.entries()].map(([ingredientId, required]) => {
-    const ing = ingredientProducts.find((p) => p.id === ingredientId);
+    const ing = allProducts.find((p) => p.id === ingredientId);
     const available = ing?.stockOnHand ?? 0;
     return { ingredientId, name: ing?.name ?? ingredientId, unit: ing?.baseUnit ?? "ea", required, available };
   });
+  const missingPrepIngredientIds = missingRecipeIngredientIds({ ...product, menu }, allProducts);
   const prepHasShortage = prepPreviewRows.some((r) => r.required > r.available + 0.0001);
+  const prepIngredientEstimateUgx = requirementsFoodCostUgx(prepPreview, allProducts);
+  const prepActualIngredientCostValue = prepActualIngredientCost.trim()
+    ? prepCostAmount(prepActualIngredientCost)
+    : null;
+  const prepIngredientCostUgx = prepActualIngredientCostValue ?? prepIngredientEstimateUgx;
+  const prepAdditionalCostValues: PrepBatchAdditionalCost[] = prepExtraCosts
+    .map((cost) => ({
+      id: cost.id,
+      label: cost.label.trim() || t(lang, "menuPrepAdditionalCosts"),
+      amountUgx: prepCostAmount(cost.amount),
+    }))
+    .filter((cost) => cost.amountUgx > 0);
+  const prepAdditionalCostUgx = prepAdditionalCostValues.reduce((sum, cost) => sum + cost.amountUgx, 0);
+  const prepTotalCostUgx = prepIngredientCostUgx + prepAdditionalCostUgx;
+  const prepSaleCogsPerPlateUgx = Math.max(
+    0,
+    Math.round(computeMenuItemFoodCostUgx({ ...product, menu }, allProducts)),
+  );
+  const prepBatchCostPerPlateUgx = Math.max(0, Math.round(prepTotalCostUgx / prepPreparedQty));
+  const prepSellingPriceUgx = Math.max(0, Math.floor(product.sellingPricePerUnitUgx));
+  const prepProjectedRevenueUgx = prepSellingPriceUgx * prepPreparedQty;
+  const prepProjectedProfitUgx = prepProjectedRevenueUgx - prepTotalCostUgx;
+  const prepProjectionTitle = tTemplate(lang, "menuPrepProjectionTitle", { count: prepPreparedQty });
+
+  const confirmPrepare = () => {
+    if (missingPrepIngredientIds.length > 0) {
+      setActionError(t(lang, "menuPrepMissingIngredient"));
+      return;
+    }
+    if (prepPreviewRows.length === 0) {
+      setActionError(t(lang, "prepRequiresRecipe"));
+      return;
+    }
+    // The action validates against the SAVED product — persist prepMode first if needed.
+    if (storePrepMode !== "batch_prepared") {
+      onSave({ ...menu, prepMode: "batch_prepared", prepBatches: storeBatches });
+    }
+    if (
+      runAction(() =>
+        prepareMenuBatch({
+          productId: product.id,
+          portions: prepPreparedQty,
+          expectedPortions: prepExpectedQtyValue,
+          actualPortions: prepActualQtyValue ?? undefined,
+          actualIngredientCostUgx: prepActualIngredientCostValue,
+          additionalCosts: prepAdditionalCostValues,
+        }),
+      )
+    ) {
+      setPrepOpen(false);
+      resetPrepDraft();
+    }
+  };
 
   const addModifierGroup = () => {
     const g: ModifierGroup = {
@@ -363,25 +466,42 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
               {!prepOpen ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setActionError(null);
-                    setPrepOpen(true);
-                  }}
+                  onClick={openPrep}
                   className="min-h-[44px] w-full rounded-xl bg-waka-600 text-sm font-black text-white"
                 >
                   {t(lang, "menuPrepPrepare")}
                 </button>
               ) : (
                 <div className="rounded-xl border border-waka-200 bg-waka-50 p-3">
-                  <label className="block">
-                    <span className="text-xs font-bold text-muted-foreground">{t(lang, "menuPrepPortions")}</span>
-                    <input
-                      value={prepQty}
-                      onChange={(e) => setPrepQty(e.target.value.replace(/\D/g, ""))}
-                      placeholder={String(storeProduct.menu?.recipe?.yieldQty ?? 1)}
-                      className="mt-1 min-h-[44px] w-full rounded-lg border border-border px-3 text-lg font-black"
-                    />
-                  </label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="text-xs font-bold text-muted-foreground">{t(lang, "menuPrepExpectedPortions")}</span>
+                      <input
+                        value={prepExpectedQty}
+                        onChange={(e) => setPrepExpectedQty(e.target.value.replace(/\D/g, ""))}
+                        placeholder={String(storeProduct.menu?.recipe?.yieldQty ?? 1)}
+                        inputMode="numeric"
+                        className="mt-1 min-h-[44px] w-full rounded-lg border border-border px-3 text-lg font-black"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-bold text-muted-foreground">{t(lang, "menuPrepActualPortions")}</span>
+                      <input
+                        value={prepActualQty}
+                        onChange={(e) => setPrepActualQty(e.target.value.replace(/\D/g, ""))}
+                        inputMode="numeric"
+                        className="mt-1 min-h-[44px] w-full rounded-lg border border-border px-3 text-lg font-black"
+                      />
+                    </label>
+                  </div>
+                  <p className="mt-1 text-[11px] font-medium text-muted-foreground">{t(lang, "menuPrepActualYieldHint")}</p>
+
+                  {missingPrepIngredientIds.length > 0 ? (
+                    <p className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-bold text-red-700">
+                      {t(lang, "menuPrepMissingIngredient")}: {missingPrepIngredientIds.join(", ")}
+                    </p>
+                  ) : null}
+
                   {prepPreviewRows.length > 0 && (
                     <ul className="mt-2 space-y-1">
                       {prepPreviewRows.map((row) => (
@@ -395,6 +515,95 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                       ))}
                     </ul>
                   )}
+
+                  <div className="mt-2 rounded-lg border border-border bg-card p-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepIngredientCostEstimate")}</span>
+                      <span className="font-black">{formatUgx(prepIngredientEstimateUgx)}</span>
+                    </div>
+                    <label className="mt-2 block">
+                      <span className="text-[11px] font-bold text-muted-foreground">{t(lang, "menuPrepActualIngredientCost")}</span>
+                      <input
+                        value={prepActualIngredientCost}
+                        onChange={(e) => setPrepActualIngredientCost(e.target.value.replace(/\D/g, ""))}
+                        placeholder={formatUgx(prepIngredientEstimateUgx)}
+                        inputMode="numeric"
+                        className="mt-1 min-h-[40px] w-full rounded-lg border border-border px-2 text-sm font-black"
+                      />
+                    </label>
+
+                    <p className="mt-2 text-[11px] font-black uppercase text-muted-foreground">{t(lang, "menuPrepAdditionalCosts")}</p>
+                    <p className="text-[11px] font-medium text-muted-foreground">{t(lang, "menuPrepAdditionalCostHint")}</p>
+                    <div className="mt-1 space-y-1">
+                      {prepExtraCosts.map((cost) => (
+                        <div key={cost.id} className="grid grid-cols-[1fr_92px_30px] gap-1">
+                          <input
+                            value={cost.label}
+                            onChange={(e) => updatePrepExtraCost(cost.id, { label: e.target.value })}
+                            className="min-h-[36px] rounded-lg border border-border px-2 text-xs font-bold"
+                          />
+                          <input
+                            value={cost.amount}
+                            onChange={(e) => updatePrepExtraCost(cost.id, { amount: e.target.value.replace(/\D/g, "") })}
+                            placeholder="UGX"
+                            inputMode="numeric"
+                            className="min-h-[36px] rounded-lg border border-border px-2 text-xs font-black"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setPrepExtraCosts((rows) => rows.filter((row) => row.id !== cost.id))}
+                            aria-label={t(lang, "menuPrepRemoveCost")}
+                            className="min-h-[36px] rounded-lg border border-border text-sm font-black text-muted-foreground"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPrepExtraCosts((rows) => [...rows, { id: newId("pc"), label: "", amount: "" }])
+                      }
+                      className="mt-1 text-xs font-black text-waka-700"
+                    >
+                      + {t(lang, "menuPrepAddCost")}
+                    </button>
+                  </div>
+
+                  <div className="mt-2 rounded-lg border border-waka-200 bg-card p-2 text-xs">
+                    <p className="flex items-center justify-between">
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepBatchCost")}</span>
+                      <span className="font-black">{formatUgx(prepTotalCostUgx)}</span>
+                    </p>
+                    <p className="flex items-center justify-between">
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepSaleCogsPerPlate")}</span>
+                      <span className="font-black">{formatUgx(prepSaleCogsPerPlateUgx)}</span>
+                    </p>
+                    <p className="flex items-center justify-between">
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepCostPerPlate")}</span>
+                      <span className="font-black">{formatUgx(prepBatchCostPerPlateUgx)}</span>
+                    </p>
+                    <p className="flex items-center justify-between">
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepSellingPrice")}</span>
+                      <span className="font-black">{formatUgx(prepSellingPriceUgx)}</span>
+                    </p>
+                    <p className="mt-1 font-black text-waka-800">{prepProjectionTitle}</p>
+                    <p className="flex items-center justify-between">
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepProjectedRevenue")}</span>
+                      <span className="font-black">{formatUgx(prepProjectedRevenueUgx)}</span>
+                    </p>
+                    <p className="flex items-center justify-between">
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepProjectedProfit")}</span>
+                      <span className="font-black">{formatUgx(prepProjectedProfitUgx)}</span>
+                    </p>
+                    <p className="text-[11px] font-medium text-muted-foreground">{t(lang, "menuPrepProjectionNote")}</p>
+                    <p className="mt-1 text-[11px] font-bold text-muted-foreground">
+                      {t(lang, prepActualQtyValue ? "menuPrepYieldActual" : "menuPrepYieldEstimated")} ·{" "}
+                      {t(lang, prepActualIngredientCostValue != null ? "menuPrepIngredientCostActual" : "menuPrepIngredientCostEstimate")}
+                    </p>
+                  </div>
+
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -406,7 +615,11 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                     <button
                       type="button"
                       onClick={confirmPrepare}
-                      disabled={prepHasShortage || prepPreviewRows.length === 0}
+                      disabled={
+                        prepHasShortage ||
+                        prepPreviewRows.length === 0 ||
+                        missingPrepIngredientIds.length > 0
+                      }
                       className="min-h-[44px] rounded-xl bg-waka-600 text-sm font-black text-white disabled:opacity-40"
                     >
                       {t(lang, "menuPrepConfirm")}
@@ -419,7 +632,9 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 <div>
                   <p className="mb-1 text-xs font-black uppercase text-muted-foreground">{t(lang, "menuPrepBatchesTitle")}</p>
                   <ul className="space-y-2">
-                    {[...storeBatches].reverse().map((batch: PrepBatch) => (
+                    {[...storeBatches].reverse().map((batch: PrepBatch) => {
+                      const projection = computePrepBatchProjection(batch, storeProduct);
+                      return (
                       <li key={batch.id} className="rounded-xl border border-border p-2">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-bold">
@@ -433,14 +648,75 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                             {batch.status}
                           </span>
                         </div>
-                        <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                          <span>
-                            {batch.portionsPrepared} · {t(lang, "menuPrepRemaining")} {batch.remainingPortions}
-                          </span>
-                          <span>
-                            {formatUgx(batch.unitCostUgx)} / {formatUgx(batch.unitCostUgx * batch.portionsPrepared)}
-                          </span>
-                        </div>
+                        {batch.totalCostUgx != null ? (
+                          <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                            <p>
+                              {t(lang, "menuPrepExpectedPortions")}: {batch.expectedPortions ?? batch.portionsPrepared}
+                              {" · "}
+                              {t(lang, "menuPrepActualPortions")}: {batch.actualPortions ?? "—"}
+                            </p>
+                            <p className="font-bold text-foreground">
+                              {t(lang, batch.yieldBasis === "actual" ? "menuPrepYieldActual" : "menuPrepYieldEstimated")}
+                              {" · "}
+                              {t(lang, batch.costBasis === "actual" ? "menuPrepIngredientCostActual" : "menuPrepIngredientCostEstimate")}
+                            </p>
+                            <p>
+                              {t(lang, "menuPrepIngredientCostTotal")}: {formatUgx(batch.ingredientCostUgx ?? 0)}
+                              {" · "}
+                              {t(lang, "menuPrepAdditionalCostTotal")}: {formatUgx(batch.additionalCostUgx ?? 0)}
+                            </p>
+                            <p>
+                              {t(lang, "menuPrepBatchCost")}: {formatUgx(batch.totalCostUgx)}
+                            </p>
+                            <p>
+                              {t(lang, "menuPrepSaleCogsPerPlate")}: {formatUgx(batch.unitCostUgx)}
+                              {" · "}
+                              {t(lang, "menuPrepCostPerPlate")}:{" "}
+                              {formatUgx(batch.batchCostPerPlateUgx ?? batch.unitCostUgx)}
+                            </p>
+                            <p>
+                              {t(lang, "menuPrepRemaining")}: {batch.remainingPortions}
+                              {" · "}
+                              {t(lang, "menuPrepRemainingValue")}:{" "}
+                              {formatUgx(
+                                batch.remainingPortions *
+                                  (batch.batchCostPerPlateUgx ?? batch.unitCostUgx),
+                              )}
+                            </p>
+                            {batch.wastedPortions ? (
+                              <p className="font-bold text-red-700">
+                                {t(lang, "menuPrepWasteValue")}: {formatUgx(batch.wasteCostUgx ?? 0)}
+                                {" · "}
+                                {batch.wastedPortions}
+                              </p>
+                            ) : null}
+                            {projection ? (
+                              <div className="rounded-lg bg-muted px-2 py-1">
+                                <p className="font-black text-waka-800">
+                                  {tTemplate(lang, "menuPrepProjectionTitle", { count: projection.portions })}
+                                </p>
+                                <p>
+                                  {t(lang, "menuPrepSellingPrice")}: {formatUgx(projection.sellingPriceUgx)}
+                                </p>
+                                <p>
+                                  {t(lang, "menuPrepProjectedRevenue")}: {formatUgx(projection.projectedRevenueUgx)}
+                                  {" · "}
+                                  {t(lang, "menuPrepProjectedProfit")}: {formatUgx(projection.projectedProfitUgx)}
+                                </p>
+                                <p className="text-[10px] font-medium">{t(lang, "menuPrepProjectionNote")}</p>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                            <span>
+                              {batch.portionsPrepared} · {t(lang, "menuPrepRemaining")} {batch.remainingPortions}
+                            </span>
+                            <span>
+                              {formatUgx(batch.unitCostUgx)} / {formatUgx(batch.unitCostUgx * batch.portionsPrepared)}
+                            </span>
+                          </div>
+                        )}
                         {batch.status === "active" && batch.remainingPortions > 0 && (
                           <div className="mt-2 space-y-2">
                             <div className="flex gap-2">
@@ -509,7 +785,8 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                           </div>
                         )}
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 </div>
               )}

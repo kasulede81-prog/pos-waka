@@ -12,11 +12,15 @@
  * unbatched stock safety, offline/sync, idempotency, ledger + recovery
  * reconciliation).
  */
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrepBatch, Product, SaleLine } from "../types";
 import { usePosStore } from "../store/usePosStore";
 import { openTestShift } from "../test/shiftTestSetup";
-import { verifyInventoryIntegrity } from "./inventoryIntegrity";
+import { mergeProductFromCloudPull, verifyInventoryIntegrity } from "./inventoryIntegrity";
+import { computePrepBatchProjection } from "./recipeEngine";
+import { t } from "./i18n";
+import { normalizeProductMenu } from "./menuModifiers";
+import * as syncEngine from "../offline/syncEngine";
 import { reconcileRecoveryInventoryLedger } from "./recoveryInventoryReconciliation";
 
 const DISH_ID = "dish-1";
@@ -464,5 +468,336 @@ describe("hospitality prep batches", () => {
     expect(usePosStore.getState().sales).toHaveLength(0);
     const prepMoves = usePosStore.getState().stockMovements.filter((m) => m.refId === "batch-a");
     expect(prepMoves.every((m) => m.kind === "adjust_use")).toBe(true);
+  });
+
+  // Batch-costing phase — legacy shape and semantics stay untouched.
+  it("keeps the legacy batch shape when no explicit yield/cost fields are supplied", () => {
+    expect(prepare(20, "batch-legacy").ok).toBe(true);
+    const b = batch("batch-legacy");
+    expect(b.expectedPortions).toBeUndefined();
+    expect(b.actualPortions).toBeUndefined();
+    expect(b.totalCostUgx).toBeUndefined();
+    expect(b.unitCostUgx).toBe(2_780);
+    expect(b.portionsPrepared).toBe(20);
+  });
+
+  it("deducts the full expected batch and costs it per actual plate", () => {
+    const res = usePosStore.getState().prepareMenuBatch({
+      productId: DISH_ID,
+      portions: 18,
+      expectedPortions: 20,
+      actualPortions: 18,
+      additionalCosts: [
+        { id: "charcoal", label: "Charcoal", amountUgx: 5_000 },
+        { id: "labour", label: "Labour", amountUgx: 10_000 },
+        { id: "packaging", label: "Packaging", amountUgx: 2_000 },
+      ],
+      batchId: "batch-costed",
+    });
+    expect(res.ok).toBe(true);
+
+    // The full pot was cooked: ingredients are NOT scaled down to 18 plates.
+    expect(product(CHICKEN_ID).stockOnHand).toBe(5);
+    expect(product(POTATOES_ID).stockOnHand).toBe(14);
+    expect(product(OIL_ID).stockOnHand).toBeCloseTo(4.4, 6);
+    expect(dish().stockOnHand).toBe(18);
+
+    const b = batch("batch-costed");
+    expect(b.portionsPrepared).toBe(18);
+    expect(b.expectedPortions).toBe(20);
+    expect(b.actualPortions).toBe(18);
+    expect(b.yieldBasis).toBe("actual");
+    expect(b.ingredientCostUgx).toBe(55_600);
+    expect(b.additionalCostUgx).toBe(17_000);
+    expect(b.totalCostUgx).toBe(72_600);
+    // Sale COGS keeps the existing recipe-basis cost; the actual-yield full
+    // batch cost is management information.
+    expect(b.unitCostUgx).toBe(2_780); // existing sale COGS basis, unchanged
+    expect(b.batchCostPerPlateUgx).toBe(4_033); // 72,600 / 18, rounded
+    expect(b.costBasis).toBe("recipe_estimate");
+    expect(b.additionalCosts).toHaveLength(3);
+
+    const projection = computePrepBatchProjection(b, dish())!;
+    expect(projection.isProjection).toBe(true);
+    expect(projection.projectedRevenueUgx).toBe(270_000);
+    expect(projection.projectedProfitUgx).toBe(197_400);
+  });
+
+  it("keeps sale COGS ingredient-only while the full batch cost stays management information", () => {
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        additionalCosts: [{ id: "charcoal", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-cogs",
+      }).ok,
+    ).toBe(true);
+    expect(batch("batch-cogs").unitCostUgx).toBe(2_780);
+    expect(batch("batch-cogs").batchCostPerPlateUgx).toBe(4_033);
+
+    seed(usePosStore.getState().products, []);
+    usePosStore.setState({ draftLines: [qtyLine(dish(), 1, "l1")] });
+    expect(finalize().ok).toBe(true);
+    const line = usePosStore.getState().sales[0]!.lines[0]!;
+    expect(line.unitCostUgx).toBe(2_780);
+    expect(line.cogsUgx).toBe(2_780);
+    expect(line.estimatedProfitUgx).toBe(12_220);
+    // The extra cost did not leak into the sale snapshot or global profit basis.
+    expect(batch("batch-cogs").batchCostPerPlateUgx).toBe(4_033);
+  });
+
+  it("keeps yield estimated when actual plates are unknown", () => {
+    const res = usePosStore.getState().prepareMenuBatch({
+      productId: DISH_ID,
+      portions: 20,
+      expectedPortions: 20,
+      actualPortions: null,
+      batchId: "batch-estimated",
+    });
+    expect(res.ok).toBe(true);
+    const b = batch("batch-estimated");
+    expect(b.actualPortions).toBeNull();
+    expect(b.yieldBasis).toBe("estimated");
+    expect(b.portionsPrepared).toBe(20);
+    expect(b.totalCostUgx).toBe(55_600);
+    expect(b.unitCostUgx).toBe(2_780);
+    expect(b.batchCostPerPlateUgx).toBe(2_780);
+
+    const projection = computePrepBatchProjection(b, dish())!;
+    expect(projection.yieldBasis).toBe("estimated");
+    expect(projection.projectedRevenueUgx).toBe(300_000);
+    expect(projection.projectedProfitUgx).toBe(244_400);
+  });
+
+  it("uses an actual ingredient cost once, with extra costs added separately", () => {
+    const res = usePosStore.getState().prepareMenuBatch({
+      productId: DISH_ID,
+      portions: 20,
+      expectedPortions: 20,
+      actualPortions: 20,
+      actualIngredientCostUgx: 40_000,
+      additionalCosts: [{ id: "gas", label: "Gas", amountUgx: 5_000 }],
+      batchId: "batch-actual-cost",
+    });
+    expect(res.ok).toBe(true);
+    const b = batch("batch-actual-cost");
+    expect(b.ingredientCostUgx).toBe(40_000);
+    expect(b.additionalCostUgx).toBe(5_000);
+    expect(b.totalCostUgx).toBe(45_000);
+    expect(b.unitCostUgx).toBe(2_780); // existing sale COGS basis, unchanged
+    expect(b.batchCostPerPlateUgx).toBe(2_250); // full batch cost / plate
+    expect(b.costBasis).toBe("actual");
+    // The cost override never changes the physical ingredient deduction.
+    expect(product(CHICKEN_ID).stockOnHand).toBe(5);
+    expect(product(POTATOES_ID).stockOnHand).toBe(14);
+    expect(product(OIL_ID).stockOnHand).toBeCloseTo(4.4, 6);
+
+    const projection = computePrepBatchProjection(b, dish())!;
+    expect(projection.costBasis).toBe("actual");
+    expect(projection.projectedRevenueUgx).toBe(300_000);
+    expect(projection.projectedProfitUgx).toBe(255_000);
+  });
+
+  it("values waste and remaining plates at the batch's frozen cost", () => {
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        additionalCosts: [{ id: "charcoal", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-waste",
+      }).ok,
+    ).toBe(true);
+    const b = batch("batch-waste");
+    expect(b.unitCostUgx).toBe(2_780);
+    expect(b.batchCostPerPlateUgx).toBe(4_033);
+
+    const res = usePosStore.getState().wastePreparedPortions({
+      batchId: "batch-waste",
+      portions: 4,
+      reason: "unsold",
+    });
+    expect(res.ok).toBe(true);
+    expect(res.lossValueUgx).toBe(16_132);
+    expect(batch("batch-waste").wastedPortions).toBe(4);
+    expect(batch("batch-waste").wasteCostUgx).toBe(16_132);
+    expect(batch("batch-waste").remainingPortions).toBe(14);
+    expect(dish().stockOnHand).toBe(14);
+  });
+
+  it("cancelling an explicit batch restores the full-pot ingredient share", () => {
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        batchId: "batch-cancel-costed",
+      }).ok,
+    ).toBe(true);
+    expect(usePosStore.getState().cancelPrepBatch({ batchId: "batch-cancel-costed" }).ok).toBe(true);
+
+    // All 18 unsold plates came from the full expected batch, so the full
+    // 5 kg / 6 kg / 0.6 L is restored — not 18/20 of it.
+    expect(product(CHICKEN_ID).stockOnHand).toBe(10);
+    expect(product(POTATOES_ID).stockOnHand).toBe(20);
+    expect(product(OIL_ID).stockOnHand).toBeCloseTo(5, 6);
+    expect(dish().stockOnHand).toBe(0);
+    expect(batch("batch-cancel-costed").status).toBe("cancelled");
+  });
+
+  it("blocks preparation and returns missing ingredient ids instead of zero-costing them", () => {
+    const valid = makeDish("batch_prepared");
+    const broken = {
+      ...valid,
+      menu: {
+        ...valid.menu!,
+        recipe: {
+          yieldQty: 20,
+          lines: [{ ingredientProductId: "ghost-ingredient", quantityBase: 1, unitLabel: "kg" }],
+        },
+      },
+    };
+    seed([{ ...chicken }, broken]);
+    const res = usePosStore.getState().prepareMenuBatch({
+      productId: DISH_ID,
+      portions: 10,
+      expectedPortions: 10,
+      batchId: "batch-missing",
+    });
+    expect(res.ok).toBe(false);
+    expect(res.errorKey).toBe("menuPrepMissingIngredient");
+    expect(res.missingIngredientIds).toContain("ghost-ingredient");
+    expect(dish().stockOnHand).toBe(0);
+    expect(batches()).toHaveLength(0);
+    expect(usePosStore.getState().stockMovements).toHaveLength(0);
+  });
+
+  it("labels the sell-out projection as projected, not recorded revenue", () => {
+    expect(t("en", "menuPrepProjectionTitle")).toContain("projection only");
+    expect(t("en", "menuPrepProjectionNote")).toContain("Not recorded revenue");
+  });
+
+  it("queues product metadata after prepare, waste and cancel so another device receives the batch", async () => {
+    const spy = vi.spyOn(syncEngine, "enqueueSync").mockResolvedValue(undefined);
+    const productOps = () =>
+      spy.mock.calls.filter((call) => {
+        const op = call[0] as {
+          kind?: string;
+          payload?: { id?: string; catalogOnly?: boolean };
+        };
+        return (
+          op.kind === "product" &&
+          op.payload?.id === DISH_ID &&
+          op.payload?.catalogOnly === true
+        );
+      });
+    try {
+      expect(
+        usePosStore.getState().prepareMenuBatch({
+          productId: DISH_ID,
+          portions: 20,
+          expectedPortions: 20,
+          actualPortions: 20,
+          batchId: "batch-sync",
+        }).ok,
+      ).toBe(true);
+      await vi.waitFor(() => expect(productOps().length).toBeGreaterThan(0));
+
+      spy.mockClear();
+      expect(usePosStore.getState().wastePreparedPortions({ batchId: "batch-sync", portions: 1, reason: "unsold" }).ok).toBe(true);
+      await vi.waitFor(() => expect(productOps().length).toBeGreaterThan(0));
+
+      spy.mockClear();
+      expect(usePosStore.getState().cancelPrepBatch({ batchId: "batch-sync" }).ok).toBe(true);
+      await vi.waitFor(() => expect(productOps().length).toBeGreaterThan(0));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a device with no local batches adopts the pushed explicit batch metadata", () => {
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        additionalCosts: [{ id: "charcoal", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-adopt",
+      }).ok,
+    ).toBe(true);
+    const remote = dish();
+    const local: Product = {
+      ...remote,
+      stockOnHand: 0,
+      updatedAt: "2020-01-01T00:00:00.000Z",
+      version: 1,
+      menu: { ...remote.menu!, prepBatches: [] },
+    };
+    const merged = mergeProductFromCloudPull(local, remote, {});
+    expect(merged.stockOnHand).toBe(18);
+    expect(merged.menu?.prepBatches?.[0]).toMatchObject({
+      id: "batch-adopt",
+      expectedPortions: 20,
+      actualPortions: 18,
+      totalCostUgx: 72_600,
+      unitCostUgx: 2_780,
+      batchCostPerPlateUgx: 4_033,
+    });
+
+    const normalized = normalizeProductMenu({ ...remote.menu!, prepBatches: remote.menu?.prepBatches });
+    expect(normalized?.prepBatches?.[0]).toMatchObject({
+      expectedPortions: 20,
+      actualPortions: 18,
+      totalCostUgx: 72_600,
+      additionalCostUgx: 17_000,
+      unitCostUgx: 2_780,
+      batchCostPerPlateUgx: 4_033,
+    });
+
+    // The same pull path must carry a wasted batch's state and stock.
+    expect(
+      usePosStore.getState().wastePreparedPortions({
+        batchId: "batch-adopt",
+        portions: 4,
+        reason: "unsold",
+      }).ok,
+    ).toBe(true);
+    const wastedRemote = dish();
+    const wastedLocal: Product = {
+      ...wastedRemote,
+      stockOnHand: 0,
+      updatedAt: "2020-01-01T00:00:00.000Z",
+      version: 1,
+      menu: { ...wastedRemote.menu!, prepBatches: [] },
+    };
+    const wastedMerged = mergeProductFromCloudPull(wastedLocal, wastedRemote, {});
+    expect(wastedMerged.stockOnHand).toBe(14);
+    expect(wastedMerged.menu?.prepBatches?.[0]).toMatchObject({
+      remainingPortions: 14,
+      wastedPortions: 4,
+      wasteCostUgx: 16_132,
+    });
+
+    // ...and a cancelled batch's terminal state.
+    expect(usePosStore.getState().cancelPrepBatch({ batchId: "batch-adopt" }).ok).toBe(true);
+    const cancelledRemote = dish();
+    const cancelledLocal: Product = {
+      ...cancelledRemote,
+      stockOnHand: 0,
+      updatedAt: "2020-01-01T00:00:00.000Z",
+      version: 1,
+      menu: { ...cancelledRemote.menu!, prepBatches: [] },
+    };
+    const cancelledMerged = mergeProductFromCloudPull(cancelledLocal, cancelledRemote, {});
+    expect(cancelledMerged.stockOnHand).toBe(0);
+    expect(cancelledMerged.menu?.prepBatches?.[0]).toMatchObject({
+      status: "cancelled",
+      remainingPortions: 0,
+    });
   });
 });
