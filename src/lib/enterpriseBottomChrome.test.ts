@@ -31,6 +31,19 @@ describe("resolveEnterpriseBottomChrome", () => {
     expect(state.showMobileBar).toBe(false);
   });
 
+  it("uses hospitality mode on the Hospitality dashboard", () => {
+    const state = resolveEnterpriseBottomChrome({
+      pathname: "/hospitality",
+      terminalHome: "/floor",
+      isDesktopLayout: false,
+      pharmacyWorkspace: false,
+      hospitalityBusiness: true,
+    });
+    expect(state.mode).toBe("hospitality");
+    expect(state.showMobileBar).toBe(true);
+    expect(state.shellClass).toBe("app-shell--hospitality-nav");
+  });
+
   it("uses pharmacy mode on pharmacy routes", () => {
     const state = resolveEnterpriseBottomChrome({
       pathname: "/pharmacy/patients",

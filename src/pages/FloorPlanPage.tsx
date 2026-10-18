@@ -27,13 +27,14 @@ import { FloorPlanRightPanel } from "../components/hospitality/FloorPlanRightPan
 import { FloorPlanBottomBar } from "../components/hospitality/FloorPlanBottomBar";
 import { HospitalityManagerToolsSheet } from "../components/hospitality/HospitalityManagerToolsSheet";
 import { ReservationDetailDialog, ReservationFormDialog } from "../components/hospitality/ReservationDialogs";
-import { WaitlistFormDialog } from "../components/hospitality/WaitlistPanel";
+import { WaitlistFormDialog, WaitlistPanel } from "../components/hospitality/WaitlistPanel";
 import { loadFloorViewState, saveFloorViewState } from "../lib/floorViewState";
 import {
   computeFloorNotifications,
   reservationForTable,
   visibleFloorTables,
 } from "../lib/hospitalityFrontOfHouse";
+import { HOSPITALITY_HOME_ROUTE } from "../lib/hospitalityNav";
 import { FLOOR_GRID_CLASS, selectFloorPlanSlice } from "../lib/floorDisplayPrefs";
 import { HospitalityOpsStatusStrip } from "../components/hospitality/HospitalityOpsStatusStrip";
 
@@ -50,6 +51,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const cancelTableReservation = usePosStore((s) => s.cancelTableReservation);
   const markReservationNoShow = usePosStore((s) => s.markReservationNoShow);
   const addWaitlistEntry = usePosStore((s) => s.addWaitlistEntry);
+  const cancelWaitlistEntry = usePosStore((s) => s.cancelWaitlistEntry);
   const suggestTablesForGuests = usePosStore((s) => s.suggestTablesForGuests);
   const startTableCleaning = usePosStore((s) => s.startTableCleaning);
   const finishTableCleaning = usePosStore((s) => s.finishTableCleaning);
@@ -378,6 +380,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
       <FloorPlanBottomBar
         lang={lang}
         active="floor"
+        onHome={() => navigate(HOSPITALITY_HOME_ROUTE)}
         onFloor={() => undefined}
         onReservations={() => navigate("/floor/reservations")}
         onDocuments={() => navigate("/pending-sales")}
@@ -453,6 +456,19 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
                 </button>
               );
             })}
+          </div>
+        ) : null}
+        {floor ? (
+          <div className="max-h-56 overflow-y-auto">
+            <WaitlistPanel
+              lang={lang}
+              floor={floor}
+              onSeat={(entry) => setSeatWaitlistEntry(entry)}
+              onCancel={(entryId) => {
+                cancelWaitlistEntry(entryId);
+              }}
+              onAdd={() => setWaitlistFormOpen(true)}
+            />
           </div>
         ) : null}
       </div>

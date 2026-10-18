@@ -391,7 +391,7 @@ export function buildDayClosePreflightSnapshot(input: {
       status: hospitalitySessions.length === 0 ? "pass" : "fail",
       labelKey: "dayCloseCheckNoHospitality",
       detailKey: hospitalitySessions.length > 0 ? "dayCloseCheckNoHospitalityFail" : undefined,
-      navigateTo: "/hospitality/floor",
+      navigateTo: "/floor",
       blockClose: hospitalitySessions.length > 0,
     },
     {

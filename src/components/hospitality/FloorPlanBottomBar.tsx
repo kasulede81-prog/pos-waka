@@ -1,20 +1,21 @@
 import clsx from "clsx";
-import { BarChart3, Calendar, ClipboardList, LayoutGrid } from "lucide-react";
+import { BarChart3, Calendar, ClipboardList, LayoutDashboard, LayoutGrid } from "lucide-react";
 import type { Language } from "../../types";
 import { t } from "../../lib/i18n";
 
-type Tab = "floor" | "reservations" | "documents" | "stats";
+type Tab = "home" | "floor" | "reservations" | "documents" | "stats";
 
 type Props = {
   lang: Language;
   active: Tab;
+  onHome: () => void;
   onFloor: () => void;
   onReservations: () => void;
   onDocuments: () => void;
   onStats: () => void;
 };
 
-export function FloorPlanBottomBar({ lang, active, onFloor, onReservations, onDocuments, onStats }: Props) {
+export function FloorPlanBottomBar({ lang, active, onHome, onFloor, onReservations, onDocuments, onStats }: Props) {
   const btn = (tab: Tab, onClick: () => void, label: string, Icon: typeof LayoutGrid) => (
     <button
       type="button"
@@ -34,6 +35,7 @@ export function FloorPlanBottomBar({ lang, active, onFloor, onReservations, onDo
   return (
     <div className="shrink-0 border-t-2 border-sky-800 bg-sky-600 p-1.5 sm:p-2">
       <div className="mx-auto flex max-w-5xl gap-1 sm:gap-1.5">
+        {btn("home", onHome, t(lang, "navHome"), LayoutDashboard)}
         {btn("floor", onFloor, t(lang, "floorNavSituation"), LayoutGrid)}
         {btn("reservations", onReservations, t(lang, "floorNavReserve"), Calendar)}
         {btn("documents", onDocuments, t(lang, "floorNavDocuments"), ClipboardList)}

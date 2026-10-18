@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Calendar, ChefHat, LayoutGrid, Monitor } from "lucide-react";
+import { BarChart3, Calendar, ChefHat, LayoutDashboard, LayoutGrid, Monitor } from "lucide-react";
 import type { Permission } from "../types";
 
 export type HospitalityNavItem = {
@@ -9,8 +9,12 @@ export type HospitalityNavItem = {
   perm: Permission;
 };
 
+/** Hospitality home/dashboard — reachable without changing the floor landing. */
+export const HOSPITALITY_HOME_ROUTE = "/hospitality" as const;
+
 /** Operational hospitality screens — one tap on mobile, permanent group on desktop. */
 export const HOSPITALITY_OPERATIONAL_PATHS = [
+  HOSPITALITY_HOME_ROUTE,
   "/floor",
   "/kitchen",
   "/expo",
@@ -18,6 +22,7 @@ export const HOSPITALITY_OPERATIONAL_PATHS = [
 ] as const;
 
 export function isHospitalityOperationalRoute(pathname: string): boolean {
+  if (pathname === HOSPITALITY_HOME_ROUTE) return true;
   if (pathname === "/floor" || pathname === "/floor/reservations") return true;
   if (pathname.startsWith("/floor/order/")) return true;
   if (pathname === "/kitchen" || pathname.startsWith("/kitchen/")) return true;
@@ -27,6 +32,7 @@ export function isHospitalityOperationalRoute(pathname: string): boolean {
 }
 
 export function hospitalityNavItemActive(path: string, pathname: string): boolean {
+  if (path === HOSPITALITY_HOME_ROUTE) return pathname === HOSPITALITY_HOME_ROUTE;
   if (path === "/floor") {
     return (
       pathname === "/floor" ||
@@ -42,6 +48,7 @@ export function hospitalityNavItemActive(path: string, pathname: string): boolea
 }
 
 export const HOSPITALITY_NAV_CATALOG: HospitalityNavItem[] = [
+  { path: HOSPITALITY_HOME_ROUTE, labelKey: "navHome", Icon: LayoutDashboard, perm: "hospitality.floor" },
   { path: "/floor", labelKey: "restaurantFloorNav", Icon: LayoutGrid, perm: "hospitality.floor" },
   { path: "/kitchen", labelKey: "navKitchen", Icon: ChefHat, perm: "hospitality.kitchen" },
   { path: "/expo", labelKey: "navExpo", Icon: Monitor, perm: "hospitality.kitchen" },

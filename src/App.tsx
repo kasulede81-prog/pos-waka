@@ -75,6 +75,7 @@ const SettingsBiometricPage = lazy(() => import("./pages/SettingsBiometricPage")
 const InventoryPurchasingPage = lazy(() => import("./pages/InventoryPurchasingPage").then((m) => ({ default: m.InventoryPurchasingPage })));
 import { InventoryPurchasingProtectedRoute } from "./components/InventoryPurchasingProtectedRoute";
 import { PharmacyProtectedRoute, PharmacyPosRedirect, PharmacyBusinessRoute } from "./components/pharmacy/PharmacyProtectedRoute";
+import { HospitalityBusinessRoute } from "./components/hospitality/HospitalityBusinessRoute";
 import { EnterpriseProtectedRoute } from "./components/enterprise/EnterpriseProtectedRoute";
 import { LegacyPurchaseDetailRedirect, LegacySupplierDetailRedirect } from "./components/inventory/LegacyInventoryRedirects";
 const InventoryCountSessionsPage = lazy(() => import("./pages/InventoryCountSessionsPage").then((m) => ({ default: m.InventoryCountSessionsPage })));
@@ -157,6 +158,9 @@ const OfficeHubSectionPage = lazy(() =>
 );
 const ReceiptsPage = lazy(() => import("./pages/ReceiptsPage").then((m) => ({ default: m.ReceiptsPage })));
 const FloorPlanPage = lazy(() => import("./pages/FloorPlanPage").then((m) => ({ default: m.FloorPlanPage })));
+const HospitalityDashboardPage = lazy(() =>
+  import("./pages/HospitalityDashboardPage").then((m) => ({ default: m.HospitalityDashboardPage })),
+);
 const TableOrderPage = lazy(() => import("./pages/TableOrderPage").then((m) => ({ default: m.TableOrderPage })));
 const SettingsFloorPage = lazy(() => import("./pages/SettingsFloorPage").then((m) => ({ default: m.SettingsFloorPage })));
 const SettingsHospitalityPage = lazy(() =>
@@ -954,33 +958,51 @@ function AppRoutes() {
               }
             />
             <Route
+              path="hospitality"
+              element={
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="hospitality.floor">
+                    <Suspense fallback={<LazyWait />}>
+                      <HospitalityDashboardPage lang={lang} />
+                    </Suspense>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
+              }
+            />
+            <Route
               path="floor"
               element={
-                <RoleProtectedRoute permission="hospitality.floor">
-                  <Suspense fallback={<LazyWait />}>
-                    <FloorPlanPage lang={lang} />
-                  </Suspense>
-                </RoleProtectedRoute>
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="hospitality.floor">
+                    <Suspense fallback={<LazyWait />}>
+                      <FloorPlanPage lang={lang} />
+                    </Suspense>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
               }
             />
             <Route
               path="floor/reservations"
               element={
-                <RoleProtectedRoute permission="hospitality.floor">
-                  <Suspense fallback={<LazyWait />}>
-                    <ReservationCalendarPage lang={lang} />
-                  </Suspense>
-                </RoleProtectedRoute>
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="hospitality.floor">
+                    <Suspense fallback={<LazyWait />}>
+                      <ReservationCalendarPage lang={lang} />
+                    </Suspense>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
               }
             />
             <Route
               path="floor/order/:sessionId"
               element={
-                <RoleProtectedRoute permission="hospitality.order">
-                  <Suspense fallback={<LazyWait />}>
-                    <TableOrderPage lang={lang} />
-                  </Suspense>
-                </RoleProtectedRoute>
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="hospitality.order">
+                    <Suspense fallback={<LazyWait />}>
+                      <TableOrderPage lang={lang} />
+                    </Suspense>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
               }
             />
             <Route
@@ -1138,21 +1160,25 @@ function AppRoutes() {
             <Route
               path="kitchen"
               element={
-                <RoleProtectedRoute permission="hospitality.kitchen">
-                  <Suspense fallback={<LazyWait />}>
-                    <KitchenDisplayPage lang={lang} />
-                  </Suspense>
-                </RoleProtectedRoute>
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="hospitality.kitchen">
+                    <Suspense fallback={<LazyWait />}>
+                      <KitchenDisplayPage lang={lang} />
+                    </Suspense>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
               }
             />
             <Route
               path="expo"
               element={
-                <RoleProtectedRoute permission="hospitality.kitchen">
-                  <Suspense fallback={<LazyWait />}>
-                    <ExpoDisplayPage lang={lang} />
-                  </Suspense>
-                </RoleProtectedRoute>
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="hospitality.kitchen">
+                    <Suspense fallback={<LazyWait />}>
+                      <ExpoDisplayPage lang={lang} />
+                    </Suspense>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
               }
             />
             <Route
@@ -1443,13 +1469,15 @@ function AppRoutes() {
             <Route
               path="settings/floor"
               element={
-                <RoleProtectedRoute permission="settings.shop" capability="floor">
-                  <SettingsChangeGate lang={lang}>
-                    <Suspense fallback={<LazyWait />}>
-                      <SettingsFloorPage lang={lang} />
-                    </Suspense>
-                  </SettingsChangeGate>
-                </RoleProtectedRoute>
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="settings.shop" capability="floor">
+                    <SettingsChangeGate lang={lang}>
+                      <Suspense fallback={<LazyWait />}>
+                        <SettingsFloorPage lang={lang} />
+                      </Suspense>
+                    </SettingsChangeGate>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
               }
             />
             <Route
@@ -1465,23 +1493,27 @@ function AppRoutes() {
             <Route
               path="settings/menu"
               element={
-                <RoleProtectedRoute permission="settings.shop" capability="menu_builder">
-                  <SettingsChangeGate lang={lang}>
-                    <MenuBuilderPage lang={lang} />
-                  </SettingsChangeGate>
-                </RoleProtectedRoute>
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="settings.shop" capability="menu_builder">
+                    <SettingsChangeGate lang={lang}>
+                      <MenuBuilderPage lang={lang} />
+                    </SettingsChangeGate>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
               }
             />
             <Route
               path="settings/hospitality"
               element={
-                <RoleProtectedRoute permission="settings.shop" capability="hospitality">
-                  <SettingsChangeGate lang={lang}>
-                    <Suspense fallback={<LazyWait />}>
-                      <SettingsHospitalityPage lang={lang} />
-                    </Suspense>
-                  </SettingsChangeGate>
-                </RoleProtectedRoute>
+                <HospitalityBusinessRoute>
+                  <RoleProtectedRoute permission="settings.shop" capability="hospitality">
+                    <SettingsChangeGate lang={lang}>
+                      <Suspense fallback={<LazyWait />}>
+                        <SettingsHospitalityPage lang={lang} />
+                      </Suspense>
+                    </SettingsChangeGate>
+                  </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
               }
             />
             <Route path="settings/staff-roles" element={<Navigate to="/staff-center/roles" replace />} />
