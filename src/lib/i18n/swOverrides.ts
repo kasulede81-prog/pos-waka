@@ -930,4 +930,95 @@ export const swOverrides: Record<string, string> = {
     "Uanachama huu umefutwa. Toa uanachama mpya kabla ya kutoa kadi ya uanachama.",
   loyaltyWalletMemberSuspended:
     "Mteja huyu amesimamishwa. Kadi yake ya uanachama haiwezi kutumika hadi uanachama utakapowashwa upya.",
+
+  // Hospitality menu costing, margins, ingredient demand, and menu export.
+  menuCostRecipeNotSet: "Gharama ya mapishi haijawekwa",
+  menuCostEstimated: "Inakadiriwa kutoka mapishi",
+  menuCostEstimatedShort: "Inakadiriwa",
+  menuCostIncomplete: "Gharama ya mapishi haijakamilika",
+  menuCostIncompleteBody:
+    "Ongeza gharama za viungo vinavyokosekana au visivyo na gharama kabla ya kutegemea ukingo huu.",
+  menuCostMissingIngredient: "Rekebisha kiungo cha mapishi: {items}",
+  menuCostZeroCostIngredient: "Ongeza gharama katika Hifadhi kwa: {items}",
+  menuCostGuidedTitle: "Weka gharama ya chakula hiki",
+  menuCostGuidedBody:
+    "Ukingo unaotegemewa huanza na mapishi. Ongeza viungo vinavyotumika kwa kundi moja, idadi na vipimo vyake, na sahani ngapi kundi linatoa. Hakuna kinachohifadhiwa hadi uhifadhi menyu.",
+  menuCostGuidedAddIngredient: "Ongeza kiungo cha kwanza",
+  menuCostGuidedExamplesTitle: "Mifano ya vyakula vya kawaida",
+  menuCostExampleRice: "Wali: mchele, mafuta ya kupikia, mkaa au gesi — weka idadi na sahani zako.",
+  menuCostExampleChicken: "Kuku: kuku, mafuta ya kupikia, viungo — weka idadi na sahani zako.",
+  menuCostExampleChips: "Kajuu: viazi, mafuta ya kupikia, chumvi — weka idadi na sahani zako.",
+  menuCostGuidedNoIngredients:
+    "Ikiwa kiungo hakipo kwenye orodha, kiongeze kama bidhaa katika Hifadhi kwanza.",
+  menuCostBannerTitle: "Baadhi ya vitu vya menyu havina gharama ya mapishi",
+  menuCostBannerBody:
+    "Vitu {count} vya menyu bado havina mapishi. Ukingo wao umefichwa hadi viungo na mavuno yawekwe.",
+  menuCostBannerAction: "Weka gharama ya chakula",
+  menuCostFoodCostEstimated: "Gharama ya chakula / sahani (inakadiriwa)",
+  menuCostEstimatedNote:
+    "Inakadiriwa kutoka gharama za viungo vya mapishi; gharama halisi za kundi na makadirio ya mauzo ni tofauti.",
+  menuCostVerifiedCostShort: "Imethibitishwa",
+  menuCostCostNotConfirmed: "Gharama haijathibitishwa",
+  menuCostProductCostTitle: "Gharama ya bidhaa",
+  menuCostProductCostLabel: "Gharama ya bidhaa",
+  menuCostProductProfitLabel: "Faida ghafi",
+  menuCostVerifiedManual: "Imethibitishwa — imewekwa kwa mkono",
+  menuCostVerifiedPurchase: "Imethibitishwa — imenunuliwa kwa msambazaji",
+  menuCostProductCostNote:
+    "Bidhaa za kuuza zilizonunuliwa hazihitaji mapishi; gharama ya bidhaa inayotumika hutumiwa.",
+  menuCostProductCostNotConfirmedTitle: "Gharama haijathibitishwa",
+  menuCostProductCostGeneratedBody:
+    "Gharama iliyohifadhiwa ni chaguo-msingi la kuongeza haraka (72% ya bei ya kuuza). Weka gharama halisi ya bidhaa katika Hifadhi.",
+  menuCostProductCostUnknownBody:
+    "Bidhaa hii haina chanzo cha gharama kilichothibitishwa. Weka gharama halisi ya bidhaa katika Hifadhi.",
+  menuCostProductCostNotSetBody: "Weka gharama ya bidhaa katika Hifadhi.",
+  menuCostSelectIngredient: "Chagua kiungo",
+  menuCostQuantity: "Idadi kwa kundi moja",
+  menuCostRemoveIngredient: "Ondoa kiungo",
+  setupCostMenuStep: "Weka gharama ya menyu (viungo na mavuno)",
+  setupCostMenuAction: "Weka gharama ya menyu",
+  menuCostPanelTitle: "Gharama ya chakula na ukingo (moja kwa moja)",
+  menuCostFoodCost: "Gharama ya chakula / sahani",
+  menuCostSellPrice: "Bei ya kuuza",
+  menuCostProfit: "Faida ghafi / sahani",
+  menuCostMargin: "Ukingo",
+  hospitalityReportsMenuTitle: "Utendaji wa menyu na gharama",
+  hospitalityReportsMenuHint:
+    "Ukingo wa mauzo hutumia gharama na mapato halisi yaliyohifadhiwa kwenye mstari wa mauzo yaliyokamilika. Mistari isiyo na data hiyo huonyesha ukingo unaokadiriwa kutoka gharama ya sasa, si ukingo wa kihistoria. Hali ya gharama hutoka kwa mfumo wa sasa wa bidhaa na mapishi.",
+  hospitalityReportsMenuItems: "Vitu vya menyu",
+  hospitalityReportsReliableCost: "Gharama inayotegemewa",
+  hospitalityReportsNeedsCost: "Inahitaji gharama",
+  hospitalityReportsUnverifiedCost: "Gharama haijathibitishwa",
+  hospitalityReportsTopDrinks: "Vinywaji vinavyoongoza",
+  hospitalityReportsLowMargin: "Ukingo mdogo",
+  hospitalityReportsSoldMargin: "Ukingo wa mauzo",
+  hospitalityReportsSoldMarginPartial: "Ukingo wa mauzo (sehemu)",
+  hospitalityReportsEstimatedMargin: "Ukingo unaokadiriwa (gharama ya sasa)",
+  hospitalityReportsMarginUnavailable: "Ukingo haupatikani",
+  hospitalityReportsIngredientGaps: "Mapungufu ya gharama za viungo",
+  hospitalityReportsIngredientGapRow: "chakula {count}",
+  hospitalityReportsIngredientZeroCost: "gharama haijawekwa",
+  hospitalityReportsIngredientMissing: "kiungo hakipo",
+  hospitalityReportsNoMenuSales: "Hakuna mauzo ya menyu yaliyokamilika katika kipindi hiki.",
+  hospitalityReportsNoLowMargin:
+    "Hakuna bidhaa zilizouzwa zenye ukingo mdogo unaoweza kutumika.",
+  hospitalityReportsNoIngredientGaps: "Hakuna mapungufu ya gharama za viungo.",
+  hospitalityReportsTopDishes: "Vyakula vinavyoongoza",
+  hospitalityReportsTopModifiers: "Viongezeo vinavyoongoza",
+  hospitalityIngredientDemandTitle: "Mahitaji ya viungo (yakikadiriwa kutoka mapishi)",
+  hospitalityIngredientDemandHint:
+    "Mahitaji yanayotokana na mapishi kutoka mauzo ya menyu yaliyokamilika. Hii si matumizi ya hifadhi wala mwendo wa hesabu za hifadhi. Idadi inazingatia mavuno na upotezaji wa mapishi; UGX huonyeshwa tu kwa gharama ya sasa ya kiungo inayotegemewa.",
+  hospitalityIngredientDemandEmpty:
+    "Hakuna mahitaji ya mapishi kutoka mauzo yaliyokamilika katika kipindi hiki.",
+  hospitalityIngredientDemandCostUnavailable: "Gharama haipatikani",
+  hospitalityIngredientDemandDishCount: "chakula {count}",
+  hospitalityIngredientDemandGapsTitle: "Mapungufu ya data ya mapishi",
+  hospitalityIngredientDemandNoRecipe: "{name} — {units} zimeuzwa, hakuna mapishi",
+  hospitalityIngredientDemandMissingProduct: "{name} — {units} zimeuzwa, bidhaa haipo",
+  hospitalityIngredientDemandMissingIngredient:
+    "Kiungo {name} hakipo — {quantity}{unit} kinahitajika · chakula {count}",
+  hospitalityExportMenuPdf: "PDF ya Menyu",
+  hospitalityMenuExportPeriod: "Kipindi",
+  hospitalityMenuExportSnapshotNote:
+    "Ukingo wa mauzo hutumia gharama na mapato halisi yaliyohifadhiwa kwenye mstari wa mauzo yaliyokamilika. Sehemu inamaanisha baadhi ya mistari ya mauzo ilikuwa na data ya sehemu au haikuwa na data inayotumika. Ukingo unaokadiriwa hutumia gharama ya sasa ya bidhaa/mapishi, si ya kihistoria. Ukingo haupatikani inamaanisha hakuna data inayotumika.",
 };
