@@ -6,6 +6,7 @@ function HospitalityOperationsWidget({ ctx }: ReportWidgetProps) {
   return (
     <HospitalityReportsSection
       lang={ctx.lang}
+      periodLabel={ctx.periodLabel}
       hospitalityReports={ctx.hospitalityReports}
       hospitalityOpenBills={ctx.hospitalityOpenBills}
       hospitalityFloor={ctx.hospitalityFloor}

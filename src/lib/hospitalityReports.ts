@@ -1,4 +1,5 @@
-import type { HospitalityFloorState, Product, Sale, StaffAccount } from "../types";
+import type { HospitalityFloorState, Language, Product, Sale, StaffAccount } from "../types";
+import { t } from "./i18n";
 import { completedSales } from "./saleStatus";
 import { resolveProductStationType } from "./kitchenRouting";
 import { dateKeyKampala } from "./datesUg";
@@ -84,6 +85,25 @@ export type HospitalityMenuPerformanceRow = {
   /** Non-voided sale lines for this item in the period. */
   soldLineCount: number;
 };
+
+/** One label used by both the on-screen report and its export. */
+export function hospitalityMenuMarginLabel(
+  lang: Language,
+  row: HospitalityMenuPerformanceRow,
+): string {
+  if (row.realized) {
+    const partial =
+      row.realized.basis === "partial" || row.realized.missingSnapshotLineCount > 0;
+    return `${t(
+      lang,
+      partial ? "hospitalityReportsSoldMarginPartial" : "hospitalityReportsSoldMargin",
+    )} ${row.realized.marginPct.toFixed(0)}%`;
+  }
+  if (row.currentMarginPct != null) {
+    return `${t(lang, "hospitalityReportsEstimatedMargin")} ${row.currentMarginPct.toFixed(0)}%`;
+  }
+  return t(lang, "hospitalityReportsMarginUnavailable");
+}
 
 export type HospitalityIngredientCostGap = {
   ingredientId: string;

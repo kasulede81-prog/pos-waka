@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Product, Sale, SaleLine, SaleLineModifier } from "../types";
-import { computeHospitalityReports } from "./hospitalityReports";
+import { computeHospitalityReports, hospitalityMenuMarginLabel } from "./hospitalityReports";
 
 function product(partial: Partial<Product> & Pick<Product, "id" | "name">): Product {
   return {
@@ -492,5 +492,18 @@ describe("historical menu margins", () => {
     expect(legacy?.currentMarginPct).toBe(20);
     const current = report.menu.lowMargin.find((row) => row.productId === "history-current");
     expect(current?.realized?.marginPct).toBe(25);
+  });
+
+  it("labels each margin basis consistently for the UI and export", () => {
+    expect(hospitalityMenuMarginLabel("en", dish("history-current")!)).toBe("Sold margin 25%");
+    expect(hospitalityMenuMarginLabel("en", dish("history-partial")!)).toBe(
+      "Sold margin (partial) 40%",
+    );
+    expect(hospitalityMenuMarginLabel("en", dish("history-legacy")!)).toBe(
+      "Est. margin (current cost) 20%",
+    );
+    expect(hospitalityMenuMarginLabel("en", dish("history-no-recipe")!)).toBe(
+      "Margin unavailable",
+    );
   });
 });

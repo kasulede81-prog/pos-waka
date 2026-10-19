@@ -16,13 +16,15 @@ import {
 } from "../../../lib/wholesaleDocumentExports";
 import {
   downloadHospitalityKitchenPdf,
+  downloadHospitalityMenuPdf,
   downloadHospitalityTablePdf,
   downloadHospitalityWaiterPdf,
 } from "../../../lib/hospitalityDocumentExports";
 import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
-import type {
-  HospitalityMenuPerformanceRow,
-  HospitalityReportSummary,
+import {
+  hospitalityMenuMarginLabel,
+  type HospitalityMenuPerformanceRow,
+  type HospitalityReportSummary,
 } from "../../../lib/hospitalityReports";
 import type { HospitalityFloorState, StockMovement } from "../../../types";
 import { computeKitchenProductionAnalytics } from "../../../lib/kitchenProduction";
@@ -159,21 +161,6 @@ export function WholesaleReportsSection({
   );
 }
 
-function menuMarginLabel(lang: Language, row: HospitalityMenuPerformanceRow): string {
-  if (row.realized) {
-    const partial =
-      row.realized.basis === "partial" || row.realized.missingSnapshotLineCount > 0;
-    return `${t(
-      lang,
-      partial ? "hospitalityReportsSoldMarginPartial" : "hospitalityReportsSoldMargin",
-    )} ${row.realized.marginPct.toFixed(0)}%`;
-  }
-  if (row.currentMarginPct != null) {
-    return `${t(lang, "hospitalityReportsEstimatedMargin")} ${row.currentMarginPct.toFixed(0)}%`;
-  }
-  return t(lang, "hospitalityReportsMarginUnavailable");
-}
-
 function MenuPerformanceList({
   lang,
   title,
@@ -200,7 +187,7 @@ function MenuPerformanceList({
               <span className="min-w-0 truncate">{row.name}</span>
               <span className="shrink-0 text-right text-xs text-muted-foreground">
                 {row.unitsSold} · UGX {row.revenueUgx.toLocaleString()} ·{" "}
-                {menuMarginLabel(lang, row)}
+                {hospitalityMenuMarginLabel(lang, row)}
               </span>
             </li>
           ))}
@@ -212,11 +199,13 @@ function MenuPerformanceList({
 
 export function HospitalityReportsSection({
   lang,
+  periodLabel,
   hospitalityReports,
   hospitalityOpenBills,
   hospitalityFloor,
 }: {
   lang: Language;
+  periodLabel?: string;
   hospitalityReports: HospitalityReportSummary;
   hospitalityOpenBills: { count: number; totalUgx: number } | null;
   hospitalityFloor?: HospitalityFloorState | null;
@@ -439,6 +428,9 @@ export function HospitalityReportsSection({
         </div>
       ) : null}
       <div className="flex flex-wrap gap-2">
+        <button type="button" className="rounded-xl border border-waka-300 bg-card px-3 py-2 text-xs font-black text-waka-900" onClick={() => void downloadHospitalityMenuPdf(lang, hospitalityReports, periodLabel)}>
+          {t(lang, "hospitalityExportMenuPdf")}
+        </button>
         <button type="button" className="rounded-xl bg-waka-700 px-3 py-2 text-xs font-black text-white" onClick={() => void downloadHospitalityWaiterPdf(lang, hospitalityReports)}>
           {t(lang, "hospitalityExportWaiterPdf")}
         </button>
@@ -470,6 +462,7 @@ type Props = {
   hospitalityReports: HospitalityReportSummary | null;
   hospitalityOpenBills: { count: number; totalUgx: number } | null;
   hospitalityFloor?: HospitalityFloorState | null;
+  periodLabel?: string;
 };
 
 /** @deprecated Prefer registry widgets — kept for composition tests. */
@@ -484,6 +477,7 @@ export function AnalyticsModeReports({
   hospitalityReports,
   hospitalityOpenBills,
   hospitalityFloor,
+  periodLabel,
   canProfit = false,
 }: Props) {
   const pharmacySection =
@@ -498,6 +492,7 @@ export function AnalyticsModeReports({
   const hospitalityPanel = hospitalityReports ? (
     <HospitalityReportsSection
       lang={lang}
+      periodLabel={periodLabel}
       hospitalityReports={hospitalityReports}
       hospitalityOpenBills={hospitalityOpenBills}
       hospitalityFloor={hospitalityFloor}

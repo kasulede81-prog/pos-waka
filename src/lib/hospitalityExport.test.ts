@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHospitalityKitchenPdfBlob,
+  buildHospitalityMenuPdfBlob,
   buildHospitalityTableRevenuePdfBlob,
   buildHospitalityWaiterPdfBlob,
 } from "./hospitalityDocumentExports";
@@ -15,15 +16,72 @@ const sample: HospitalityReportSummary = {
   tables: [{ label: "T1", billCount: 1, revenueUgx: 10_000 }],
   peakHours: [{ hour: 12, label: "12:00", billCount: 2, revenueUgx: 15_000 }],
   menu: {
-    menuItemCount: 0,
-    reliableCostCount: 0,
-    needsCostCount: 0,
-    unverifiedCostCount: 0,
-    topDishes: [],
-    topDrinks: [],
-    lowMargin: [],
-    topModifiers: [],
-    ingredientCostGaps: [],
+    menuItemCount: 3,
+    reliableCostCount: 1,
+    needsCostCount: 1,
+    unverifiedCostCount: 1,
+    topDishes: [
+      {
+        productId: "p1",
+        name: "Chicken plate",
+        unitsSold: 2,
+        revenueUgx: 20_000,
+        sellPriceUgx: 10_000,
+        costStatus: "estimated",
+        currentCostUgx: 2_000,
+        currentMarginPct: 80,
+        realized: {
+          basis: "complete",
+          revenueUgx: 20_000,
+          costUgx: 15_000,
+          profitUgx: 5_000,
+          marginPct: 25,
+          snapshotLineCount: 2,
+          missingSnapshotLineCount: 0,
+        },
+        soldLineCount: 2,
+      },
+    ],
+    topDrinks: [
+      {
+        productId: "p2",
+        name: "Soda",
+        unitsSold: 3,
+        revenueUgx: 6_000,
+        sellPriceUgx: 2_000,
+        costStatus: "unverified",
+        currentCostUgx: null,
+        currentMarginPct: null,
+        realized: {
+          basis: "partial",
+          revenueUgx: 6_000,
+          costUgx: 4_000,
+          profitUgx: 2_000,
+          marginPct: 33.33,
+          snapshotLineCount: 2,
+          missingSnapshotLineCount: 1,
+        },
+        soldLineCount: 3,
+      },
+    ],
+    lowMargin: [
+      {
+        productId: "p3",
+        name: "Legacy plate",
+        unitsSold: 1,
+        revenueUgx: 5_000,
+        sellPriceUgx: 5_000,
+        costStatus: "estimated",
+        currentCostUgx: 4_000,
+        currentMarginPct: 20,
+        realized: null,
+        soldLineCount: 1,
+      },
+    ],
+    topModifiers: [{ optionLabel: "Extra sauce", groupLabel: "Extras", count: 2 }],
+    ingredientCostGaps: [
+      { ingredientId: "spice", name: "Spice mix", unit: "kg", dishCount: 1, reason: "zero_cost" },
+    ],
   },
 };
 
@@ -41,5 +99,10 @@ describe("hospitalityExport", () => {
   it("builds table PDF", () => {
     const blob = buildHospitalityTableRevenuePdfBlob("en", sample);
     expect(blob.size).toBeGreaterThan(200);
+  });
+
+  it("builds menu PDF with period and margin labels", () => {
+    const blob = buildHospitalityMenuPdfBlob("en", sample, "October 2026");
+    expect(blob.size).toBeGreaterThan(300);
   });
 });

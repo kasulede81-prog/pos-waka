@@ -1090,9 +1090,13 @@ const en: Dict = {
   hospitalityWaiterExportTitle: "Waiter performance",
   hospitalityKitchenExportTitle: "Kitchen summary",
   hospitalityTableExportTitle: "Table revenue",
+  hospitalityExportMenuPdf: "Menu PDF",
   hospitalityExportWaiterPdf: "Waiter PDF",
   hospitalityExportKitchenPdf: "Kitchen PDF",
   hospitalityExportTablePdf: "Table PDF",
+  hospitalityMenuExportPeriod: "Period",
+  hospitalityMenuExportSnapshotNote:
+    "Sold margin uses the sale-time cost and net revenue snapshot on completed sale lines. Partial means some sold lines had only a partial or no usable snapshot. Est. margin uses current product/recipe cost and is not historical. Margin unavailable means neither is usable.",
   printerStateSupported: "Thermal printing: supported",
   printerStatePartial: "Printing: partial",
   printerStateUnavailable: "Printing: unavailable",
