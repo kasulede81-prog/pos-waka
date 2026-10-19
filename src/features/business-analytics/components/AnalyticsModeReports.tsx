@@ -24,6 +24,8 @@ import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
 import {
   formatIngredientDemandQty,
   hospitalityMenuMarginLabel,
+  type HospitalityCancellationSource,
+  type HospitalityCancelledMenuItem,
   type HospitalityMenuPerformanceRow,
   type HospitalityReportSummary,
 } from "../../../lib/hospitalityReports";
@@ -162,6 +164,33 @@ export function WholesaleReportsSection({
   );
 }
 
+const VOID_REASON_KEYS = new Set([
+  "wrong_item",
+  "customer_changed_mind",
+  "returned_item",
+  "wrong_quantity",
+  "other",
+]);
+
+function cancellationSourceLabel(lang: Language, source: HospitalityCancellationSource): string {
+  if (source === "whole_bill_void") return t(lang, "hospitalityCancelledSourceWholeBill");
+  if (source === "kitchen_ticket") return t(lang, "hospitalityCancelledSourceKitchen");
+  return t(lang, "hospitalityCancelledSourceLineVoid");
+}
+
+function cancellationReasonLabel(lang: Language, row: HospitalityCancelledMenuItem): string {
+  const base = row.reason
+    ? VOID_REASON_KEYS.has(row.reason)
+      ? t(lang, `voidReason_${row.reason}`)
+      : row.reason
+    : t(lang, "hospitalityCancelledReasonUnknown");
+  return row.note ? `${base} — ${row.note}` : base;
+}
+
+function cancellationDateLabel(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
+
 function MenuPerformanceList({
   lang,
   title,
@@ -218,6 +247,7 @@ export function HospitalityReportsSection({
   const demand = hospitalityReports.menu.ingredientDemand;
   const hasDemandGaps =
     demand.missingIngredients.length > 0 || demand.noRecipeDishes.length > 0;
+  const cancellations = hospitalityReports.cancellations;
 
   return (
     <section className="space-y-4 rounded-2xl border border-waka-200 bg-waka-50/40 p-4 shadow-sm">
@@ -445,6 +475,116 @@ export function HospitalityReportsSection({
             ) : null}
           </>
         )}
+      </div>
+      <div className="rounded-2xl border border-amber-200 bg-card p-3">
+        <p className="text-xs font-black uppercase text-muted-foreground">
+          {t(lang, "hospitalityCancelledItemsTitle")}
+        </p>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">
+          {t(lang, "hospitalityCancelledItemsHint")}
+        </p>
+        {cancellations.rows.length === 0 ? (
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">
+            {t(lang, "hospitalityCancelledItemsEmpty")}
+          </p>
+        ) : (
+          <>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {[
+                {
+                  label: t(lang, "hospitalityCancelledLineVoids"),
+                  value: cancellations.lineVoidCount,
+                  className: "text-foreground",
+                },
+                {
+                  label: t(lang, "hospitalityCancelledWholeBillVoids"),
+                  value: cancellations.wholeBillVoidCount,
+                  className: "text-amber-800",
+                },
+                {
+                  label: t(lang, "hospitalityCancelledKitchenCancellations"),
+                  value: cancellations.kitchenCancellationCount,
+                  className: "text-muted-foreground",
+                },
+              ].map((tile) => (
+                <article key={tile.label} className="rounded-xl bg-muted/60 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                    {tile.label}
+                  </p>
+                  <p className={`mt-0.5 text-lg font-black ${tile.className}`}>{tile.value}</p>
+                </article>
+              ))}
+            </div>
+            <p className="mt-2 text-xs font-semibold text-muted-foreground">
+              {tTemplate(lang, "hospitalityCancelledSummaryCount", {
+                count: String(cancellations.rows.length),
+              })}{" "}
+              · {t(lang, "hospitalityCancelledRecordedValue")}: UGX{" "}
+              {cancellations.totalRecordedValueUgx.toLocaleString()} ·{" "}
+              {t(lang, "hospitalityCancelledSaleTimeCost")}: UGX{" "}
+              {cancellations.totalSaleTimeCostUgx.toLocaleString()} (
+              {tTemplate(lang, "hospitalityCancelledSnapshotCoverage", {
+                count: String(cancellations.saleTimeCostRowCount),
+              })}
+              )
+            </p>
+            <ul className="mt-2 space-y-2">
+              {cancellations.rows.map((row) => (
+                <li
+                  key={row.id}
+                  className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-foreground">
+                        {row.productName} · {formatIngredientDemandQty(row.quantity)}
+                      </p>
+                      <p className="mt-0.5 text-xs font-medium text-muted-foreground">
+                        {cancellationSourceLabel(lang, row.source)} ·{" "}
+                        {cancellationDateLabel(row.occurredAt)}
+                        {row.contextLabel ? ` · ${row.contextLabel}` : ""}
+                        {row.ticketNumber != null
+                          ? ` · ${tTemplate(lang, "hospitalityCancelledTicketLabel", {
+                              number: String(row.ticketNumber),
+                            })}`
+                          : ""}
+                        {row.actorLabel ? ` · ${row.actorLabel}` : ""}
+                      </p>
+                      <p className="mt-0.5 text-xs font-semibold text-amber-950">
+                        {cancellationReasonLabel(lang, row)}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right text-xs font-semibold text-muted-foreground">
+                      {row.recordedValueUgx != null ? (
+                        <p>
+                          {t(lang, "hospitalityCancelledRecordedValue")}: UGX{" "}
+                          {row.recordedValueUgx.toLocaleString()}
+                        </p>
+                      ) : null}
+                      {row.saleTimeCostUgx != null ? (
+                        <p>
+                          {row.saleTimeCostBasis === "partial"
+                            ? t(lang, "hospitalityCancelledSaleTimeCostPartial")
+                            : t(lang, "hospitalityCancelledSaleTimeCost")}
+                          : UGX {row.saleTimeCostUgx.toLocaleString()}
+                        </p>
+                      ) : (
+                        <p>
+                          {row.source === "kitchen_ticket"
+                            ? t(lang, "hospitalityCancelledNoSnapshot")
+                            : t(lang, "hospitalityCancelledCostNotRecorded")}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+          {t(lang, "hospitalityCancelledValueNote")}
+        </p>
       </div>
       {hospitalityReports.waiters.length > 0 ? (
         <div className="rounded-2xl border border-border bg-card p-3">

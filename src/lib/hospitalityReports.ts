@@ -5,6 +5,7 @@ import type {
   Recipe,
   Sale,
   StaffAccount,
+  VoidRecord,
 } from "../types";
 import { t } from "./i18n";
 import { completedSales } from "./saleStatus";
@@ -163,6 +164,45 @@ export type HospitalityIngredientDemandReport = {
   noRecipeDishes: HospitalityNoRecipeDemand[];
 };
 
+export type HospitalityCancellationSource =
+  | "line_void"
+  | "whole_bill_void"
+  | "kitchen_ticket";
+
+export type HospitalityCancelledMenuItem = {
+  id: string;
+  source: HospitalityCancellationSource;
+  productId: string;
+  productName: string;
+  quantity: number;
+  occurredAt: string;
+  actorLabel: string | null;
+  /** VoidReason for sale voids, free-text reason for kitchen cancellations. */
+  reason: string;
+  note: string | null;
+  saleId: string | null;
+  /** Sale reference label or kitchen ticket table label, when recorded. */
+  contextLabel: string | null;
+  ticketNumber: number | null;
+  /** Recorded value reversed by the shared void record, never a food-cost value. */
+  recordedValueUgx: number | null;
+  /** Prorated sale-time COGS snapshot from the linked sale line. */
+  saleTimeCostUgx: number | null;
+  saleTimeCostBasis: "complete" | "partial" | null;
+  costStatus: "snapshot" | "unavailable";
+};
+
+export type HospitalityCancelledMenuReport = {
+  rows: HospitalityCancelledMenuItem[];
+  lineVoidCount: number;
+  wholeBillVoidCount: number;
+  kitchenCancellationCount: number;
+  totalQuantity: number;
+  totalRecordedValueUgx: number;
+  totalSaleTimeCostUgx: number;
+  saleTimeCostRowCount: number;
+};
+
 /**
  * Read-only menu performance and cost coverage for the reporting period.
  * It is derived from completed sales plus the shared product/recipe model —
@@ -190,6 +230,7 @@ export type HospitalityReportSummary = {
   tables: TableRevenueRow[];
   peakHours: PeakHourRow[];
   menu: HospitalityMenuReport;
+  cancellations: HospitalityCancelledMenuReport;
 };
 
 function menuCostStatus(state: ReturnType<typeof hospitalityMenuCostState>): HospitalityMenuCostStatus {
@@ -500,6 +541,115 @@ function inRange(iso: string, range: HospitalityReportRange): boolean {
   return key >= range.fromKey && key <= range.toKey;
 }
 
+function computeCancelledMenuReport(
+  sales: Sale[],
+  voidRecords: readonly VoidRecord[],
+  archivedVoidRecords: readonly VoidRecord[],
+  floor: HospitalityFloorState | null,
+  range: HospitalityReportRange,
+): HospitalityCancelledMenuReport {
+  const saleById = new Map(sales.map((sale) => [sale.id, sale]));
+  const voidById = new Map<string, VoidRecord>();
+  for (const record of [...voidRecords, ...archivedVoidRecords]) {
+    voidById.set(record.id, record);
+  }
+
+  const rows: HospitalityCancelledMenuItem[] = [];
+
+  for (const record of voidById.values()) {
+    if (!inRange(record.createdAt, range)) continue;
+    const sale = saleById.get(record.saleId) ?? null;
+    const candidates = sale
+      ? (record.saleLineId
+          ? [sale.lines.find((line) => line.id === record.saleLineId), sale.lines[record.lineIndex]]
+          : [sale.lines[record.lineIndex]])
+      : [];
+    const line =
+      candidates.find((candidate) => candidate && candidate.productId === record.productId) ?? null;
+    const historical = line
+      ? resolveSaleLineHistoricalFinancials(line, sale ?? undefined, { includeVoided: true })
+      : null;
+    const saleTimeCostUgx =
+      historical && line && line.quantity > 0
+        ? Math.round(
+            (historical.cogsUgx * Math.min(Math.max(0, record.quantity), line.quantity)) /
+              line.quantity,
+          )
+        : null;
+    const wholeBill = Boolean(
+      record.saleVoidedAt || sale?.saleVoidedAt || sale?.billDraft?.voidedAt,
+    );
+    const note =
+      record.note?.trim() ||
+      sale?.saleVoidReason?.trim() ||
+      sale?.billDraft?.voidReason?.trim() ||
+      null;
+
+    rows.push({
+      id: `void:${record.id}`,
+      source: wholeBill ? "whole_bill_void" : "line_void",
+      productId: record.productId,
+      productName: record.productName,
+      quantity: record.quantity,
+      occurredAt: record.createdAt,
+      actorLabel: record.actorName?.trim() || sale?.saleVoidedByLabel?.trim() || record.actorUserId,
+      reason: record.reason,
+      note,
+      saleId: record.saleId,
+      contextLabel: sale?.referenceLabel?.trim() || null,
+      ticketNumber: null,
+      recordedValueUgx: Number.isFinite(record.amountUgx) ? Math.round(record.amountUgx) : null,
+      saleTimeCostUgx,
+      saleTimeCostBasis: historical?.basis ?? null,
+      costStatus: saleTimeCostUgx != null ? "snapshot" : "unavailable",
+    });
+  }
+
+  for (const ticket of floor?.kitchenTickets ?? []) {
+    for (const item of ticket.items) {
+      if (item.itemStatus !== "cancelled" || !item.cancelledAt) continue;
+      if (!inRange(item.cancelledAt, range)) continue;
+      rows.push({
+        id: `kitchen:${ticket.id}:${item.id}`,
+        source: "kitchen_ticket",
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        occurredAt: item.cancelledAt,
+        actorLabel: item.cancelledBy?.trim() || null,
+        reason: item.cancelReason?.trim() || "",
+        note: null,
+        saleId: ticket.saleId ?? null,
+        contextLabel: ticket.tableLabel?.trim() || null,
+        ticketNumber: ticket.ticketNumber ?? null,
+        recordedValueUgx: null,
+        saleTimeCostUgx: null,
+        saleTimeCostBasis: null,
+        costStatus: "unavailable",
+      });
+    }
+  }
+
+  rows.sort(
+    (a, b) => b.occurredAt.localeCompare(a.occurredAt) || a.productName.localeCompare(b.productName),
+  );
+
+  return {
+    rows,
+    lineVoidCount: rows.filter((row) => row.source === "line_void").length,
+    wholeBillVoidCount: rows.filter((row) => row.source === "whole_bill_void").length,
+    kitchenCancellationCount: rows.filter((row) => row.source === "kitchen_ticket").length,
+    totalQuantity: roundDemandQty(rows.reduce((sum, row) => sum + row.quantity, 0)),
+    totalRecordedValueUgx: Math.round(
+      rows.reduce((sum, row) => sum + (row.recordedValueUgx ?? 0), 0),
+    ),
+    totalSaleTimeCostUgx: Math.round(
+      rows.reduce((sum, row) => sum + (row.saleTimeCostUgx ?? 0), 0),
+    ),
+    saleTimeCostRowCount: rows.filter((row) => row.saleTimeCostUgx != null).length,
+  };
+}
+
 export function computeHospitalityReports(
   sales: Sale[],
   products: Product[],
@@ -507,6 +657,8 @@ export function computeHospitalityReports(
   options?: {
     floor?: HospitalityFloorState | null;
     staffAccounts?: StaffAccount[] | null;
+    voidRecords?: readonly VoidRecord[] | null;
+    archivedVoidRecords?: readonly VoidRecord[] | null;
   },
 ): HospitalityReportSummary {
   const productById = new Map(products.map((p) => [p.id, p]));
@@ -581,6 +733,13 @@ export function computeHospitalityReports(
     tables,
     peakHours,
     menu: computeHospitalityMenuReport(scoped, products),
+    cancellations: computeCancelledMenuReport(
+      sales,
+      options?.voidRecords ?? [],
+      options?.archivedVoidRecords ?? [],
+      floor,
+      range,
+    ),
   };
 }
 

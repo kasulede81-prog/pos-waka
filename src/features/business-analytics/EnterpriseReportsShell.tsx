@@ -66,6 +66,8 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
   const stockMovements = usePosStore((s) => s.stockMovements);
+  const voidRecords = usePosStore((s) => s.voidRecords);
+  const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
 
   const mode = resolveReportsMode(preferences.businessType, preferences.pharmacyModeEnabled);
 
@@ -166,8 +168,10 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     return computeHospitalityReports(sales, products, { fromKey: bounds.fromKey, toKey: bounds.toKey }, {
       floor: preferences.hospitalityFloor,
       staffAccounts: preferences.staffAccounts,
+      voidRecords,
+      archivedVoidRecords,
     });
-  }, [preferences, bounds, sales, products]);
+  }, [preferences, bounds, sales, products, voidRecords, archivedVoidRecords]);
 
   const hospitalityOpenBills = useMemo(() => {
     if (!hospitalityReports || !preferences.hospitalityFloor) return null;

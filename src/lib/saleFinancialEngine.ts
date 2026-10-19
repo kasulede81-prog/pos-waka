@@ -251,13 +251,15 @@ export function resolveSaleLineFinancialsWithSale(line: SaleLine, sale: Sale): S
  * - complete: the line carries the full net revenue / COGS / gross-profit snapshot.
  * - partial: an older line carries a sale-time unit cost or COGS snapshot but not
  *   the full reporting triple; revenue comes from the line's net/gross snapshot.
- * - null: legacy, needs-repair, voided, or no sale-time cost evidence.
+ * - null: legacy, needs-repair, voided (unless includeVoided is set for an
+ *   audit/cancellation report), or no sale-time cost evidence.
  */
 export function resolveSaleLineHistoricalFinancials(
   line: SaleLine,
   sale?: Sale,
+  opts?: { includeVoided?: boolean },
 ): SaleLineHistoricalFinancials | null {
-  if (line.voided) return null;
+  if (line.voided && !opts?.includeVoided) return null;
   if (line.financialDataStatus === "legacy" || line.financialDataStatus === "needs_repair") return null;
 
   const quantity = Math.max(0, Number(line.quantity) || 0);

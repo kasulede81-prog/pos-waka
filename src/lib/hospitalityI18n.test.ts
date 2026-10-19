@@ -83,6 +83,32 @@ const KEYS = [
   "hospitalityExportMenuPdf",
   "hospitalityMenuExportPeriod",
   "hospitalityMenuExportSnapshotNote",
+  // Cancellation/void report
+  "hospitalityCancelledItemsTitle",
+  "hospitalityCancelledItemsHint",
+  "hospitalityCancelledItemsEmpty",
+  "hospitalityCancelledSourceLineVoid",
+  "hospitalityCancelledSourceWholeBill",
+  "hospitalityCancelledSourceKitchen",
+  "hospitalityCancelledLineVoids",
+  "hospitalityCancelledWholeBillVoids",
+  "hospitalityCancelledKitchenCancellations",
+  "hospitalityCancelledRecordedValue",
+  "hospitalityCancelledSaleTimeCost",
+  "hospitalityCancelledSaleTimeCostPartial",
+  "hospitalityCancelledCostNotRecorded",
+  "hospitalityCancelledNoSnapshot",
+  "hospitalityCancelledValueNote",
+  "hospitalityCancelledReasonUnknown",
+  "hospitalityCancelledTicketLabel",
+  "hospitalityCancelledSummaryCount",
+  "hospitalityCancelledSnapshotCoverage",
+  // Shared void reason labels used by the cancellation report
+  "voidReason_wrong_item",
+  "voidReason_customer_changed_mind",
+  "voidReason_returned_item",
+  "voidReason_wrong_quantity",
+  "voidReason_other",
 ] as const;
 
 function placeholders(value: string): string[] {

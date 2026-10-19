@@ -3541,6 +3541,27 @@ const en: Dict = {
   hospitalityIngredientDemandMissingProduct: "{name} — {units} sold, product missing",
   hospitalityIngredientDemandMissingIngredient:
     "Missing ingredient {name} — {quantity}{unit} required · {count} dish(es)",
+  hospitalityCancelledItemsTitle: "Cancelled & voided menu items",
+  hospitalityCancelledItemsHint:
+    "Read-only evidence from sale-line voids, whole-bill voids, and kitchen ticket item cancellations. This is not kitchen waste and does not mean food was prepared or wasted. Cost appears only when the linked sale line has a sale-time cost snapshot.",
+  hospitalityCancelledItemsEmpty: "No cancelled or voided menu items in this period.",
+  hospitalityCancelledSourceLineVoid: "Line void",
+  hospitalityCancelledSourceWholeBill: "Whole bill void",
+  hospitalityCancelledSourceKitchen: "Kitchen ticket cancellation",
+  hospitalityCancelledLineVoids: "Line voids",
+  hospitalityCancelledWholeBillVoids: "Whole bill voids",
+  hospitalityCancelledKitchenCancellations: "Kitchen cancellations",
+  hospitalityCancelledRecordedValue: "Recorded void value",
+  hospitalityCancelledSaleTimeCost: "Sale-time cost snapshot",
+  hospitalityCancelledSaleTimeCostPartial: "Sale-time cost (partial snapshot)",
+  hospitalityCancelledCostNotRecorded: "Cost not recorded",
+  hospitalityCancelledNoSnapshot: "No sale-time cost snapshot",
+  hospitalityCancelledValueNote:
+    "Recorded value is the amount reversed by the shared void record — not a food-cost or waste value.",
+  hospitalityCancelledReasonUnknown: "Reason not recorded",
+  hospitalityCancelledTicketLabel: "Ticket #{number}",
+  hospitalityCancelledSummaryCount: "{count} item(s)",
+  hospitalityCancelledSnapshotCoverage: "{count} with sale-time cost",
   customerDisplayTitle: "Your order",
   customerDisplayTable: "Table",
   customerDisplayTotal: "Total",
@@ -16587,6 +16608,28 @@ const lgBase: Dict = {
   hospitalityMenuExportPeriod: "Kiseera",
   hospitalityMenuExportSnapshotNote:
     "Magini ku byatundiddwa gakozesa omuwendo n'ensimbi eziri mu snapshot ya sale line ekkakasiddwa. Kitundu kiba kitegeeza nti sale line ezimu zirina snapshot etuukiridde oba tezirina. Magini agerekeranyizibwa gakozesa omuwendo gw'ebikozesebwa gw'ekiseera kino, si gwa history. Magini tewali kiba kitegeeza nti tewali snapshot wadde omuwendo gw'ekiseera kino.",
+  hospitalityCancelledItemsTitle: "Ebintu ku menu ebiggyiddwa oba ebikyusiddwa",
+  hospitalityCancelledItemsHint:
+    "Obujulizi obusomwa bwokka okuva mu kuggyako ku sale line, okuggyako bill yonna, n'okukyusa ebintu ku ticket ya kkizinzi. Kino si kusaasaanya mu kkizinzi era tekitegeeza nti emmere yateekebwa oba yasaanyiziddwa. Cost erabika bwokka nga sale line erina snapshot ya cost ey'okutunda.",
+  hospitalityCancelledItemsEmpty:
+    "Tewali bintu ku menu ebiggyiddwa oba ebikyusiddwa mu kiseera kino.",
+  hospitalityCancelledSourceLineVoid: "Okuggyako ku line",
+  hospitalityCancelledSourceWholeBill: "Okuggyako bill yonna",
+  hospitalityCancelledSourceKitchen: "Okukyusa ku ticket ya kkizinzi",
+  hospitalityCancelledLineVoids: "Ebiggyiddwa ku line",
+  hospitalityCancelledWholeBillVoids: "Bills eziggiddwa",
+  hospitalityCancelledKitchenCancellations: "Ebikyusiddwa ku kkizinzi",
+  hospitalityCancelledRecordedValue: "Omuwendo oguwandiikiddwa",
+  hospitalityCancelledSaleTimeCost: "Snapshot ya cost ey'okutunda",
+  hospitalityCancelledSaleTimeCostPartial: "Snapshot ya cost ey'okutunda (kitundu)",
+  hospitalityCancelledCostNotRecorded: "Cost teyawandiikiddwa",
+  hospitalityCancelledNoSnapshot: "Tewali snapshot ya cost ey'okutunda",
+  hospitalityCancelledValueNote:
+    "Omuwendo oguwandiikiddwa gwe gwaggyibwa mu void record ey'omu shared — si cost ya mmere oba kusaasaanya.",
+  hospitalityCancelledReasonUnknown: "Ensonga teyawandiikiddwa",
+  hospitalityCancelledTicketLabel: "Tikiti #{number}",
+  hospitalityCancelledSummaryCount: "ebintu {count}",
+  hospitalityCancelledSnapshotCoverage: "{count} birina snapshot ya cost",
 };
 
 /** Luganda = base dictionary + Phase 2 Batch 4 overrides (mirrors the sw layering). */

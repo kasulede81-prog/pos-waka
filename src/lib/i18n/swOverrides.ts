@@ -1021,4 +1021,31 @@ export const swOverrides: Record<string, string> = {
   hospitalityMenuExportPeriod: "Kipindi",
   hospitalityMenuExportSnapshotNote:
     "Ukingo wa mauzo hutumia gharama na mapato halisi yaliyohifadhiwa kwenye mstari wa mauzo yaliyokamilika. Sehemu inamaanisha baadhi ya mistari ya mauzo ilikuwa na data ya sehemu au haikuwa na data inayotumika. Ukingo unaokadiriwa hutumia gharama ya sasa ya bidhaa/mapishi, si ya kihistoria. Ukingo haupatikani inamaanisha hakuna data inayotumika.",
+  hospitalityCancelledItemsTitle: "Vitu vya menyu vilivyoghairiwa au kufutwa",
+  hospitalityCancelledItemsHint:
+    "Ushahidi wa kusoma tu kutoka kwa kufuta mistari ya mauzo, kufuta bili nzima, na kughairi vitu kwenye tiketi ya jikoni. Hii si taka ya jikoni na haimaanishi chakula kilipikiwa au kupotea. Gharama huonekana tu ikiwa mstari wa mauzo una picha ya gharama wakati wa mauzo.",
+  hospitalityCancelledItemsEmpty:
+    "Hakuna vitu vya menyu vilivyoghairiwa au kufutwa katika kipindi hiki.",
+  hospitalityCancelledSourceLineVoid: "Kufuta mstari",
+  hospitalityCancelledSourceWholeBill: "Kufuta bili nzima",
+  hospitalityCancelledSourceKitchen: "Kughairi tiketi ya jikoni",
+  hospitalityCancelledLineVoids: "Mistari iliyofutwa",
+  hospitalityCancelledWholeBillVoids: "Bili zilizofutwa",
+  hospitalityCancelledKitchenCancellations: "Kughairi jikoni",
+  hospitalityCancelledRecordedValue: "Thamani iliyorekodiwa",
+  hospitalityCancelledSaleTimeCost: "Picha ya gharama wakati wa mauzo",
+  hospitalityCancelledSaleTimeCostPartial: "Picha ya gharama wakati wa mauzo (sehemu)",
+  hospitalityCancelledCostNotRecorded: "Gharama haikurekodiwa",
+  hospitalityCancelledNoSnapshot: "Hakuna picha ya gharama wakati wa mauzo",
+  hospitalityCancelledValueNote:
+    "Thamani iliyorekodiwa ni kiasi kilichorejeshwa na rekodi ya kufuta iliyoshirikiwa — si gharama ya chakula au taka.",
+  hospitalityCancelledReasonUnknown: "Sababu haikurekodiwa",
+  hospitalityCancelledTicketLabel: "Tiketi #{number}",
+  hospitalityCancelledSummaryCount: "vitu {count}",
+  hospitalityCancelledSnapshotCoverage: "{count} zina picha ya gharama",
+  voidReason_wrong_item: "Bidhaa isiyo sahihi",
+  voidReason_customer_changed_mind: "Mteja alibadilisha mawazo",
+  voidReason_returned_item: "Bidhaa ilirejeshwa",
+  voidReason_wrong_quantity: "Idadi isiyo sahihi",
+  voidReason_other: "Nyingine",
 };

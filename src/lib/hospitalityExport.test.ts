@@ -111,6 +111,16 @@ const sample: HospitalityReportSummary = {
       ],
     },
   },
+  cancellations: {
+    rows: [],
+    lineVoidCount: 0,
+    wholeBillVoidCount: 0,
+    kitchenCancellationCount: 0,
+    totalQuantity: 0,
+    totalRecordedValueUgx: 0,
+    totalSaleTimeCostUgx: 0,
+    saleTimeCostRowCount: 0,
+  },
 };
 
 describe("hospitalityExport", () => {
