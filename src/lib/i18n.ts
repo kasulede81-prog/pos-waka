@@ -3530,6 +3530,17 @@ const en: Dict = {
   hospitalityReportsNoMenuSales: "No completed menu sales in this period.",
   hospitalityReportsNoLowMargin: "No low-margin sold items with a usable margin.",
   hospitalityReportsNoIngredientGaps: "No ingredient cost gaps.",
+  hospitalityIngredientDemandTitle: "Ingredient demand (estimated recipe-based)",
+  hospitalityIngredientDemandHint:
+    "Recipe-based demand from completed menu sales. This is not stock usage or an inventory movement. Quantities respect recipe yield and waste; UGX is shown only when the current ingredient cost has trustworthy provenance.",
+  hospitalityIngredientDemandEmpty: "No completed recipe-based demand in this period.",
+  hospitalityIngredientDemandCostUnavailable: "Cost unavailable",
+  hospitalityIngredientDemandDishCount: "{count} dish(es)",
+  hospitalityIngredientDemandGapsTitle: "Recipe data gaps",
+  hospitalityIngredientDemandNoRecipe: "{name} — {units} sold, no recipe",
+  hospitalityIngredientDemandMissingProduct: "{name} — {units} sold, product missing",
+  hospitalityIngredientDemandMissingIngredient:
+    "Missing ingredient {name} — {quantity}{unit} required · {count} dish(es)",
   customerDisplayTitle: "Your order",
   customerDisplayTable: "Table",
   customerDisplayTotal: "Total",

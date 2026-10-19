@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import type { Language } from "../types";
 import {
+  formatIngredientDemandQty,
   hospitalityMenuMarginLabel,
   type HospitalityReportSummary as Summary,
 } from "./hospitalityReports";
@@ -136,6 +137,67 @@ export function buildHospitalityMenuPdfBlob(
       pdfLine(layout, doc, `  ${mod.optionLabel} — ${mod.count} · ${mod.groupLabel}`, {
         size: 9,
       });
+    }
+  }
+
+  const demand = menu.ingredientDemand;
+  pdfGap(layout, 6);
+  pdfLine(layout, doc, t(lang, "hospitalityIngredientDemandTitle"), { bold: true, size: 11 });
+  pdfLine(layout, doc, t(lang, "hospitalityIngredientDemandHint"), { size: 8 });
+  if (
+    demand.rows.length === 0 &&
+    demand.missingIngredients.length === 0 &&
+    demand.noRecipeDishes.length === 0
+  ) {
+    pdfLine(layout, doc, `  ${t(lang, "hospitalityIngredientDemandEmpty")}`, { size: 9 });
+  } else {
+    for (const row of demand.rows) {
+      pdfLine(
+        layout,
+        doc,
+        `  ${row.name} — ${formatIngredientDemandQty(row.quantityBase)} ${row.unit} — ${
+          row.costStatus === "trusted"
+            ? `UGX ${(row.estimatedCostUgx ?? 0).toLocaleString()}`
+            : t(lang, "hospitalityIngredientDemandCostUnavailable")
+        } — ${tTemplate(lang, "hospitalityIngredientDemandDishCount", {
+          count: String(row.dishCount),
+        })}`,
+        { size: 9 },
+      );
+    }
+    if (demand.noRecipeDishes.length > 0 || demand.missingIngredients.length > 0) {
+      pdfGap(layout, 4);
+      pdfLine(layout, doc, t(lang, "hospitalityIngredientDemandGapsTitle"), {
+        bold: true,
+        size: 9,
+      });
+      for (const row of demand.noRecipeDishes) {
+        pdfLine(
+          layout,
+          doc,
+          `  ${tTemplate(
+            lang,
+            row.reason === "missing_product"
+              ? "hospitalityIngredientDemandMissingProduct"
+              : "hospitalityIngredientDemandNoRecipe",
+            { name: row.name, units: String(row.unitsSold) },
+          )}`,
+          { size: 9 },
+        );
+      }
+      for (const gap of demand.missingIngredients) {
+        pdfLine(
+          layout,
+          doc,
+          `  ${tTemplate(lang, "hospitalityIngredientDemandMissingIngredient", {
+            name: gap.ingredientId,
+            quantity: formatIngredientDemandQty(gap.quantityBase),
+            unit: gap.unit ? ` ${gap.unit}` : "",
+            count: String(gap.dishCount),
+          })}`,
+          { size: 9 },
+        );
+      }
     }
   }
 

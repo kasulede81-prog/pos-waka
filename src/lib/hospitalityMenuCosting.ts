@@ -46,6 +46,21 @@ export function zeroCostRecipeIngredientIds(product: Product, products: Product[
   return [...ids];
 }
 
+export type TrustedProductCost = {
+  costUgx: number;
+  source: "manual" | "purchase";
+};
+
+/** Current shared product cost, only when provenance makes it trustworthy. */
+export function resolveTrustedProductCost(
+  product: Pick<Product, "costPricePerUnitUgx" | "costSource">,
+): TrustedProductCost | null {
+  const costUgx = Number(product.costPricePerUnitUgx) || 0;
+  if (costUgx <= 0) return null;
+  if (product.costSource !== "manual" && product.costSource !== "purchase") return null;
+  return { costUgx, source: product.costSource };
+}
+
 export type HospitalityMenuCostState =
   | {
       status: "not_set";
@@ -110,15 +125,14 @@ export function hospitalityMenuCostState(
     return { status: "not_set", missingIngredientIds: [] };
   }
 
-  const cost = Number(product.costPricePerUnitUgx) || 0;
-  const source = product.costSource;
-  if (cost > 0 && (source === "manual" || source === "purchase")) {
-    const foodCostUgx = Math.round(cost);
+  const trusted = resolveTrustedProductCost(product);
+  if (trusted) {
+    const foodCostUgx = Math.round(trusted.costUgx);
     const sellPriceUgx = product.sellingPricePerUnitUgx;
     const profitUgx = sellPriceUgx - foodCostUgx;
     return {
       status: "verified_product_cost",
-      costSource: source,
+      costSource: trusted.source,
       foodCostUgx,
       sellPriceUgx,
       profitUgx,
@@ -126,6 +140,8 @@ export function hospitalityMenuCostState(
     };
   }
 
+  const cost = Number(product.costPricePerUnitUgx) || 0;
+  const source = product.costSource;
   return {
     status: "unverified_product_cost",
     reason:

@@ -1,6 +1,14 @@
-import type { HospitalityFloorState, Language, Product, Sale, StaffAccount } from "../types";
+import type {
+  HospitalityFloorState,
+  Language,
+  Product,
+  Recipe,
+  Sale,
+  StaffAccount,
+} from "../types";
 import { t } from "./i18n";
 import { completedSales } from "./saleStatus";
+import { aggregateRecipeRequirements, effectiveRecipe } from "./recipeEngine";
 import { resolveProductStationType } from "./kitchenRouting";
 import { dateKeyKampala } from "./datesUg";
 import { resolveSaleWaiterAttribution } from "./waiterAttribution";
@@ -16,6 +24,7 @@ import {
   isHospitalityMenuItem,
   isHospitalityRecipeDish,
   isHospitalityResaleItem,
+  resolveTrustedProductCost,
 } from "./hospitalityMenuCosting";
 
 export type HospitalityReportRange = {
@@ -105,6 +114,10 @@ export function hospitalityMenuMarginLabel(
   return t(lang, "hospitalityReportsMarginUnavailable");
 }
 
+export function formatIngredientDemandQty(value: number): string {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
+}
+
 export type HospitalityIngredientCostGap = {
   ingredientId: string;
   name: string;
@@ -112,6 +125,42 @@ export type HospitalityIngredientCostGap = {
   /** How many menu dishes reference this ingredient. */
   dishCount: number;
   reason: "zero_cost" | "missing";
+};
+
+export type HospitalityIngredientDemandRow = {
+  ingredientId: string;
+  name: string;
+  unit: string;
+  /** Estimated base-unit demand from completed recipe sales; not stock usage. */
+  quantityBase: number;
+  /** Current shared product cost estimate, only when provenance is trustworthy. */
+  estimatedCostUgx: number | null;
+  costStatus: "trusted" | "unavailable";
+  dishCount: number;
+};
+
+export type HospitalityMissingIngredientDemand = {
+  ingredientId: string;
+  unit: string;
+  quantityBase: number;
+  dishCount: number;
+};
+
+export type HospitalityNoRecipeDemand = {
+  productId: string;
+  name: string;
+  unitsSold: number;
+  reason: "no_recipe" | "missing_product";
+};
+
+/**
+ * Estimated recipe-based demand from completed menu sales.
+ * This is not stock usage, an inventory movement, or a Hospitality ledger.
+ */
+export type HospitalityIngredientDemandReport = {
+  rows: HospitalityIngredientDemandRow[];
+  missingIngredients: HospitalityMissingIngredientDemand[];
+  noRecipeDishes: HospitalityNoRecipeDemand[];
 };
 
 /**
@@ -129,6 +178,7 @@ export type HospitalityMenuReport = {
   lowMargin: HospitalityMenuPerformanceRow[];
   topModifiers: ModifierPopularityStat[];
   ingredientCostGaps: HospitalityIngredientCostGap[];
+  ingredientDemand: HospitalityIngredientDemandReport;
 };
 
 export type HospitalityReportSummary = {
@@ -157,6 +207,132 @@ type HistoricalMenuAggregate = {
   missingSnapshotLineCount: number;
   partial: boolean;
 };
+
+function recipeLineUnit(recipe: Recipe, ingredientId: string): string {
+  return (
+    recipe.lines.find((line) => line.ingredientProductId === ingredientId)?.unitLabel?.trim() ?? ""
+  );
+}
+
+function roundDemandQty(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+function computeIngredientDemand(
+  scopedSales: Sale[],
+  products: Product[],
+): HospitalityIngredientDemandReport {
+  const productById = new Map(products.map((product) => [product.id, product]));
+  const demand = new Map<
+    string,
+    { ingredient: Product; unit: string; quantityBase: number; dishIds: Set<string> }
+  >();
+  const missing = new Map<
+    string,
+    { ingredientId: string; unit: string; quantityBase: number; dishIds: Set<string> }
+  >();
+  const noRecipe = new Map<string, HospitalityNoRecipeDemand>();
+
+  for (const sale of scopedSales) {
+    for (const line of sale.lines) {
+      if (line.voided) continue;
+      const product = productById.get(line.productId);
+      if (!product) {
+        const key = `missing-product:${line.productId}`;
+        const row = noRecipe.get(key) ?? {
+          productId: line.productId,
+          name: line.name,
+          unitsSold: 0,
+          reason: "missing_product" as const,
+        };
+        row.unitsSold += line.quantity;
+        noRecipe.set(key, row);
+        continue;
+      }
+
+      const recipe = effectiveRecipe(product, line.variantId);
+      if (!recipe) {
+        if (isHospitalityRecipeDish(product)) {
+          const key = `no-recipe:${product.id}`;
+          const row = noRecipe.get(key) ?? {
+            productId: product.id,
+            name: product.name,
+            unitsSold: 0,
+            reason: "no_recipe" as const,
+          };
+          row.unitsSold += line.quantity;
+          noRecipe.set(key, row);
+        }
+        continue;
+      }
+
+      const requirements = aggregateRecipeRequirements([
+        {
+          product,
+          quantity: line.quantity,
+          variantId: line.variantId,
+          modifiers: line.selectedModifiers,
+        },
+      ]);
+      for (const [ingredientId, quantityBase] of requirements) {
+        if (quantityBase <= 0) continue;
+        const ingredient = productById.get(ingredientId);
+        const unit = ingredient
+          ? ingredient.baseUnit?.trim() || "ea"
+          : recipeLineUnit(recipe, ingredientId) || "";
+        if (!ingredient) {
+          const key = `missing:${ingredientId}:${unit}`;
+          const row = missing.get(key) ?? {
+            ingredientId,
+            unit,
+            quantityBase: 0,
+            dishIds: new Set<string>(),
+          };
+          row.quantityBase += quantityBase;
+          row.dishIds.add(product.id);
+          missing.set(key, row);
+        } else {
+          const key = `${ingredientId}:${unit}`;
+          const row = demand.get(key) ?? {
+            ingredient,
+            unit,
+            quantityBase: 0,
+            dishIds: new Set<string>(),
+          };
+          row.quantityBase += quantityBase;
+          row.dishIds.add(product.id);
+          demand.set(key, row);
+        }
+      }
+    }
+  }
+
+  return {
+    rows: [...demand.values()]
+      .map(({ ingredient, unit, quantityBase, dishIds }) => {
+        const trusted = resolveTrustedProductCost(ingredient);
+        return {
+          ingredientId: ingredient.id,
+          name: ingredient.name,
+          unit,
+          quantityBase: roundDemandQty(quantityBase),
+          estimatedCostUgx: trusted ? Math.round(quantityBase * trusted.costUgx) : null,
+          costStatus: trusted ? ("trusted" as const) : ("unavailable" as const),
+          dishCount: dishIds.size,
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    missingIngredients: [...missing.values()]
+      .map(({ ingredientId, unit, quantityBase, dishIds }) => ({
+        ingredientId,
+        unit,
+        quantityBase: roundDemandQty(quantityBase),
+        dishCount: dishIds.size,
+      }))
+      .sort((a, b) => a.ingredientId.localeCompare(b.ingredientId)),
+    noRecipeDishes: [...noRecipe.values()].sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
 
 function computeHospitalityMenuReport(
   scopedSales: Sale[],
@@ -315,6 +491,7 @@ function computeHospitalityMenuReport(
     ingredientCostGaps: [...gapMap.values()].sort(
       (a, b) => b.dishCount - a.dishCount || a.name.localeCompare(b.name),
     ),
+    ingredientDemand: computeIngredientDemand(scopedSales, products),
   };
 }
 

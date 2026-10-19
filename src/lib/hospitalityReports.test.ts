@@ -507,3 +507,211 @@ describe("historical menu margins", () => {
     );
   });
 });
+
+describe("ingredient demand", () => {
+  const demandRice = product({
+    id: "demand-rice",
+    name: "Rice",
+    category: "Ingredients",
+    baseUnit: "kg",
+    costPricePerUnitUgx: 4_000,
+    costSource: "manual",
+    menu: { productKind: "ingredient" },
+  });
+  const demandChicken = product({
+    id: "demand-chicken",
+    name: "Chicken",
+    category: "Ingredients",
+    baseUnit: "kg",
+    costPricePerUnitUgx: 8_000,
+    costSource: "purchase",
+    menu: { productKind: "ingredient" },
+  });
+  const demandSpice = product({
+    id: "demand-spice",
+    name: "Spice mix",
+    category: "Ingredients",
+    baseUnit: "kg",
+    costPricePerUnitUgx: 0,
+    costSource: null,
+    menu: { productKind: "ingredient" },
+  });
+  const demandOil = product({
+    id: "demand-oil",
+    name: "Untrusted oil",
+    category: "Ingredients",
+    baseUnit: "litre",
+    costPricePerUnitUgx: 5_000,
+    costSource: "quick_add_default",
+    menu: { productKind: "ingredient" },
+  });
+  const demandDishA = product({
+    id: "demand-dish-a",
+    name: "Dish A",
+    menu: {
+      productKind: "finished_menu",
+      recipe: {
+        yieldQty: 4,
+        lines: [
+          { ingredientProductId: "demand-rice", quantityBase: 1, unitLabel: "kg" },
+          { ingredientProductId: "demand-chicken", quantityBase: 0.5, unitLabel: "kg" },
+        ],
+      },
+    },
+  });
+  const demandDishB = product({
+    id: "demand-dish-b",
+    name: "Dish B",
+    menu: {
+      productKind: "finished_menu",
+      recipe: {
+        yieldQty: 1,
+        lines: [
+          { ingredientProductId: "demand-rice", quantityBase: 0.2, unitLabel: "kg" },
+          { ingredientProductId: "demand-spice", quantityBase: 0.1, unitLabel: "kg" },
+          { ingredientProductId: "demand-oil", quantityBase: 0.5, unitLabel: "litre" },
+        ],
+      },
+    },
+  });
+  const demandNoRecipe = product({
+    id: "demand-no-recipe",
+    name: "No recipe plate",
+    category: "Food",
+    menu: { productKind: "finished_menu", recipe: null },
+  });
+  const demandMissing = product({
+    id: "demand-missing",
+    name: "Missing ingredient plate",
+    menu: {
+      productKind: "finished_menu",
+      recipe: {
+        yieldQty: 1,
+        lines: [{ ingredientProductId: "ghost", quantityBase: 1, unitLabel: "kg" }],
+      },
+    },
+  });
+  const demandDrink = product({
+    id: "demand-drink",
+    name: "Drink",
+    category: "Drinks",
+    baseUnit: "bottle",
+    menu: { productKind: "retail" },
+  });
+  const demandProducts = [
+    demandRice,
+    demandChicken,
+    demandSpice,
+    demandOil,
+    demandDishA,
+    demandDishB,
+    demandNoRecipe,
+    demandMissing,
+    demandDrink,
+  ];
+
+  function demandSale(
+    id: string,
+    createdAt: string,
+    lines: SaleLine[],
+    status: Sale["status"] = "completed",
+  ): Sale {
+    const total = lines.reduce((sum, row) => sum + row.lineTotalUgx, 0);
+    return {
+      id,
+      status,
+      lines,
+      subtotalUgx: total,
+      totalUgx: total,
+      cashPaidUgx: total,
+      debtUgx: 0,
+      estimatedProfitUgx: 0,
+      createdAt,
+      pendingSync: false,
+    };
+  }
+
+  const saleOne = demandSale("demand-sale-1", "2026-06-02T12:00:00.000Z", [
+    line(demandDishA, 2),
+    line(demandDishB, 1),
+    line(demandDrink, 1),
+  ]);
+  const saleTwo = demandSale("demand-sale-2", "2026-06-03T12:00:00.000Z", [
+    line(demandDishA, 2),
+    line(demandDishB, 1),
+    line(demandNoRecipe, 1),
+    line(demandMissing, 1),
+    line(demandDishA, 5, { voided: true }),
+  ]);
+  const pending = demandSale("demand-pending", "2026-06-02T12:00:00.000Z", [
+    line(demandDishA, 100),
+  ], "pending");
+  const cancelled = demandSale("demand-cancelled", "2026-06-02T12:00:00.000Z", [
+    line(demandDishA, 100),
+  ], "cancelled");
+  const outside = demandSale("demand-outside", "2026-05-01T12:00:00.000Z", [
+    line(demandDishA, 100),
+  ]);
+
+  const report = computeHospitalityReports(
+    [saleOne, saleTwo, pending, cancelled, outside],
+    demandProducts,
+    { fromKey: "2026-06-02", toKey: "2026-06-03" },
+    {},
+  );
+  const demand = report.menu.ingredientDemand;
+  const row = (ingredientId: string) =>
+    demand.rows.find((entry) => entry.ingredientId === ingredientId);
+
+  it("aggregates multiple completed sales and respects recipe yield", () => {
+    expect(row("demand-rice")?.quantityBase).toBeCloseTo(1.4, 6);
+    expect(row("demand-chicken")?.quantityBase).toBeCloseTo(0.5, 6);
+    expect(row("demand-spice")?.quantityBase).toBeCloseTo(0.2, 6);
+    expect(row("demand-oil")?.quantityBase).toBeCloseTo(1, 6);
+    expect(row("demand-rice")?.unit).toBe("kg");
+    expect(row("demand-oil")?.unit).toBe("litre");
+    expect(row("demand-drink")).toBeUndefined();
+  });
+
+  it("excludes voided lines and non-completed or out-of-range sales", () => {
+    // 2 + 2 completed units of Dish A, not the voided 5 or the 100-unit
+    // pending/cancelled/out-of-range sales.
+    expect(report.menu.ingredientDemand.rows.find((entry) => entry.ingredientId === "demand-rice")
+      ?.quantityBase).toBeCloseTo(1.4, 6);
+  });
+
+  it("reports missing ingredients and dishes with no recipe", () => {
+    expect(demand.missingIngredients).toEqual([
+      { ingredientId: "ghost", unit: "kg", quantityBase: 1, dishCount: 1 },
+    ]);
+    expect(demand.noRecipeDishes).toEqual([
+      {
+        productId: "demand-no-recipe",
+        name: "No recipe plate",
+        unitsSold: 1,
+        reason: "no_recipe",
+      },
+    ]);
+  });
+
+  it("only estimates UGX for trusted current ingredient costs", () => {
+    expect(row("demand-rice")).toMatchObject({
+      estimatedCostUgx: 5_600,
+      costStatus: "trusted",
+      dishCount: 2,
+    });
+    expect(row("demand-chicken")).toMatchObject({
+      estimatedCostUgx: 4_000,
+      costStatus: "trusted",
+      dishCount: 1,
+    });
+    expect(row("demand-spice")).toMatchObject({
+      estimatedCostUgx: null,
+      costStatus: "unavailable",
+    });
+    expect(row("demand-oil")).toMatchObject({
+      estimatedCostUgx: null,
+      costStatus: "unavailable",
+    });
+  });
+});

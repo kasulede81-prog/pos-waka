@@ -22,6 +22,7 @@ import {
 } from "../../../lib/hospitalityDocumentExports";
 import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
 import {
+  formatIngredientDemandQty,
   hospitalityMenuMarginLabel,
   type HospitalityMenuPerformanceRow,
   type HospitalityReportSummary,
@@ -214,6 +215,9 @@ export function HospitalityReportsSection({
   const reservationCount =
     hospitalityFloor?.reservations?.filter((r) => r.status !== "cancelled").length ?? 0;
   const waitlistCount = hospitalityFloor?.waitlist?.filter((w) => w.status !== "cancelled").length ?? 0;
+  const demand = hospitalityReports.menu.ingredientDemand;
+  const hasDemandGaps =
+    demand.missingIngredients.length > 0 || demand.noRecipeDishes.length > 0;
 
   return (
     <section className="space-y-4 rounded-2xl border border-waka-200 bg-waka-50/40 p-4 shadow-sm">
@@ -373,6 +377,74 @@ export function HospitalityReportsSection({
             </ul>
           </div>
         ) : null}
+      </div>
+      <div className="rounded-2xl border border-waka-200 bg-card p-3">
+        <p className="text-xs font-black uppercase text-muted-foreground">
+          {t(lang, "hospitalityIngredientDemandTitle")}
+        </p>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">
+          {t(lang, "hospitalityIngredientDemandHint")}
+        </p>
+        {demand.rows.length === 0 && !hasDemandGaps ? (
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">
+            {t(lang, "hospitalityIngredientDemandEmpty")}
+          </p>
+        ) : (
+          <>
+            {demand.rows.length > 0 ? (
+              <ul className="mt-2 space-y-1">
+                {demand.rows.map((row) => (
+                  <li
+                    key={`${row.ingredientId}:${row.unit}`}
+                    className="flex items-start justify-between gap-2 text-sm font-semibold text-foreground"
+                  >
+                    <span className="min-w-0 truncate">{row.name}</span>
+                    <span className="shrink-0 text-right text-xs text-muted-foreground">
+                      {formatIngredientDemandQty(row.quantityBase)} {row.unit} ·{" "}
+                      {row.costStatus === "trusted"
+                        ? `UGX ${(row.estimatedCostUgx ?? 0).toLocaleString()}`
+                        : t(lang, "hospitalityIngredientDemandCostUnavailable")}
+                      {" · "}
+                      {tTemplate(lang, "hospitalityIngredientDemandDishCount", {
+                        count: String(row.dishCount),
+                      })}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {hasDemandGaps ? (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <p className="text-xs font-black uppercase text-amber-900">
+                  {t(lang, "hospitalityIngredientDemandGapsTitle")}
+                </p>
+                <ul className="mt-1 space-y-1 text-xs font-semibold text-amber-950">
+                  {demand.noRecipeDishes.map((row) => (
+                    <li key={`${row.reason}:${row.productId}`}>
+                      {tTemplate(
+                        lang,
+                        row.reason === "missing_product"
+                          ? "hospitalityIngredientDemandMissingProduct"
+                          : "hospitalityIngredientDemandNoRecipe",
+                        { name: row.name, units: String(row.unitsSold) },
+                      )}
+                    </li>
+                  ))}
+                  {demand.missingIngredients.map((gap) => (
+                    <li key={`${gap.ingredientId}:${gap.unit}`}>
+                      {tTemplate(lang, "hospitalityIngredientDemandMissingIngredient", {
+                        name: gap.ingredientId,
+                        quantity: formatIngredientDemandQty(gap.quantityBase),
+                        unit: gap.unit ? ` ${gap.unit}` : "",
+                        count: String(gap.dishCount),
+                      })}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
       {hospitalityReports.waiters.length > 0 ? (
         <div className="rounded-2xl border border-border bg-card p-3">

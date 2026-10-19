@@ -82,6 +82,34 @@ const sample: HospitalityReportSummary = {
     ingredientCostGaps: [
       { ingredientId: "spice", name: "Spice mix", unit: "kg", dishCount: 1, reason: "zero_cost" },
     ],
+    ingredientDemand: {
+      rows: [
+        {
+          ingredientId: "rice",
+          name: "Rice",
+          unit: "kg",
+          quantityBase: 1.4,
+          estimatedCostUgx: 5_600,
+          costStatus: "trusted",
+          dishCount: 2,
+        },
+        {
+          ingredientId: "spice",
+          name: "Spice mix",
+          unit: "kg",
+          quantityBase: 0.2,
+          estimatedCostUgx: null,
+          costStatus: "unavailable",
+          dishCount: 1,
+        },
+      ],
+      missingIngredients: [
+        { ingredientId: "ghost", unit: "kg", quantityBase: 1, dishCount: 1 },
+      ],
+      noRecipeDishes: [
+        { productId: "p4", name: "No recipe plate", unitsSold: 1, reason: "no_recipe" },
+      ],
+    },
   },
 };
 
