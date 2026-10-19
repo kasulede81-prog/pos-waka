@@ -1,12 +1,17 @@
 import { useMemo, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import type { Language } from "../types";
-import { t } from "../lib/i18n";
+import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { usePosStore } from "../store/usePosStore";
 import { SettingsPageHeader } from "../components/settings/SettingsPageHeader";
 import { isHospitalityMode } from "../lib/hospitality";
+import {
+  hospitalityMenuCostState,
+  isHospitalityMenuItem,
+  isHospitalityRecipeDish,
+} from "../lib/hospitalityMenuCosting";
 import { DEFAULT_MENU_SECTIONS } from "../lib/menuModifiers";
 import { aggregateDishSales, aggregateModifierPopularity, lowMarginMenuItems } from "../lib/menuReports";
 import { computeMenuItemMargin } from "../lib/recipeEngine";
@@ -26,6 +31,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
   const preferences = usePosStore((s) => s.preferences);
   const updateProduct = usePosStore((s) => s.updateProduct);
   const setPreferences = usePosStore((s) => s.setPreferences);
+  const [searchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
   const toast = useToast();
@@ -47,7 +53,31 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
     [products],
   );
 
-  const selected = selectedId ? products.find((p) => p.id === selectedId) : null;
+  const noRecipeMenuProducts = useMemo(
+    () =>
+      products.filter(
+        (p) =>
+          !p.menu?.hideFromMenu &&
+          isHospitalityRecipeDish(p) &&
+          hospitalityMenuCostState(p, products).status === "not_set",
+      ),
+    [products],
+  );
+  const needsCostMenuProducts = useMemo(
+    () =>
+      products.filter((p) => {
+        if (p.menu?.hideFromMenu || !isHospitalityRecipeDish(p)) return false;
+        const state = hospitalityMenuCostState(p, products);
+        return state.status === "not_set" || (state.status === "estimated" && state.incomplete);
+      }),
+    [products],
+  );
+  // The dashboard setup card links here with ?cost=1. Derive the first dish that
+  // needs costing without a setState-in-effect; a row click still takes over.
+  const requestedCostId =
+    searchParams.get("cost") === "1" ? (needsCostMenuProducts[0]?.id ?? null) : null;
+  const effectiveSelectedId = selectedId ?? requestedCostId;
+  const selected = effectiveSelectedId ? products.find((p) => p.id === effectiveSelectedId) : null;
   const topDishes = useMemo(() => aggregateDishSales(sales).slice(0, 5), [sales]);
   const topModifiers = useMemo(() => aggregateModifierPopularity(sales).slice(0, 5), [sales]);
   const lowMargin = useMemo(() => lowMarginMenuItems(products, 35).slice(0, 5), [products]);
@@ -101,6 +131,26 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
         </button>
       </div>
 
+      {noRecipeMenuProducts.length > 0 ? (
+        <article className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm dark:border-amber-800/40 dark:bg-amber-950/20">
+          <p className="text-sm font-black text-amber-950 dark:text-amber-100">
+            {t(lang, "menuCostBannerTitle")}
+          </p>
+          <p className="mt-1 text-xs font-semibold text-amber-900 dark:text-amber-200">
+            {tTemplate(lang, "menuCostBannerBody", {
+              count: String(noRecipeMenuProducts.length),
+            })}
+          </p>
+          <button
+            type="button"
+            onClick={() => setSelectedId(noRecipeMenuProducts[0]!.id)}
+            className="mt-3 min-h-10 rounded-xl bg-amber-700 px-3 text-xs font-black text-white"
+          >
+            {t(lang, "menuCostBannerAction")}
+          </button>
+        </article>
+      ) : null}
+
       <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
         <p className="text-sm font-black text-foreground">{t(lang, "menuSectionsTitle")}</p>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -140,19 +190,36 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
           <p className="mb-3 text-sm font-black text-foreground">{t(lang, "menuProductsTitle")}</p>
           <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
             {menuProducts.map((p) => {
-              const margin = computeMenuItemMargin(p, products);
+              const costState = isHospitalityMenuItem(p)
+                ? hospitalityMenuCostState(p, products)
+                : null;
+              const fallbackMarginPct = costState
+                ? null
+                : computeMenuItemMargin(p, products).marginPct;
+              const costLabel =
+                costState?.status === "not_set"
+                  ? t(lang, "menuCostRecipeNotSet")
+                  : costState?.status === "estimated" && costState.incomplete
+                    ? t(lang, "menuCostIncomplete")
+                    : costState?.status === "estimated"
+                      ? `${t(lang, "menuCostEstimatedShort")} ${costState.marginPct.toFixed(0)}%`
+                      : costState?.status === "verified_product_cost"
+                        ? `${t(lang, "menuCostVerifiedCostShort")} ${costState.marginPct.toFixed(0)}%`
+                        : costState?.status === "unverified_product_cost"
+                          ? t(lang, "menuCostCostNotConfirmed")
+                          : `${fallbackMarginPct!.toFixed(0)}%`;
               return (
                 <li key={p.id}>
                   <button
                     type="button"
                     onClick={() => setSelectedId(p.id)}
                     className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-sm font-bold ${
-                      selectedId === p.id ? "border-waka-500 bg-waka-50" : "border-border"
+                      effectiveSelectedId === p.id ? "border-waka-500 bg-waka-50" : "border-border"
                     }`}
                   >
                     <span className="truncate">{p.name}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">
-                      {formatUgx(p.sellingPricePerUnitUgx)} · {margin.marginPct.toFixed(0)}%
+                      {formatUgx(p.sellingPricePerUnitUgx)} · {costLabel}
                     </span>
                   </button>
                 </li>

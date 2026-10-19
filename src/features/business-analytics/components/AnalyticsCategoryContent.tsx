@@ -107,7 +107,15 @@ export function AnalyticsCategoryContent(props: AnalyticsSectionProps) {
       return <ReportsDataLoadingState lang={lang} />;
     }
     if (props.count === 0 && props.revenue === 0 && !breakdownsUnavailable && props.report.dataComplete) {
-      return <AnalyticsEmptyState lang={lang} titleKey="baEmptyTitle" bodyKey="baEmptyBody" />;
+      // Operational panels (hospitality menu cost coverage/open bills, pharmacy
+      // expiry, stock activity) remain useful before the first sale. Keep them
+      // above the empty state instead of hiding the whole overview.
+      return (
+        <div className="space-y-4">
+          {props.modePanels}
+          <AnalyticsEmptyState lang={lang} titleKey="baEmptyTitle" bodyKey="baEmptyBody" />
+        </div>
+      );
     }
     return (
       <div className="space-y-4">

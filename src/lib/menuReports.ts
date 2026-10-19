@@ -1,5 +1,5 @@
 import type { Product, Sale, SaleLineModifier } from "../types";
-import { computeMenuItemMargin } from "./recipeEngine";
+import { hospitalityMenuCostState, isHospitalityMenuItem } from "./hospitalityMenuCosting";
 
 export type DishSaleStat = {
   productId: string;
@@ -70,10 +70,22 @@ export function lowMarginMenuItems(
 ): Array<{ product: Product; marginPct: number; foodCostUgx: number; sellPriceUgx: number }> {
   const out: Array<{ product: Product; marginPct: number; foodCostUgx: number; sellPriceUgx: number }> = [];
   for (const p of products) {
-    if (!p.menu?.recipe && !p.menu?.modifierGroups?.length && p.menu?.productKind !== "finished_menu") continue;
-    const m = computeMenuItemMargin(p, products);
-    if (m.marginPct < thresholdPct) {
-      out.push({ product: p, ...m });
+    if (p.menu?.hideFromMenu || !isHospitalityMenuItem(p)) continue;
+    const state = hospitalityMenuCostState(p, products);
+    // Recipe cost must be complete; purchased resale items need verified shared
+    // product cost. Generated defaults and unknown provenance are not findings.
+    if (state.status === "estimated") {
+      if (state.incomplete) continue;
+    } else if (state.status !== "verified_product_cost") {
+      continue;
+    }
+    if (state.marginPct < thresholdPct) {
+      out.push({
+        product: p,
+        marginPct: state.marginPct,
+        foodCostUgx: state.foodCostUgx,
+        sellPriceUgx: state.sellPriceUgx,
+      });
     }
   }
   return out.sort((a, b) => a.marginPct - b.marginPct);

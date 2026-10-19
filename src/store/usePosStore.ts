@@ -1940,6 +1940,7 @@ function buildQuickAddProductDraft(
     conversionRate,
     sellingPricePerUnitUgx: price,
     costPricePerUnitUgx: cost,
+    costSource: costExplicit !== null ? "manual" : "quick_add_default",
     buyingPackCostUgx:
       input.buyingPackCostUgx != null && input.buyingPackCostUgx > 0
         ? Math.floor(input.buyingPackCostUgx)
@@ -6800,6 +6801,7 @@ export const usePosStore = create<PosState>((set, get) => {
       conversionRate: p.conversionRate,
       sellingPricePerUnitUgx: catalog.sellingPricePerUnitUgx,
       costPricePerUnitUgx: catalog.costPricePerUnitUgx ?? 0,
+      costSource: p.costSource ?? null,
       stockOnHand: catalog.stockOnHand,
       minimumStockAlert: p.minimumStockAlert,
       category: catalog.category || p.category,
@@ -6922,6 +6924,9 @@ export const usePosStore = create<PosState>((set, get) => {
     }
     if (patch.costPricePerUnitUgx !== undefined) {
       merged.costPricePerUnitUgx = normalizeUnitCostUgx(patch.costPricePerUnitUgx);
+      // An explicit edit confirms where this product cost came from. Keep the
+      // existing cost/financial behavior; this is provenance metadata only.
+      merged.costSource = "manual";
     }
     if (patch.buyingPackCostUgx !== undefined) {
       merged.buyingPackCostUgx =
@@ -8800,6 +8805,7 @@ export const usePosStore = create<PosState>((set, get) => {
         ...p,
         stockOnHand: newStock,
         costPricePerUnitUgx: newCost,
+        costSource: "purchase",
         updatedAt: createdAt,
         version: p.version + 1,
       };

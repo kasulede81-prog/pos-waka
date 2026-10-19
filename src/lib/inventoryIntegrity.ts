@@ -219,6 +219,7 @@ export function mergeProductCatalogFields(local: Product, remote: Product): Prod
     quickPresetsQty: pickScalar("quickPresetsQty"),
     sellingPricePerUnitUgx: priceCostSource.sellingPricePerUnitUgx,
     costPricePerUnitUgx: priceCostSource.costPricePerUnitUgx,
+    costSource: priceCostSource.costSource ?? null,
     version: Math.max(localVer, remoteVer, catalogBase.version ?? 1),
   });
 }

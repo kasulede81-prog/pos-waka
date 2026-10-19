@@ -14,6 +14,17 @@ const sample: HospitalityReportSummary = {
   categoryMix: [{ kind: "food", revenueUgx: 20_000, quantity: 4 }],
   tables: [{ label: "T1", billCount: 1, revenueUgx: 10_000 }],
   peakHours: [{ hour: 12, label: "12:00", billCount: 2, revenueUgx: 15_000 }],
+  menu: {
+    menuItemCount: 0,
+    reliableCostCount: 0,
+    needsCostCount: 0,
+    unverifiedCostCount: 0,
+    topDishes: [],
+    topDrinks: [],
+    lowMargin: [],
+    topModifiers: [],
+    ingredientCostGaps: [],
+  },
 };
 
 describe("hospitalityExport", () => {

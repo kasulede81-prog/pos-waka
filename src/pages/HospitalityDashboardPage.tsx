@@ -19,6 +19,7 @@ import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { dateKeyKampala } from "../lib/datesUg";
 import { localGetDailySalesSummary } from "../lib/localReporting";
 import { hospitalityKitchenEnabledFromPrefs, isHospitalityMode } from "../lib/hospitality";
+import { hospitalityMenuCostState, isHospitalityRecipeDish } from "../lib/hospitalityMenuCosting";
 import { formatUgx } from "../lib/formatUgx";
 import {
   activeSessions,
@@ -60,6 +61,20 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const canKitchen = kitchenEnabled && actorHasEffectivePermission(actor, "hospitality.kitchen", snapshot, authMode);
   const canSell = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
   const canStock = actorHasEffectivePermission(actor, "stock.view", snapshot, authMode);
+  const canSettings = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
+  const recipeDishes = useMemo(
+    () => products.filter((p) => !p.menu?.hideFromMenu && isHospitalityRecipeDish(p)),
+    [products],
+  );
+  const needsCostMenuProducts = useMemo(
+    () =>
+      recipeDishes.filter((p) => {
+        const state = hospitalityMenuCostState(p, products);
+        return state.status === "not_set" || (state.status === "estimated" && state.incomplete);
+      }),
+    [recipeDishes, products],
+  );
+  const hasUncostedMenu = needsCostMenuProducts.length > 0;
 
   const stats = useMemo(
     () => (floor ? computeHospitalityDashboardStats(floor, sales) : null),
@@ -123,7 +138,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
 
       <HomeTrustBanner lang={lang} />
 
-      {preferences.onboardingDone && (products.length === 0 || !hasOpenSessions) && salesCount === 0 ? (
+      {preferences.onboardingDone && (products.length === 0 || !hasOpenSessions || hasUncostedMenu) && salesCount === 0 ? (
         <EnterpriseCard
           title={t(lang, "setupChecklistTitle")}
           subtitle={t(lang, "setupChecklistSub")}
@@ -139,8 +154,26 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
                 </Link>
               ) : null}
             </li>
+            {recipeDishes.length > 0 ? (
+              <li className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
+                <span className={!hasUncostedMenu ? "text-primary" : "text-muted-foreground"}>
+                  {!hasUncostedMenu ? "✓" : "②"}
+                </span>
+                {t(lang, "setupCostMenuStep")}
+                {hasUncostedMenu && canSettings ? (
+                  <Link
+                    to="/settings/menu?cost=1"
+                    className={themeUi.btnPrimary + " min-h-0 rounded-full px-4 py-2 text-sm"}
+                  >
+                    {t(lang, "setupCostMenuAction")}
+                  </Link>
+                ) : null}
+              </li>
+            ) : null}
             <li className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
-              <span className={hasOpenSessions ? "text-primary" : "text-muted-foreground"}>{hasOpenSessions ? "✓" : "②"}</span>
+              <span className={hasOpenSessions ? "text-primary" : "text-muted-foreground"}>
+                {hasOpenSessions ? "✓" : recipeDishes.length > 0 ? "③" : "②"}
+              </span>
               {t(lang, "hospitalitySetupStep2")}
               {!hasOpenSessions && canFloor ? (
                 <Link to="/floor" className={themeUi.btnInverse + " min-h-0 rounded-full px-4 py-2 text-sm"}>
@@ -150,7 +183,7 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
             </li>
             {kitchenEnabled ? (
               <li className="flex flex-wrap items-center gap-2 font-semibold text-foreground">
-                <span className="text-muted-foreground">③</span>
+                <span className="text-muted-foreground">{recipeDishes.length > 0 ? "④" : "③"}</span>
                 {t(lang, "hospitalitySetupStep3")}
                 {canKitchen ? (
                   <Link to="/kitchen" className={themeUi.btnSecondary + " min-h-0 rounded-full px-4 py-2 text-sm"}>

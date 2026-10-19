@@ -12,10 +12,14 @@ import type {
   ComboSlot,
 } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
+import {
+  hospitalityMenuCostState,
+  isHospitalityMenuItem,
+  isHospitalityRecipeDish,
+} from "../../lib/hospitalityMenuCosting";
 import { DEFAULT_MENU_SECTIONS } from "../../lib/menuModifiers";
 import {
   computeMenuItemFoodCostUgx,
-  computeMenuItemMargin,
   computePrepBatchProjection,
   missingRecipeIngredientIds,
   prepRequirementsForPortions,
@@ -204,11 +208,12 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
     setMenu({ ...menu, modifierGroups: [...(menu.modifierGroups ?? []), g] });
   };
 
-  const addRecipeLine = () => {
+  const addRecipeLine = (ingredientProductId = ingredientProducts[0]?.id ?? "") => {
+    const ingredient = ingredientProducts.find((p) => p.id === ingredientProductId);
     const line: RecipeLine = {
-      ingredientProductId: ingredientProducts[0]?.id ?? "",
+      ingredientProductId,
       quantityBase: 1,
-      unitLabel: ingredientProducts[0]?.baseUnit ?? "ea",
+      unitLabel: ingredient?.baseUnit ?? "ea",
     };
     setMenu({
       ...menu,
@@ -222,10 +227,32 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
     setMenu({ ...menu, recipe: { ...menu.recipe, lines } });
   };
 
+  const removeRecipeLine = (li: number) => {
+    const lines = (menu.recipe?.lines ?? []).filter((_, index) => index !== li);
+    setMenu({ ...menu, recipe: { ...menu.recipe, lines } });
+  };
+
   // Live food-cost panel: run the exact same engine the sale finalize path uses,
-  // against the in-progress (not yet saved) menu config.
+  // against the in-progress (not yet saved) menu config. A no-recipe product is
+  // "not set", never the quick-add 72% cost presented as a margin.
   const syntheticProduct: Product = { ...product, menu };
-  const liveMargin = computeMenuItemMargin(syntheticProduct, ingredientProducts);
+  const liveCostState = hospitalityMenuCostState(syntheticProduct, allProducts);
+  const liveMenuItem = isHospitalityMenuItem(syntheticProduct);
+  const liveRecipeDish = isHospitalityRecipeDish(syntheticProduct);
+  const liveMissingNames =
+    liveCostState.status === "estimated"
+      ? liveCostState.missingIngredientIds.map((id) =>
+          id
+            ? (allProducts.find((p) => p.id === id)?.name ?? id)
+            : t(lang, "menuCostSelectIngredient"),
+        )
+      : [];
+  const liveZeroCostNames =
+    liveCostState.status === "estimated"
+      ? liveCostState.zeroCostIngredientIds.map(
+          (id) => allProducts.find((p) => p.id === id)?.name ?? id,
+        )
+      : [];
 
   return (
     <div className="space-y-4">
@@ -258,6 +285,79 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
           ))}
         </select>
       </label>
+
+      {liveRecipeDish && (menu.recipe?.lines ?? []).length === 0 ? (
+        <section className="rounded-2xl border border-waka-200 bg-waka-50 p-3">
+          <p className="text-sm font-black text-foreground">{t(lang, "menuCostGuidedTitle")}</p>
+          <p className="mt-1 text-xs font-medium text-muted-foreground">
+            {t(lang, "menuCostGuidedBody")}
+          </p>
+          <details className="mt-2 rounded-xl bg-card p-2">
+            <summary className="cursor-pointer text-xs font-black text-waka-700">
+              {t(lang, "menuCostGuidedExamplesTitle")}
+            </summary>
+            <ul className="mt-1 space-y-1 text-xs font-medium text-muted-foreground">
+              <li>{t(lang, "menuCostExampleRice")}</li>
+              <li>{t(lang, "menuCostExampleChicken")}</li>
+              <li>{t(lang, "menuCostExampleChips")}</li>
+            </ul>
+          </details>
+          <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+            {t(lang, "menuCostGuidedNoIngredients")}
+          </p>
+          <button
+            type="button"
+            onClick={() => addRecipeLine("")}
+            className="mt-2 min-h-[44px] w-full rounded-xl bg-waka-600 text-sm font-black text-white"
+          >
+            {t(lang, "menuCostGuidedAddIngredient")}
+          </button>
+        </section>
+      ) : null}
+
+      {liveMenuItem && !liveRecipeDish ? (
+        <section className="rounded-2xl border border-border bg-card p-3">
+          {liveCostState.status === "verified_product_cost" ? (
+            <>
+              <p className="text-sm font-black text-foreground">{t(lang, "menuCostProductCostTitle")}</p>
+              <p className="mt-1 text-xs font-bold text-emerald-800">
+                {liveCostState.costSource === "purchase"
+                  ? t(lang, "menuCostVerifiedPurchase")
+                  : t(lang, "menuCostVerifiedManual")}
+              </p>
+              <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                <dt className="text-muted-foreground">{t(lang, "menuCostProductCostLabel")}</dt>
+                <dd className="text-right font-black">{formatUgx(liveCostState.foodCostUgx)}</dd>
+                <dt className="text-muted-foreground">{t(lang, "menuCostSellPrice")}</dt>
+                <dd className="text-right font-black">{formatUgx(liveCostState.sellPriceUgx)}</dd>
+                <dt className="text-muted-foreground">{t(lang, "menuCostProductProfitLabel")}</dt>
+                <dd className="text-right font-black">{formatUgx(liveCostState.profitUgx)}</dd>
+                <dt className="text-muted-foreground">{t(lang, "menuCostMargin")}</dt>
+                <dd className="text-right font-black">{liveCostState.marginPct.toFixed(1)}%</dd>
+              </dl>
+              <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+                {t(lang, "menuCostProductCostNote")}
+              </p>
+            </>
+          ) : liveCostState.status === "unverified_product_cost" ? (
+            <>
+              <p className="text-sm font-black text-foreground">
+                {t(lang, "menuCostProductCostNotConfirmedTitle")}
+              </p>
+              <p className="mt-1 text-xs font-medium text-muted-foreground">
+                {liveCostState.reason === "quick_add_default"
+                  ? t(lang, "menuCostProductCostGeneratedBody")
+                  : liveCostState.reason === "not_set"
+                    ? t(lang, "menuCostProductCostNotSetBody")
+                    : t(lang, "menuCostProductCostUnknownBody")}
+              </p>
+              <p className="mt-1 text-[11px] font-medium text-muted-foreground">
+                {t(lang, "menuCostProductCostNote")}
+              </p>
+            </>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-border p-3">
         <div className="mb-2 flex items-center justify-between">
@@ -336,7 +436,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
       <section className="rounded-2xl border border-border p-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-black text-foreground">{t(lang, "menuRecipeTitle")}</p>
-          <button type="button" onClick={addRecipeLine} className="text-xs font-black text-waka-700">
+          <button type="button" onClick={() => addRecipeLine()} className="text-xs font-black text-waka-700">
             + {t(lang, "menuAddIngredient")}
           </button>
         </div>
@@ -381,6 +481,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 }}
                 className="min-h-[40px] rounded-lg border border-border px-2 text-sm"
               >
+                <option value="">{t(lang, "menuCostSelectIngredient")}</option>
                 {ingredientProducts.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -392,6 +493,8 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 onChange={(e) =>
                   updateRecipeLine(li, { ...line, quantityBase: Math.max(0, Number(e.target.value) || 0) })
                 }
+                aria-label={t(lang, "menuCostQuantity")}
+                placeholder={t(lang, "menuCostQuantity")}
                 className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-black"
               />
               <span className="flex items-center text-xs font-bold text-muted-foreground">{line.unitLabel ?? "ea"}</span>
@@ -416,22 +519,54 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                 className="min-h-[36px] rounded-lg border border-border px-2 text-xs"
               />
             </div>
+            <button
+              type="button"
+              onClick={() => removeRecipeLine(li)}
+              className="mt-1 text-[11px] font-black text-red-700"
+            >
+              {t(lang, "menuCostRemoveIngredient")}
+            </button>
           </div>
         ))}
 
         {(menu.recipe?.lines ?? []).length > 0 && (
           <div className="mt-3 rounded-xl border border-waka-200 bg-waka-50 p-3">
             <p className="mb-2 text-xs font-black uppercase text-waka-700">{t(lang, "menuCostPanelTitle")}</p>
-            <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-              <dt className="text-muted-foreground">{t(lang, "menuCostFoodCost")}</dt>
-              <dd className="text-right font-black">{formatUgx(liveMargin.foodCostUgx)}</dd>
-              <dt className="text-muted-foreground">{t(lang, "menuCostSellPrice")}</dt>
-              <dd className="text-right font-black">{formatUgx(liveMargin.sellPriceUgx)}</dd>
-              <dt className="text-muted-foreground">{t(lang, "menuCostProfit")}</dt>
-              <dd className="text-right font-black">{formatUgx(liveMargin.profitUgx)}</dd>
-              <dt className="text-muted-foreground">{t(lang, "menuCostMargin")}</dt>
-              <dd className="text-right font-black">{liveMargin.marginPct.toFixed(1)}%</dd>
-            </dl>
+            <p className="mb-2 text-xs font-bold text-waka-800">{t(lang, "menuCostEstimated")}</p>
+            {liveCostState.status === "estimated" && !liveCostState.incomplete ? (
+              <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
+                <dt className="text-muted-foreground">{t(lang, "menuCostFoodCost")}</dt>
+                <dd className="text-right font-black">{formatUgx(liveCostState.foodCostUgx)}</dd>
+                <dt className="text-muted-foreground">{t(lang, "menuCostSellPrice")}</dt>
+                <dd className="text-right font-black">{formatUgx(liveCostState.sellPriceUgx)}</dd>
+                <dt className="text-muted-foreground">{t(lang, "menuCostProfit")}</dt>
+                <dd className="text-right font-black">{formatUgx(liveCostState.profitUgx)}</dd>
+                <dt className="text-muted-foreground">{t(lang, "menuCostMargin")}</dt>
+                <dd className="text-right font-black">{liveCostState.marginPct.toFixed(1)}%</dd>
+              </dl>
+            ) : (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                <p className="font-black">{t(lang, "menuCostIncomplete")}</p>
+                <p className="mt-0.5 font-medium">{t(lang, "menuCostIncompleteBody")}</p>
+                {liveMissingNames.length > 0 ? (
+                  <p className="mt-1 font-bold">
+                    {tTemplate(lang, "menuCostMissingIngredient", {
+                      items: liveMissingNames.join(", "),
+                    })}
+                  </p>
+                ) : null}
+                {liveZeroCostNames.length > 0 ? (
+                  <p className="mt-1 font-bold">
+                    {tTemplate(lang, "menuCostZeroCostIngredient", {
+                      items: liveZeroCostNames.join(", "),
+                    })}
+                  </p>
+                ) : null}
+              </div>
+            )}
+            <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+              {t(lang, "menuCostEstimatedNote")}
+            </p>
           </div>
         )}
       </section>

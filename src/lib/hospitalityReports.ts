@@ -3,6 +3,18 @@ import { completedSales } from "./saleStatus";
 import { resolveProductStationType } from "./kitchenRouting";
 import { dateKeyKampala } from "./datesUg";
 import { resolveSaleWaiterAttribution } from "./waiterAttribution";
+import {
+  aggregateDishSales,
+  aggregateModifierPopularity,
+  lowMarginMenuItems,
+  type ModifierPopularityStat,
+} from "./menuReports";
+import {
+  hospitalityMenuCostState,
+  isHospitalityMenuItem,
+  isHospitalityRecipeDish,
+  isHospitalityResaleItem,
+} from "./hospitalityMenuCosting";
 
 export type HospitalityReportRange = {
   fromKey: string;
@@ -36,6 +48,52 @@ export type PeakHourRow = {
   revenueUgx: number;
 };
 
+/** Honest cost confidence for one menu item, from the shared costing engine. */
+export type HospitalityMenuCostStatus =
+  | "verified"
+  | "estimated"
+  | "incomplete"
+  | "not_set"
+  | "unverified";
+
+export type HospitalityMenuPerformanceRow = {
+  productId: string;
+  name: string;
+  unitsSold: number;
+  revenueUgx: number;
+  sellPriceUgx: number;
+  costStatus: HospitalityMenuCostStatus;
+  /** Only present when the cost is trustworthy (verified product cost or complete recipe). */
+  foodCostUgx: number | null;
+  marginPct: number | null;
+};
+
+export type HospitalityIngredientCostGap = {
+  ingredientId: string;
+  name: string;
+  unit: string;
+  /** How many menu dishes reference this ingredient. */
+  dishCount: number;
+  reason: "zero_cost" | "missing";
+};
+
+/**
+ * Read-only menu performance and cost coverage for the reporting period.
+ * It is derived from completed sales plus the shared product/recipe model —
+ * no second menu ledger and no new persisted data.
+ */
+export type HospitalityMenuReport = {
+  menuItemCount: number;
+  reliableCostCount: number;
+  needsCostCount: number;
+  unverifiedCostCount: number;
+  topDishes: HospitalityMenuPerformanceRow[];
+  topDrinks: HospitalityMenuPerformanceRow[];
+  lowMargin: HospitalityMenuPerformanceRow[];
+  topModifiers: ModifierPopularityStat[];
+  ingredientCostGaps: HospitalityIngredientCostGap[];
+};
+
 export type HospitalityReportSummary = {
   completedBillCount: number;
   totalRevenueUgx: number;
@@ -44,7 +102,117 @@ export type HospitalityReportSummary = {
   categoryMix: CategoryMixRow[];
   tables: TableRevenueRow[];
   peakHours: PeakHourRow[];
+  menu: HospitalityMenuReport;
 };
+
+function menuCostStatus(state: ReturnType<typeof hospitalityMenuCostState>): HospitalityMenuCostStatus {
+  if (state.status === "verified_product_cost") return "verified";
+  if (state.status === "unverified_product_cost") return "unverified";
+  if (state.status === "estimated") return state.incomplete ? "incomplete" : "estimated";
+  return "not_set";
+}
+
+function computeHospitalityMenuReport(
+  scopedSales: Sale[],
+  products: Product[],
+): HospitalityMenuReport {
+  const soldById = new Map(aggregateDishSales(scopedSales).map((row) => [row.productId, row]));
+  const productById = new Map(products.map((product) => [product.id, product]));
+  const menuProducts = products.filter(
+    (product) => !product.menu?.hideFromMenu && isHospitalityMenuItem(product),
+  );
+
+  const entries = menuProducts.map((product) => {
+    const state = hospitalityMenuCostState(product, products);
+    const status = menuCostStatus(state);
+    const sold = soldById.get(product.id);
+    const trustworthy = status === "verified" || status === "estimated";
+    const row: HospitalityMenuPerformanceRow = {
+      productId: product.id,
+      name: product.name,
+      unitsSold: sold?.quantitySold ?? 0,
+      revenueUgx: sold?.revenueUgx ?? 0,
+      sellPriceUgx: product.sellingPricePerUnitUgx,
+      costStatus: status,
+      foodCostUgx:
+        trustworthy && (state.status === "estimated" || state.status === "verified_product_cost")
+          ? state.foodCostUgx
+          : null,
+      marginPct:
+        trustworthy && (state.status === "estimated" || state.status === "verified_product_cost")
+          ? state.marginPct
+          : null,
+    };
+    return { product, state, row };
+  });
+  const entryById = new Map(entries.map((entry) => [entry.product.id, entry]));
+
+  const topDishes = entries
+    .filter((entry) => isHospitalityRecipeDish(entry.product) && entry.row.unitsSold > 0)
+    .map((entry) => entry.row)
+    .sort((a, b) => b.unitsSold - a.unitsSold || b.revenueUgx - a.revenueUgx)
+    .slice(0, 5);
+  const topDrinks = entries
+    .filter((entry) => isHospitalityResaleItem(entry.product) && entry.row.unitsSold > 0)
+    .map((entry) => entry.row)
+    .sort((a, b) => b.unitsSold - a.unitsSold || b.revenueUgx - a.revenueUgx)
+    .slice(0, 5);
+
+  // lowMarginMenuItems already excludes incomplete, not-set and unverified costs.
+  // Keep the report sales-scoped: an unsold low-margin item belongs in the menu
+  // builder, not in a completed-sales period report with zero units/revenue.
+  const lowMargin = lowMarginMenuItems(products, 35)
+    .map((row) => entryById.get(row.product.id)?.row)
+    .filter((row): row is HospitalityMenuPerformanceRow => row != null && row.unitsSold > 0)
+    .slice(0, 5);
+
+  const gapMap = new Map<string, HospitalityIngredientCostGap>();
+  for (const entry of entries) {
+    if (entry.state.status !== "estimated") continue;
+    for (const ingredientId of entry.state.zeroCostIngredientIds) {
+      const key = `zero:${ingredientId}`;
+      const existing = gapMap.get(key) ?? {
+        ingredientId,
+        name: productById.get(ingredientId)?.name ?? ingredientId,
+        unit: productById.get(ingredientId)?.baseUnit ?? "",
+        dishCount: 0,
+        reason: "zero_cost" as const,
+      };
+      existing.dishCount += 1;
+      gapMap.set(key, existing);
+    }
+    for (const ingredientId of entry.state.missingIngredientIds) {
+      const key = `missing:${ingredientId}`;
+      const existing = gapMap.get(key) ?? {
+        ingredientId,
+        name: ingredientId,
+        unit: "",
+        dishCount: 0,
+        reason: "missing" as const,
+      };
+      existing.dishCount += 1;
+      gapMap.set(key, existing);
+    }
+  }
+
+  return {
+    menuItemCount: menuProducts.length,
+    reliableCostCount: entries.filter(
+      (entry) => entry.row.costStatus === "verified" || entry.row.costStatus === "estimated",
+    ).length,
+    needsCostCount: entries.filter(
+      (entry) => entry.row.costStatus === "not_set" || entry.row.costStatus === "incomplete",
+    ).length,
+    unverifiedCostCount: entries.filter((entry) => entry.row.costStatus === "unverified").length,
+    topDishes,
+    topDrinks,
+    lowMargin,
+    topModifiers: aggregateModifierPopularity(scopedSales).slice(0, 5),
+    ingredientCostGaps: [...gapMap.values()].sort(
+      (a, b) => b.dishCount - a.dishCount || a.name.localeCompare(b.name),
+    ),
+  };
+}
 
 function inRange(iso: string, range: HospitalityReportRange): boolean {
   const key = dateKeyKampala(new Date(iso));
@@ -131,6 +299,7 @@ export function computeHospitalityReports(
     categoryMix,
     tables,
     peakHours,
+    menu: computeHospitalityMenuReport(scoped, products),
   };
 }
 

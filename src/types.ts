@@ -1729,6 +1729,9 @@ export type PharmacyPackaging = {
   batches?: PharmacyBatchRecord[];
 };
 
+/** How the shared product's current cost was written. Absent on older rows = unknown. */
+export type ProductCostSource = "quick_add_default" | "manual" | "purchase";
+
 export type Product = {
   id: string;
   name: string;
@@ -1743,6 +1746,13 @@ export type Product = {
   sellingPricePerUnitUgx: number;
   /** UGX cost per base unit — profit hints (may be fractional for pack breakdowns) */
   costPricePerUnitUgx: number;
+  /**
+   * Provenance of `costPricePerUnitUgx`. `quick_add_default` is the generated
+   * 72%-of-selling-price fallback; `manual` is an explicit merchant entry;
+   * `purchase` is a supplier-purchase weighted-average cost. Absent means the
+   * model cannot verify where the cost came from.
+   */
+  costSource?: ProductCostSource | null;
   /** Invoice total for one buying pack/crate when cost was derived from pack ÷ units */
   buyingPackCostUgx?: number | null;
   /** FIFO slot index for pack-cost allocation (units sold from pack-priced inventory). */

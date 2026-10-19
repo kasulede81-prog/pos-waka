@@ -1,5 +1,5 @@
 import type { Customer, Language, Product } from "../../../types";
-import { t } from "../../../lib/i18n";
+import { t, tTemplate } from "../../../lib/i18n";
 import { reportsInventoryCostPresentation } from "../lib/analyticsPageView";
 import { StockMovementsPanel } from "../../../components/stock/StockMovementsPanel";
 import { ExpiryStatusBadge } from "../../../components/pharmacy/ExpiryStatusBadge";
@@ -20,7 +20,11 @@ import {
   downloadHospitalityWaiterPdf,
 } from "../../../lib/hospitalityDocumentExports";
 import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
-import type { HospitalityReportSummary } from "../../../lib/hospitalityReports";
+import type {
+  HospitalityMenuCostStatus,
+  HospitalityMenuPerformanceRow,
+  HospitalityReportSummary,
+} from "../../../lib/hospitalityReports";
 import type { HospitalityFloorState, StockMovement } from "../../../types";
 import { computeKitchenProductionAnalytics } from "../../../lib/kitchenProduction";
 
@@ -156,6 +160,51 @@ export function WholesaleReportsSection({
   );
 }
 
+function menuCostStatusLabel(lang: Language, status: HospitalityMenuCostStatus): string {
+  if (status === "verified") return t(lang, "menuCostVerifiedCostShort");
+  if (status === "estimated") return t(lang, "menuCostEstimatedShort");
+  if (status === "incomplete") return t(lang, "menuCostIncomplete");
+  if (status === "not_set") return t(lang, "menuCostRecipeNotSet");
+  return t(lang, "menuCostCostNotConfirmed");
+}
+
+function MenuPerformanceList({
+  lang,
+  title,
+  rows,
+  emptyLabel,
+}: {
+  lang: Language;
+  title: string;
+  rows: HospitalityMenuPerformanceRow[];
+  emptyLabel: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-3">
+      <p className="text-xs font-black uppercase text-muted-foreground">{title}</p>
+      {rows.length === 0 ? (
+        <p className="mt-2 text-sm font-semibold text-muted-foreground">{emptyLabel}</p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {rows.map((row) => (
+            <li
+              key={row.productId}
+              className="flex items-start justify-between gap-2 text-sm font-semibold text-foreground"
+            >
+              <span className="min-w-0 truncate">{row.name}</span>
+              <span className="shrink-0 text-right text-xs text-muted-foreground">
+                {row.unitsSold} · UGX {row.revenueUgx.toLocaleString()} ·{" "}
+                {menuCostStatusLabel(lang, row.costStatus)}
+                {row.marginPct != null ? ` · ${row.marginPct.toFixed(0)}%` : null}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function HospitalityReportsSection({
   lang,
   hospitalityReports,
@@ -220,6 +269,117 @@ export function HospitalityReportsSection({
           </article>
         </div>
       ) : null}
+      <div className="rounded-2xl border border-waka-200 bg-card p-3">
+        <p className="text-xs font-black uppercase text-muted-foreground">
+          {t(lang, "hospitalityReportsMenuTitle")}
+        </p>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">
+          {t(lang, "hospitalityReportsMenuHint")}
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            {
+              label: t(lang, "hospitalityReportsMenuItems"),
+              value: hospitalityReports.menu.menuItemCount,
+              className: "text-foreground",
+            },
+            {
+              label: t(lang, "hospitalityReportsReliableCost"),
+              value: hospitalityReports.menu.reliableCostCount,
+              className: "text-emerald-800",
+            },
+            {
+              label: t(lang, "hospitalityReportsNeedsCost"),
+              value: hospitalityReports.menu.needsCostCount,
+              className: "text-amber-800",
+            },
+            {
+              label: t(lang, "hospitalityReportsUnverifiedCost"),
+              value: hospitalityReports.menu.unverifiedCostCount,
+              className: "text-muted-foreground",
+            },
+          ].map((tile) => (
+            <article key={tile.label} className="rounded-xl bg-muted/60 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                {tile.label}
+              </p>
+              <p className={`mt-0.5 text-lg font-black ${tile.className}`}>{tile.value}</p>
+            </article>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <MenuPerformanceList
+            lang={lang}
+            title={t(lang, "hospitalityReportsTopDishes")}
+            rows={hospitalityReports.menu.topDishes}
+            emptyLabel={t(lang, "hospitalityReportsNoMenuSales")}
+          />
+          <MenuPerformanceList
+            lang={lang}
+            title={t(lang, "hospitalityReportsTopDrinks")}
+            rows={hospitalityReports.menu.topDrinks}
+            emptyLabel={t(lang, "hospitalityReportsNoMenuSales")}
+          />
+          <MenuPerformanceList
+            lang={lang}
+            title={t(lang, "hospitalityReportsLowMargin")}
+            rows={hospitalityReports.menu.lowMargin}
+            emptyLabel={t(lang, "hospitalityReportsNoLowMargin")}
+          />
+          <div className="rounded-2xl border border-border bg-card p-3">
+            <p className="text-xs font-black uppercase text-muted-foreground">
+              {t(lang, "hospitalityReportsIngredientGaps")}
+            </p>
+            {hospitalityReports.menu.ingredientCostGaps.length === 0 ? (
+              <p className="mt-2 text-sm font-semibold text-muted-foreground">
+                {t(lang, "hospitalityReportsNoIngredientGaps")}
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1">
+                {hospitalityReports.menu.ingredientCostGaps.map((gap) => (
+                  <li
+                    key={`${gap.reason}:${gap.ingredientId}`}
+                    className="flex items-start justify-between gap-2 text-sm font-semibold text-foreground"
+                  >
+                    <span className="min-w-0 truncate">
+                      {gap.name || t(lang, "menuCostSelectIngredient")}
+                    </span>
+                    <span className="shrink-0 text-right text-xs text-muted-foreground">
+                      {tTemplate(lang, "hospitalityReportsIngredientGapRow", {
+                        count: String(gap.dishCount),
+                      })}{" "}
+                      ·{" "}
+                      {gap.reason === "missing"
+                        ? t(lang, "hospitalityReportsIngredientMissing")
+                        : t(lang, "hospitalityReportsIngredientZeroCost")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        {hospitalityReports.menu.topModifiers.length > 0 ? (
+          <div className="mt-3 rounded-2xl border border-border bg-card p-3">
+            <p className="text-xs font-black uppercase text-muted-foreground">
+              {t(lang, "hospitalityReportsTopModifiers")}
+            </p>
+            <ul className="mt-2 space-y-1">
+              {hospitalityReports.menu.topModifiers.map((mod) => (
+                <li
+                  key={`${mod.groupLabel}:${mod.optionLabel}`}
+                  className="flex justify-between text-sm font-semibold text-foreground"
+                >
+                  <span>{mod.optionLabel}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {mod.count} · {mod.groupLabel}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </div>
       {hospitalityReports.waiters.length > 0 ? (
         <div className="rounded-2xl border border-border bg-card p-3">
           <p className="text-xs font-black uppercase text-muted-foreground">{t(lang, "hospitalityReportsWaiters")}</p>

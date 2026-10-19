@@ -7,7 +7,11 @@ import { normalizedCategoryKey, shelfIconFor } from "../../lib/productCategories
 import { formatMedicineListPrimary, formatMedicineListSecondary } from "../../lib/pharmacyMedicine";
 import { isPharmacyMode } from "../../lib/pharmacy";
 import { usePharmacyTerms } from "../../lib/pharmacyTerms";
+import { isHospitalityMode } from "../../lib/hospitality";
+import { hospitalityMenuCostState, isHospitalityMenuItem } from "../../lib/hospitalityMenuCosting";
+import { formatUgx } from "../../lib/formatUgx";
 import { profitPerSellUnitUgx } from "../../lib/simpleProductWizard";
+import { usePosStore } from "../../store/usePosStore";
 import { ModalSheet } from "../layout/ModalSheet";
 import { ExpiryStatusBadge } from "../pharmacy/ExpiryStatusBadge";
 import { WakaButton } from "../ui/wakaPrimitives";
@@ -28,6 +32,14 @@ type Props = {
   onSell: () => void;
   onEdit: () => void;
   onMore: () => void;
+};
+
+type DetailRow = {
+  label: string;
+  value: string;
+  warn?: boolean;
+  positive?: boolean;
+  negative?: boolean;
 };
 
 function formatUpdated(iso: string, lang: Language): string {
@@ -59,6 +71,11 @@ export function StockProductDetailSheet({
 }: Props) {
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const pt = usePharmacyTerms(lang, preferences.businessType, preferences.pharmacyModeEnabled);
+  const products = usePosStore((s) => s.products);
+  const hospitalityMode = isHospitalityMode(
+    preferences.businessType,
+    preferences.hospitalityModeEnabled,
+  );
 
   if (!product) return null;
 
@@ -70,8 +87,81 @@ export function StockProductDetailSheet({
     product.sellingPricePerUnitUgx > 0 && profit != null
       ? Math.round((profit / product.sellingPricePerUnitUgx) * 1000) / 10
       : null;
+  const menuCost =
+    hospitalityMode && isHospitalityMenuItem(product)
+      ? hospitalityMenuCostState(product, products)
+      : null;
 
-  const rows = [
+  // Retail keeps its existing product-cost rows. Hospitality menu items use the
+  // recipe estimate, and show a clear not-set/incomplete state instead of a
+  // quick-add default margin.
+  const costRow: DetailRow | null = !canSeeCost
+    ? null
+    : menuCost?.status === "not_set"
+      ? { label: t(lang, "stockDetailCost"), value: t(lang, "menuCostRecipeNotSet") }
+      : menuCost?.status === "estimated" && menuCost.incomplete
+        ? { label: t(lang, "stockDetailCost"), value: t(lang, "menuCostIncomplete") }
+        : menuCost?.status === "estimated"
+          ? {
+              label: t(lang, "menuCostFoodCostEstimated"),
+              value: formatUgx(menuCost.foodCostUgx),
+            }
+          : menuCost?.status === "verified_product_cost"
+            ? {
+                label: t(lang, "menuCostProductCostLabel"),
+                value: formatUgx(menuCost.foodCostUgx),
+              }
+            : menuCost?.status === "unverified_product_cost"
+              ? {
+                  label: t(lang, "stockDetailCost"),
+                  value: t(lang, "menuCostCostNotConfirmed"),
+                }
+              : {
+                  label: t(lang, "stockDetailCost"),
+                  value:
+                    product.costPricePerUnitUgx > 0
+                      ? `UGX ${Math.round(product.costPricePerUnitUgx).toLocaleString()}`
+                      : "—",
+                };
+
+  const performanceRows: DetailRow[] = !canSeeCost
+    ? []
+    : (menuCost?.status === "estimated" && !menuCost.incomplete) ||
+        menuCost?.status === "verified_product_cost"
+      ? [
+          {
+            label: t(lang, "stockDetailProfit"),
+            value: formatUgx(menuCost.profitUgx),
+            positive: menuCost.profitUgx >= 0,
+            negative: menuCost.profitUgx < 0,
+          },
+          {
+            label: t(lang, "profitStatMargin"),
+            value: `${menuCost.marginPct.toFixed(1)}%`,
+            positive: menuCost.marginPct >= 0,
+            negative: menuCost.marginPct < 0,
+          },
+        ]
+      : menuCost
+        ? []
+        : [
+            {
+              label: t(lang, "stockDetailProfit"),
+              value: profit != null ? `UGX ${profit.toLocaleString()}` : "—",
+              positive: profit != null && profit >= 0,
+              negative: profit != null && profit < 0,
+            },
+            ...(marginPct != null
+              ? [{
+                  label: t(lang, "profitStatMargin"),
+                  value: `${marginPct.toFixed(1)}%`,
+                  positive: marginPct >= 0,
+                  negative: marginPct < 0,
+                }]
+              : []),
+          ];
+
+  const rows: DetailRow[] = [
     { label: t(lang, "stockDetailCategory"), value: shelf },
     { label: t(lang, "stockDetailShelf"), value: shelf },
     { label: t(lang, "stockDetailBarcode"), value: product.sku?.trim() || "—" },
@@ -80,33 +170,9 @@ export function StockProductDetailSheet({
       value: formatStockLabel(product),
       warn: low,
     },
-    ...(canSeeCost
-      ? [
-          {
-            label: t(lang, "stockDetailCost"),
-            value: product.costPricePerUnitUgx > 0 ? `UGX ${Math.round(product.costPricePerUnitUgx).toLocaleString()}` : "—",
-          },
-        ]
-      : []),
+    ...(costRow ? [costRow] : []),
     { label: t(lang, "stockDetailSellPrice"), value: formatProductPriceLabel(product) },
-    ...(canSeeCost
-      ? [
-          {
-            label: t(lang, "stockDetailProfit"),
-            value: profit != null ? `UGX ${profit.toLocaleString()}` : "—",
-            positive: profit != null && profit >= 0,
-            negative: profit != null && profit < 0,
-          },
-          ...(marginPct != null
-            ? [{
-                label: t(lang, "profitStatMargin"),
-                value: `${marginPct.toFixed(1)}%`,
-                positive: marginPct >= 0,
-                negative: marginPct < 0,
-              }]
-            : []),
-        ]
-      : []),
+    ...performanceRows,
     { label: t(lang, "stockDetailLastUpdated"), value: formatUpdated(product.updatedAt, lang) },
   ];
 

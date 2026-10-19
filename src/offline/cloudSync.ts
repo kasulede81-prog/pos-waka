@@ -287,6 +287,7 @@ function productToRow(p: Product, shopId: string, opts?: { includeStock?: boolea
       pharmacyPackaging: p.pharmacyPackaging ?? null,
       pharmacyMaster: p.pharmacyMaster ?? null,
       exactCostPricePerUnitUgx: p.costPricePerUnitUgx,
+      costSource: p.costSource ?? null,
       buyingPackCostUgx: p.buyingPackCostUgx ?? null,
       packCostUnitsDepleted: p.packCostUnitsDepleted ?? null,
       wakaClient: true,
@@ -322,6 +323,12 @@ function rowToProduct(row: Record<string, unknown>): Product | null {
     costPricePerUnitUgx: normalizeUnitCostUgx(
       exactMeta != null && Number.isFinite(Number(exactMeta)) ? Number(exactMeta) : costFromRow,
     ),
+    costSource:
+      meta.costSource === "quick_add_default" ||
+      meta.costSource === "manual" ||
+      meta.costSource === "purchase"
+        ? meta.costSource
+        : null,
     buyingPackCostUgx:
       meta.buyingPackCostUgx != null && Number(meta.buyingPackCostUgx) > 0
         ? normalizePackCostUgx(Number(meta.buyingPackCostUgx))
