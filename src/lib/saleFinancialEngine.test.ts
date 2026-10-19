@@ -11,6 +11,7 @@ import {
   resolveReturnCogsFromSaleLine,
   resolveReturnFinancials,
   resolveSaleLineFinancials,
+  resolveSaleLineHistoricalFinancials,
   saleEstimatedProfitUgx,
 } from "./saleFinancialEngine";
 
@@ -328,6 +329,56 @@ describe("ensureMoneySaleQuantity", () => {
     expect(fixed.quantity).toBe(1);
     expect(fixed.lineTotalUgx).toBe(20_000);
     expect(fixed.originalLineTotalUgx).toBe(300_000);
+  });
+});
+
+describe("resolveSaleLineHistoricalFinancials", () => {
+  it("reads a complete sale-time snapshot", () => {
+    const line = draftLine({
+      lineTotalUgx: 4000,
+      quantity: 1,
+      unitCostUgx: 2500,
+      cogsUgx: 2500,
+      netRevenueUgx: 4000,
+      grossProfitUgx: 1500,
+      estimatedProfitUgx: 1500,
+      financialDataStatus: "complete",
+    });
+    expect(resolveSaleLineHistoricalFinancials(line)).toEqual({
+      basis: "complete",
+      revenueUgx: 4000,
+      cogsUgx: 2500,
+      grossProfitUgx: 1500,
+    });
+  });
+
+  it("reads an older partial line from its sale-time unit cost", () => {
+    const line = draftLine({
+      lineTotalUgx: 4000,
+      quantity: 1,
+      unitCostUgx: 2500,
+      estimatedProfitUgx: 1500,
+    });
+    expect(resolveSaleLineHistoricalFinancials(line)).toEqual({
+      basis: "partial",
+      revenueUgx: 4000,
+      cogsUgx: 2500,
+      grossProfitUgx: 1500,
+    });
+  });
+
+  it("returns null for legacy, needs-repair, or no cost evidence", () => {
+    const base = { lineTotalUgx: 4000, quantity: 1, unitCostUgx: 0, estimatedProfitUgx: 0 };
+    expect(
+      resolveSaleLineHistoricalFinancials({ ...draftLine(base), financialDataStatus: "legacy" }),
+    ).toBeNull();
+    expect(
+      resolveSaleLineHistoricalFinancials({
+        ...draftLine(base),
+        financialDataStatus: "needs_repair",
+      }),
+    ).toBeNull();
+    expect(resolveSaleLineHistoricalFinancials(draftLine(base))).toBeNull();
   });
 });
 

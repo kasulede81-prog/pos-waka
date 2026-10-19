@@ -21,7 +21,6 @@ import {
 } from "../../../lib/hospitalityDocumentExports";
 import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
 import type {
-  HospitalityMenuCostStatus,
   HospitalityMenuPerformanceRow,
   HospitalityReportSummary,
 } from "../../../lib/hospitalityReports";
@@ -160,12 +159,19 @@ export function WholesaleReportsSection({
   );
 }
 
-function menuCostStatusLabel(lang: Language, status: HospitalityMenuCostStatus): string {
-  if (status === "verified") return t(lang, "menuCostVerifiedCostShort");
-  if (status === "estimated") return t(lang, "menuCostEstimatedShort");
-  if (status === "incomplete") return t(lang, "menuCostIncomplete");
-  if (status === "not_set") return t(lang, "menuCostRecipeNotSet");
-  return t(lang, "menuCostCostNotConfirmed");
+function menuMarginLabel(lang: Language, row: HospitalityMenuPerformanceRow): string {
+  if (row.realized) {
+    const partial =
+      row.realized.basis === "partial" || row.realized.missingSnapshotLineCount > 0;
+    return `${t(
+      lang,
+      partial ? "hospitalityReportsSoldMarginPartial" : "hospitalityReportsSoldMargin",
+    )} ${row.realized.marginPct.toFixed(0)}%`;
+  }
+  if (row.currentMarginPct != null) {
+    return `${t(lang, "hospitalityReportsEstimatedMargin")} ${row.currentMarginPct.toFixed(0)}%`;
+  }
+  return t(lang, "hospitalityReportsMarginUnavailable");
 }
 
 function MenuPerformanceList({
@@ -194,8 +200,7 @@ function MenuPerformanceList({
               <span className="min-w-0 truncate">{row.name}</span>
               <span className="shrink-0 text-right text-xs text-muted-foreground">
                 {row.unitsSold} · UGX {row.revenueUgx.toLocaleString()} ·{" "}
-                {menuCostStatusLabel(lang, row.costStatus)}
-                {row.marginPct != null ? ` · ${row.marginPct.toFixed(0)}%` : null}
+                {menuMarginLabel(lang, row)}
               </span>
             </li>
           ))}

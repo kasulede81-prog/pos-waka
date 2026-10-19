@@ -21,6 +21,9 @@ export type StationWorkloadStat = {
   itemCount: number;
 };
 
+/** Shared threshold for the menu-builder and report low-margin lists. */
+export const MENU_LOW_MARGIN_THRESHOLD_PCT = 35;
+
 export function aggregateDishSales(sales: Sale[]): DishSaleStat[] {
   const map = new Map<string, DishSaleStat>();
   for (const sale of sales) {
@@ -66,7 +69,7 @@ export function aggregateModifierPopularity(sales: Sale[]): ModifierPopularitySt
 
 export function lowMarginMenuItems(
   products: Product[],
-  thresholdPct = 30,
+  thresholdPct = MENU_LOW_MARGIN_THRESHOLD_PCT,
 ): Array<{ product: Product; marginPct: number; foodCostUgx: number; sellPriceUgx: number }> {
   const out: Array<{ product: Product; marginPct: number; foodCostUgx: number; sellPriceUgx: number }> = [];
   for (const p of products) {

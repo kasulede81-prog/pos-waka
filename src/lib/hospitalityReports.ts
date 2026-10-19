@@ -6,9 +6,10 @@ import { resolveSaleWaiterAttribution } from "./waiterAttribution";
 import {
   aggregateDishSales,
   aggregateModifierPopularity,
-  lowMarginMenuItems,
+  MENU_LOW_MARGIN_THRESHOLD_PCT,
   type ModifierPopularityStat,
 } from "./menuReports";
+import { resolveSaleLineHistoricalFinancials } from "./saleFinancialEngine";
 import {
   hospitalityMenuCostState,
   isHospitalityMenuItem,
@@ -56,6 +57,18 @@ export type HospitalityMenuCostStatus =
   | "not_set"
   | "unverified";
 
+export type HospitalityMenuRealizedMargin = {
+  /** complete: full sale-line snapshot. partial: old line with only unit-cost/COGS evidence. */
+  basis: "complete" | "partial";
+  /** Net revenue from the sale-line snapshot. */
+  revenueUgx: number;
+  costUgx: number;
+  profitUgx: number;
+  marginPct: number;
+  snapshotLineCount: number;
+  missingSnapshotLineCount: number;
+};
+
 export type HospitalityMenuPerformanceRow = {
   productId: string;
   name: string;
@@ -63,9 +76,13 @@ export type HospitalityMenuPerformanceRow = {
   revenueUgx: number;
   sellPriceUgx: number;
   costStatus: HospitalityMenuCostStatus;
-  /** Only present when the cost is trustworthy (verified product cost or complete recipe). */
-  foodCostUgx: number | null;
-  marginPct: number | null;
+  /** Current-cost estimate; only present when the shared costing engine has a trustworthy cost. */
+  currentCostUgx: number | null;
+  currentMarginPct: number | null;
+  /** Historical realized figures from completed sale-line snapshots. Null when none are usable. */
+  realized: HospitalityMenuRealizedMargin | null;
+  /** Non-voided sale lines for this item in the period. */
+  soldLineCount: number;
 };
 
 export type HospitalityIngredientCostGap = {
@@ -112,6 +129,15 @@ function menuCostStatus(state: ReturnType<typeof hospitalityMenuCostState>): Hos
   return "not_set";
 }
 
+type HistoricalMenuAggregate = {
+  revenueUgx: number;
+  costUgx: number;
+  profitUgx: number;
+  snapshotLineCount: number;
+  missingSnapshotLineCount: number;
+  partial: boolean;
+};
+
 function computeHospitalityMenuReport(
   scopedSales: Sale[],
   products: Product[],
@@ -122,11 +148,59 @@ function computeHospitalityMenuReport(
     (product) => !product.menu?.hideFromMenu && isHospitalityMenuItem(product),
   );
 
+  // Historical sales evidence comes from the shared sale-line snapshots only.
+  // Missing/legacy snapshots are counted, never replaced with a live product cost.
+  const historicalByProduct = new Map<string, HistoricalMenuAggregate>();
+  for (const sale of scopedSales) {
+    for (const line of sale.lines) {
+      if (line.voided) continue;
+      const aggregate = historicalByProduct.get(line.productId) ?? {
+        revenueUgx: 0,
+        costUgx: 0,
+        profitUgx: 0,
+        snapshotLineCount: 0,
+        missingSnapshotLineCount: 0,
+        partial: false,
+      };
+      const historical = resolveSaleLineHistoricalFinancials(line, sale);
+      if (!historical) {
+        aggregate.missingSnapshotLineCount += 1;
+      } else {
+        aggregate.snapshotLineCount += 1;
+        aggregate.revenueUgx += historical.revenueUgx;
+        aggregate.costUgx += historical.cogsUgx;
+        aggregate.profitUgx += historical.grossProfitUgx;
+        if (historical.basis === "partial") aggregate.partial = true;
+      }
+      historicalByProduct.set(line.productId, aggregate);
+    }
+  }
+
   const entries = menuProducts.map((product) => {
     const state = hospitalityMenuCostState(product, products);
     const status = menuCostStatus(state);
     const sold = soldById.get(product.id);
+    const historical = historicalByProduct.get(product.id);
     const trustworthy = status === "verified" || status === "estimated";
+    const realizedRevenueUgx = Math.round(historical?.revenueUgx ?? 0);
+    const realizedCostUgx = Math.round(historical?.costUgx ?? 0);
+    const realizedProfitUgx = Math.round(historical?.profitUgx ?? 0);
+    const realized: HospitalityMenuRealizedMargin | null =
+      historical && historical.snapshotLineCount > 0
+        ? {
+            basis:
+              historical.partial || historical.missingSnapshotLineCount > 0
+                ? "partial"
+                : "complete",
+            revenueUgx: realizedRevenueUgx,
+            costUgx: realizedCostUgx,
+            profitUgx: realizedProfitUgx,
+            marginPct:
+              realizedRevenueUgx > 0 ? (realizedProfitUgx / realizedRevenueUgx) * 100 : 0,
+            snapshotLineCount: historical.snapshotLineCount,
+            missingSnapshotLineCount: historical.missingSnapshotLineCount,
+          }
+        : null;
     const row: HospitalityMenuPerformanceRow = {
       productId: product.id,
       name: product.name,
@@ -134,18 +208,20 @@ function computeHospitalityMenuReport(
       revenueUgx: sold?.revenueUgx ?? 0,
       sellPriceUgx: product.sellingPricePerUnitUgx,
       costStatus: status,
-      foodCostUgx:
+      currentCostUgx:
         trustworthy && (state.status === "estimated" || state.status === "verified_product_cost")
           ? state.foodCostUgx
           : null,
-      marginPct:
+      currentMarginPct:
         trustworthy && (state.status === "estimated" || state.status === "verified_product_cost")
           ? state.marginPct
           : null,
+      realized,
+      soldLineCount:
+        (historical?.snapshotLineCount ?? 0) + (historical?.missingSnapshotLineCount ?? 0),
     };
     return { product, state, row };
   });
-  const entryById = new Map(entries.map((entry) => [entry.product.id, entry]));
 
   const topDishes = entries
     .filter((entry) => isHospitalityRecipeDish(entry.product) && entry.row.unitsSold > 0)
@@ -158,13 +234,21 @@ function computeHospitalityMenuReport(
     .sort((a, b) => b.unitsSold - a.unitsSold || b.revenueUgx - a.revenueUgx)
     .slice(0, 5);
 
-  // lowMarginMenuItems already excludes incomplete, not-set and unverified costs.
-  // Keep the report sales-scoped: an unsold low-margin item belongs in the menu
-  // builder, not in a completed-sales period report with zero units/revenue.
-  const lowMargin = lowMarginMenuItems(products, 35)
-    .map((row) => entryById.get(row.product.id)?.row)
-    .filter((row): row is HospitalityMenuPerformanceRow => row != null && row.unitsSold > 0)
-    .slice(0, 5);
+  // Realized sale-time margin wins; current-cost estimates are the explicit
+  // fallback for items without a usable snapshot. Unsold items stay out.
+  const lowMargin = entries
+    .map((entry) => {
+      if (entry.row.soldLineCount === 0) return null;
+      const margin = entry.row.realized?.marginPct ?? entry.row.currentMarginPct;
+      if (margin == null || margin >= MENU_LOW_MARGIN_THRESHOLD_PCT) return null;
+      return { row: entry.row, margin };
+    })
+    .filter(
+      (entry): entry is { row: HospitalityMenuPerformanceRow; margin: number } => entry != null,
+    )
+    .sort((a, b) => a.margin - b.margin)
+    .slice(0, 5)
+    .map((entry) => entry.row);
 
   const gapMap = new Map<string, HospitalityIngredientCostGap>();
   for (const entry of entries) {

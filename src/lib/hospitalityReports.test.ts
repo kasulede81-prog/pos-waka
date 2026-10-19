@@ -124,20 +124,34 @@ const products = [
   unverifiedSoda,
 ];
 
+type LineSnapshot = {
+  unitCostUgx?: number;
+  cogsUgx?: number;
+  netRevenueUgx?: number;
+  grossProfitUgx?: number;
+  estimatedProfitUgx?: number;
+  financialDataStatus?: SaleLine["financialDataStatus"];
+};
+
 function line(
   p: Product,
   quantity: number,
-  opts?: { voided?: boolean; modifiers?: SaleLineModifier[] },
+  opts?: { voided?: boolean; modifiers?: SaleLineModifier[]; snapshot?: LineSnapshot },
 ): SaleLine {
+  const snapshot = opts?.snapshot;
   return {
     productId: p.id,
     name: p.name,
     inputMode: "quantity",
     quantity,
     unitPriceUgx: p.sellingPricePerUnitUgx,
-    unitCostUgx: 0,
+    unitCostUgx: snapshot?.unitCostUgx ?? 0,
     lineTotalUgx: Math.round(p.sellingPricePerUnitUgx * quantity),
-    estimatedProfitUgx: 0,
+    estimatedProfitUgx: snapshot?.estimatedProfitUgx ?? 0,
+    ...(snapshot?.cogsUgx !== undefined ? { cogsUgx: snapshot.cogsUgx } : {}),
+    ...(snapshot?.netRevenueUgx !== undefined ? { netRevenueUgx: snapshot.netRevenueUgx } : {}),
+    ...(snapshot?.grossProfitUgx !== undefined ? { grossProfitUgx: snapshot.grossProfitUgx } : {}),
+    ...(snapshot?.financialDataStatus ? { financialDataStatus: snapshot.financialDataStatus } : {}),
     voided: opts?.voided,
     selectedModifiers: opts?.modifiers,
   };
@@ -216,30 +230,32 @@ describe("hospitality menu report", () => {
     });
   });
 
-  it("exposes margin only where the cost is trustworthy", () => {
+  it("exposes current-cost estimates only where the cost is trustworthy", () => {
     const complete = report.menu.topDishes.find((row) => row.productId === "complete");
     expect(complete?.costStatus).toBe("estimated");
-    expect(complete?.foodCostUgx).toBe(2_000);
-    expect(complete?.marginPct).toBe(80);
+    expect(complete?.currentCostUgx).toBe(2_000);
+    expect(complete?.currentMarginPct).toBe(80);
+    expect(complete?.realized).toBeNull();
 
     const incomplete = report.menu.topDishes.find((row) => row.productId === "incomplete");
     expect(incomplete?.costStatus).toBe("incomplete");
-    expect(incomplete?.foodCostUgx).toBeNull();
-    expect(incomplete?.marginPct).toBeNull();
+    expect(incomplete?.currentCostUgx).toBeNull();
+    expect(incomplete?.currentMarginPct).toBeNull();
 
     const noRecipe = report.menu.topDishes.find((row) => row.productId === "no-recipe");
     expect(noRecipe?.costStatus).toBe("not_set");
-    expect(noRecipe?.marginPct).toBeNull();
+    expect(noRecipe?.currentMarginPct).toBeNull();
 
     const soda = report.menu.topDrinks.find((row) => row.productId === "soda");
     expect(soda?.costStatus).toBe("unverified");
-    expect(soda?.marginPct).toBeNull();
+    expect(soda?.currentMarginPct).toBeNull();
   });
 
-  it("lists only low-margin items with a reliable cost that sold in the period", () => {
+  it("falls back to a current-cost estimate for sold low-margin items without a snapshot", () => {
     expect(report.menu.lowMargin).toHaveLength(1);
     expect(report.menu.lowMargin[0]?.productId).toBe("low");
-    expect(report.menu.lowMargin[0]?.marginPct).toBeCloseTo(20, 1);
+    expect(report.menu.lowMargin[0]?.currentMarginPct).toBeCloseTo(20, 1);
+    expect(report.menu.lowMargin[0]?.realized).toBeNull();
     expect(report.menu.lowMargin.map((row) => row.productId)).not.toContain("unsold-low");
   });
 
@@ -306,5 +322,175 @@ describe("hospitality menu report", () => {
     expect(blankReport.menu.ingredientCostGaps).toEqual([
       { ingredientId: "", name: "", unit: "", dishCount: 1, reason: "missing" },
     ]);
+  });
+});
+
+describe("historical menu margins", () => {
+  const historyCurrent = product({
+    id: "history-current",
+    name: "History current",
+    menu: {
+      productKind: "finished_menu",
+      recipe: {
+        yieldQty: 1,
+        lines: [{ ingredientProductId: "chicken", quantityBase: 1, unitLabel: "kg" }],
+      },
+    },
+  });
+  const historyPartial = product({
+    id: "history-partial",
+    name: "History partial",
+    menu: {
+      productKind: "finished_menu",
+      recipe: {
+        yieldQty: 1,
+        lines: [{ ingredientProductId: "chicken", quantityBase: 1, unitLabel: "kg" }],
+      },
+    },
+  });
+  const historyLegacy = product({
+    id: "history-legacy",
+    name: "History legacy",
+    menu: {
+      productKind: "finished_menu",
+      recipe: {
+        yieldQty: 1,
+        lines: [{ ingredientProductId: "chicken", quantityBase: 1, unitLabel: "kg" }],
+      },
+    },
+  });
+  const historyIncomplete = product({
+    id: "history-incomplete",
+    name: "History incomplete",
+    sellingPricePerUnitUgx: 5_000,
+    menu: {
+      productKind: "finished_menu",
+      recipe: {
+        yieldQty: 1,
+        lines: [
+          { ingredientProductId: "spice", quantityBase: 0.1, unitLabel: "kg" },
+          { ingredientProductId: "ghost", quantityBase: 1, unitLabel: "ea" },
+        ],
+      },
+    },
+  });
+  const historyNoRecipe = product({
+    id: "history-no-recipe",
+    name: "History no recipe",
+    sellingPricePerUnitUgx: 7_000,
+    menu: { productKind: "finished_menu", recipe: null },
+  });
+
+  const historyProducts = [
+    chicken,
+    spice,
+    historyCurrent,
+    historyPartial,
+    historyLegacy,
+    historyIncomplete,
+    historyNoRecipe,
+  ];
+
+  const historySale: Sale = {
+    id: "history-sale",
+    status: "completed",
+    lines: [
+      line(historyCurrent, 1, {
+        snapshot: {
+          unitCostUgx: 7_500,
+          cogsUgx: 7_500,
+          netRevenueUgx: 10_000,
+          grossProfitUgx: 2_500,
+          estimatedProfitUgx: 2_500,
+          financialDataStatus: "complete",
+        },
+      }),
+      line(historyPartial, 1, {
+        snapshot: { unitCostUgx: 6_000, estimatedProfitUgx: 4_000 },
+      }),
+      line(historyLegacy, 1, { snapshot: { financialDataStatus: "legacy" } }),
+      line(historyIncomplete, 1, {
+        snapshot: {
+          unitCostUgx: 2_000,
+          cogsUgx: 2_000,
+          netRevenueUgx: 5_000,
+          grossProfitUgx: 3_000,
+          estimatedProfitUgx: 3_000,
+          financialDataStatus: "complete",
+        },
+      }),
+      line(historyNoRecipe, 1, { snapshot: { financialDataStatus: "legacy" } }),
+    ],
+    subtotalUgx: 42_000,
+    totalUgx: 42_000,
+    cashPaidUgx: 42_000,
+    debtUgx: 0,
+    estimatedProfitUgx: 9_500,
+    createdAt: "2026-06-02T12:00:00.000Z",
+    pendingSync: false,
+  };
+
+  const report = computeHospitalityReports(
+    [historySale],
+    historyProducts,
+    { fromKey: "2026-06-02", toKey: "2026-06-02" },
+    {},
+  );
+  const dish = (id: string) => report.menu.topDishes.find((row) => row.productId === id);
+
+  it("uses the sale-time snapshot instead of the current product cost", () => {
+    const current = dish("history-current");
+    expect(current?.currentMarginPct).toBe(20);
+    expect(current?.realized).toMatchObject({
+      basis: "complete",
+      revenueUgx: 10_000,
+      costUgx: 7_500,
+      profitUgx: 2_500,
+      marginPct: 25,
+      snapshotLineCount: 1,
+      missingSnapshotLineCount: 0,
+    });
+  });
+
+  it("supports old lines that carry only a sale-time unit cost", () => {
+    const partial = dish("history-partial");
+    expect(partial?.currentMarginPct).toBe(20);
+    expect(partial?.realized).toMatchObject({
+      basis: "partial",
+      revenueUgx: 10_000,
+      costUgx: 6_000,
+      profitUgx: 4_000,
+      marginPct: 40,
+    });
+  });
+
+  it("does not invent a realized margin when the snapshot is missing", () => {
+    const legacy = dish("history-legacy");
+    expect(legacy?.realized).toBeNull();
+    expect(legacy?.currentMarginPct).toBe(20);
+    expect(legacy?.soldLineCount).toBe(1);
+
+    const noRecipe = dish("history-no-recipe");
+    expect(noRecipe?.realized).toBeNull();
+    expect(noRecipe?.currentMarginPct).toBeNull();
+    expect(noRecipe?.soldLineCount).toBe(1);
+  });
+
+  it("keeps a realized margin when the current menu cost is incomplete", () => {
+    const incomplete = dish("history-incomplete");
+    expect(incomplete?.currentMarginPct).toBeNull();
+    expect(incomplete?.realized?.marginPct).toBe(60);
+  });
+
+  it("ranks low margin by realized margin first and labels estimate fallbacks", () => {
+    expect(report.menu.lowMargin.map((row) => row.productId)).toEqual([
+      "history-legacy",
+      "history-current",
+    ]);
+    const legacy = report.menu.lowMargin.find((row) => row.productId === "history-legacy");
+    expect(legacy?.realized).toBeNull();
+    expect(legacy?.currentMarginPct).toBe(20);
+    const current = report.menu.lowMargin.find((row) => row.productId === "history-current");
+    expect(current?.realized?.marginPct).toBe(25);
   });
 });

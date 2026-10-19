@@ -39,6 +39,13 @@ export type SaleFinancialTotals = {
   grossProfitUgx: number;
 };
 
+export type SaleLineHistoricalFinancials = {
+  basis: "complete" | "partial";
+  revenueUgx: number;
+  cogsUgx: number;
+  grossProfitUgx: number;
+};
+
 function lineListRevenueUgx(line: SaleLine): number {
   return Math.max(0, Math.floor(Number(line.originalLineTotalUgx ?? line.lineTotalUgx) || 0));
 }
@@ -235,6 +242,67 @@ export function resolveSaleLineFinancialsWithSale(line: SaleLine, sale: Sale): S
   const heldTotal = Math.max(0, Math.floor(sale.totalUgx ?? 0));
   const cartDiscountUgx = Math.max(0, Math.min(lineSubtotalUgx, lineSubtotalUgx - heldTotal));
   return resolveSaleLineFinancials(line, { cartDiscountUgx, lineSubtotalUgx });
+}
+
+/**
+ * Historical reporting read: use only the sale-time cost evidence on the line.
+ * It never substitutes the live product cost.
+ *
+ * - complete: the line carries the full net revenue / COGS / gross-profit snapshot.
+ * - partial: an older line carries a sale-time unit cost or COGS snapshot but not
+ *   the full reporting triple; revenue comes from the line's net/gross snapshot.
+ * - null: legacy, needs-repair, voided, or no sale-time cost evidence.
+ */
+export function resolveSaleLineHistoricalFinancials(
+  line: SaleLine,
+  sale?: Sale,
+): SaleLineHistoricalFinancials | null {
+  if (line.voided) return null;
+  if (line.financialDataStatus === "legacy" || line.financialDataStatus === "needs_repair") return null;
+
+  const quantity = Math.max(0, Number(line.quantity) || 0);
+  if (quantity <= 0) return null;
+
+  const hasCompleteSnapshot =
+    Number.isFinite(line.netRevenueUgx) &&
+    Number.isFinite(line.cogsUgx) &&
+    Number.isFinite(line.grossProfitUgx);
+  if (hasCompleteSnapshot) {
+    const financials = sale
+      ? resolveSaleLineFinancialsWithSale(line, sale)
+      : resolveSaleLineFinancials(line);
+    return {
+      basis: "complete",
+      revenueUgx: Math.max(0, Math.round(financials.revenueUgx)),
+      cogsUgx: Math.max(0, Math.round(financials.cogsUgx)),
+      grossProfitUgx: Math.round(financials.grossProfitUgx),
+    };
+  }
+
+  const unitCostUgx = normalizeUnitCostUgx(line.unitCostUgx);
+  let cogsUgx: number;
+  if (Number.isFinite(line.cogsUgx)) {
+    cogsUgx = Math.max(0, Math.round(line.cogsUgx!));
+  } else if (unitCostUgx > 0) {
+    cogsUgx = lineCostUgx(unitCostUgx, quantity);
+  } else {
+    return null;
+  }
+
+  const revenueUgx = Number.isFinite(line.netRevenueUgx)
+    ? Math.max(0, Math.floor(line.netRevenueUgx!))
+    : Math.max(
+        0,
+        Math.floor(Number(line.lineTotalUgx) || 0) -
+          Math.max(0, Math.floor(Number(line.cartDiscountUgx) || 0)),
+      );
+
+  return {
+    basis: "partial",
+    revenueUgx,
+    cogsUgx,
+    grossProfitUgx: lineProfitUgx(revenueUgx, cogsUgx),
+  };
 }
 
 export function sumSaleLinesFinancials(
