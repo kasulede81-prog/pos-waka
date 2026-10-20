@@ -1079,3 +1079,225 @@ describe("hospitality prep batches", () => {
     });
   });
 });
+
+describe("batch-prepared modifier ingredients", () => {
+  const CHEESE_ID = "cheese-1";
+  const MODIFIER = {
+    groupId: "extras",
+    groupLabel: "Extras",
+    optionId: "cheese",
+    optionLabel: "Extra cheese",
+    priceDeltaUgx: 0,
+  };
+
+  const cheese = baseProduct({
+    id: CHEESE_ID,
+    name: "Cheese",
+    costPricePerUnitUgx: 4_000,
+    stockOnHand: 5,
+    baseUnit: "kg",
+    menu: { productKind: "ingredient" },
+  });
+
+  function dishWithModifier(): Product {
+    return {
+      ...makeDish("batch_prepared"),
+      menu: {
+        ...makeDish("batch_prepared").menu!,
+        modifierGroups: [
+          {
+            id: "extras",
+            label: "Extras",
+            required: false,
+            selectionMode: "multiple",
+            options: [
+              {
+                id: "cheese",
+                label: "Extra cheese",
+                priceDeltaUgx: 0,
+                ingredientProductId: CHEESE_ID,
+                ingredientQtyBase: 0.05,
+              },
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  function seedCostedDish() {
+    seed([{ ...chicken }, { ...potatoes }, { ...oil }, { ...drink }, dishWithModifier(), { ...cheese }], []);
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        additionalCosts: [{ id: "charcoal", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-mod",
+      }).ok,
+    ).toBe(true);
+  }
+
+  const modLine = (qty: number) => ({
+    ...qtyLine(dish(), qty, "l1"),
+    selectedModifiers: [MODIFIER],
+  });
+
+  const rawStock = () => ({
+    chicken: product(CHICKEN_ID).stockOnHand,
+    potatoes: product(POTATOES_ID).stockOnHand,
+    oil: product(OIL_ID).stockOnHand,
+  });
+
+  it("consumes the modifier ingredient once, keeps the batch recipe untouched, and freezes both costs", () => {
+    seedCostedDish();
+    const raw = rawStock();
+    usePosStore.setState({ draftLines: [modLine(2)] });
+    expect(finalize().ok).toBe(true);
+
+    // Prepared portions + modifier ingredient only; the batch recipe stays consumed at prep.
+    expect(product(DISH_ID).stockOnHand).toBe(16);
+    expect(batch("batch-mod").remainingPortions).toBe(16);
+    expect(product(CHEESE_ID).stockOnHand).toBeCloseTo(4.9, 6);
+    expect(rawStock()).toEqual(raw);
+
+    const sale = usePosStore.getState().sales[0]!;
+    const line = sale.lines[0]!;
+    expect(line.prepAllocation).toEqual([{ batchId: "batch-mod", portions: 2 }]);
+    expect(line.ingredientConsumption).toEqual([{ productId: CHEESE_ID, quantity: 0.1 }]);
+    // 2 × 4,033 batch cost + 2 × 0.05 kg × 4,000 cheese = 8,466; unit 4,233.
+    expect(line.unitCostUgx).toBe(4_233);
+    expect(line.cogsUgx).toBe(8_466);
+    expect(line.estimatedProfitUgx).toBe(30_000 - 8_466);
+
+    const moves = usePosStore.getState().stockMovements.filter((m) => m.refId === sale.id);
+    expect(moves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ productId: DISH_ID, kind: "sale_out", deltaBaseUnits: -2 }),
+        expect.objectContaining({ productId: CHEESE_ID, kind: "adjust_use", deltaBaseUnits: -0.1 }),
+      ]),
+    );
+    expect(moves.some((m) => [CHICKEN_ID, POTATOES_ID, OIL_ID].includes(m.productId))).toBe(false);
+
+    const integrity = verifyInventoryIntegrity({
+      products: usePosStore.getState().products,
+      movements: usePosStore.getState().stockMovements,
+      openingStockByProduct: { ...OPENING, [CHEESE_ID]: 5 },
+    });
+    expect(integrity.mismatches).toEqual([]);
+  });
+
+  it("voids both the prepared portion and the modifier ingredient, never the batch recipe", () => {
+    seedCostedDish();
+    const raw = rawStock();
+    usePosStore.setState({ draftLines: [modLine(2)] });
+    expect(finalize().ok).toBe(true);
+    const saleId = usePosStore.getState().sales[0]!.id;
+
+    expect(usePosStore.getState().voidSaleLine({ saleId, lineIndex: 0, reason: "wrong_item" }).ok).toBe(true);
+
+    expect(product(DISH_ID).stockOnHand).toBe(18);
+    expect(batch("batch-mod").remainingPortions).toBe(18);
+    expect(product(CHEESE_ID).stockOnHand).toBe(5);
+    expect(rawStock()).toEqual(raw);
+    expect(usePosStore.getState().sales[0]!.lines[0]!.cogsUgx).toBe(8_466);
+
+    const voidRec = usePosStore.getState().voidRecords[0]!;
+    const moves = usePosStore.getState().stockMovements.filter((m) => m.refId === voidRec.id);
+    expect(moves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ productId: DISH_ID, deltaBaseUnits: 2 }),
+        expect.objectContaining({ productId: CHEESE_ID, deltaBaseUnits: 0.1 }),
+      ]),
+    );
+    expect(moves.some((m) => [CHICKEN_ID, POTATOES_ID, OIL_ID].includes(m.productId))).toBe(false);
+  });
+
+  it("returns a portion and its share of the modifier ingredient proportionally", () => {
+    seedCostedDish();
+    const raw = rawStock();
+    usePosStore.setState({ draftLines: [modLine(2)] });
+    expect(finalize().ok).toBe(true);
+    const saleId = usePosStore.getState().sales[0]!.id;
+
+    const ret = usePosStore.getState().returnProduct({
+      saleId,
+      productId: DISH_ID,
+      quantity: 1,
+      refundAmountUgx: 15_000,
+      reason: "wrong_item",
+      note: "n",
+    });
+    expect(ret.ok).toBe(true);
+
+    expect(product(DISH_ID).stockOnHand).toBe(17);
+    expect(batch("batch-mod").remainingPortions).toBe(17);
+    expect(product(CHEESE_ID).stockOnHand).toBeCloseTo(4.95, 6);
+    expect(rawStock()).toEqual(raw);
+    expect(usePosStore.getState().returnRecords[0]!.cogsUgx).toBe(4_233); // half of 8,466
+    expect(usePosStore.getState().sales[0]!.lines[0]!.cogsUgx).toBe(8_466);
+
+    const returnMoves = usePosStore.getState().stockMovements.filter(
+      (m) => m.refId === usePosStore.getState().returnRecords[0]!.id,
+    );
+    expect(returnMoves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ productId: DISH_ID, deltaBaseUnits: 1 }),
+        expect.objectContaining({ productId: CHEESE_ID, deltaBaseUnits: 0.05 }),
+      ]),
+    );
+    expect(returnMoves.some((m) => [CHICKEN_ID, POTATOES_ID, OIL_ID].includes(m.productId))).toBe(false);
+  });
+
+  it("order-taking checks the modifier ingredient, not the batch recipe, at sale time", () => {
+    seedCostedDish();
+    usePosStore.setState({
+      products: usePosStore.getState().products.map((p) =>
+        p.id === CHEESE_ID ? { ...p, stockOnHand: 0 } : p,
+      ),
+      preferences: {
+        ...usePosStore.getState().preferences,
+        hospitalityIngredientPolicy: { policy: "block", allowNegativeInventory: false },
+      },
+    });
+    const blocked = usePosStore.getState().addHospitalityDraftLine({
+      product: dish(),
+      quantity: 1,
+      modifiers: [MODIFIER],
+    });
+    expect(blocked).toMatchObject({ ok: false, errorKey: "ingredientShortage" });
+
+    // The base recipe is not checked: its ingredients were consumed during preparation.
+    usePosStore.setState({
+      products: usePosStore.getState().products.map((p) =>
+        p.id === CHICKEN_ID ? { ...p, stockOnHand: 0 } : p,
+      ),
+      draftLines: [],
+    });
+    expect(usePosStore.getState().addHospitalityDraftLine({ product: dish(), quantity: 1 }).ok).toBe(true);
+  });
+
+  it("a replayed completion consumes neither the portion nor the modifier twice", () => {
+    seedCostedDish();
+    usePosStore.setState({ draftLines: [modLine(2)] });
+    expect(finalize().ok).toBe(true);
+    const sale = usePosStore.getState().sales[0]!;
+    const before = {
+      cogs: sale.lines[0]!.cogsUgx,
+      remaining: batch("batch-mod").remainingPortions,
+      dishStock: product(DISH_ID).stockOnHand,
+      cheese: product(CHEESE_ID).stockOnHand,
+      movements: usePosStore.getState().stockMovements.length,
+    };
+
+    usePosStore.setState({ activePendingSaleId: sale.id, draftLines: [modLine(2)] });
+    expect(finalize()).toMatchObject({ ok: true, idempotent: true, saleId: sale.id });
+
+    expect(usePosStore.getState().sales[0]!.lines[0]!.cogsUgx).toBe(before.cogs);
+    expect(batch("batch-mod").remainingPortions).toBe(before.remaining);
+    expect(product(DISH_ID).stockOnHand).toBe(before.dishStock);
+    expect(product(CHEESE_ID).stockOnHand).toBe(before.cheese);
+    expect(usePosStore.getState().stockMovements).toHaveLength(before.movements);
+  });
+});

@@ -7,6 +7,7 @@ import { returnRestocksInventory } from "./returnPolicy";
 import { allStockMovementsForIntegrity } from "./stockMovementLedger";
 import {
   effectiveRecipe,
+  hasBatchPreparedProvenance,
   productPrepMode,
   requirementsFromSaleLines,
   saleLineConsumesIngredientsAtSale,
@@ -501,6 +502,35 @@ export function saleStockMovementsFromSale(
         supplierId: null,
       });
     }
+  }
+
+  // Batch-prepared dishes consume only their selected MODIFIER ingredients at sale (the
+  // recipe was already consumed during preparation). The frozen provenance is the exact
+  // record of what left the shelf, so use it directly rather than recomputing from the
+  // live menu — later recipe/product edits cannot rewrite the ledger.
+  const batchModifierByIngredient = new Map<string, number>();
+  for (const line of sale.lines) {
+    if (line.voided || (Number(line.quantity) || 0) <= 0) continue;
+    if (!hasBatchPreparedProvenance(line)) continue;
+    for (const c of line.ingredientConsumption ?? []) {
+      if (c.quantity <= 0) continue;
+      batchModifierByIngredient.set(c.productId, (batchModifierByIngredient.get(c.productId) ?? 0) + c.quantity);
+    }
+  }
+  for (const [productId, qty] of batchModifierByIngredient) {
+    const quantity = Math.round(qty * 10000) / 10000;
+    if (quantity <= 0) continue;
+    movements.push({
+      id: stableInventoryMovementId(shopKey, "recipe_modifier", sale.id, productId),
+      at,
+      productId,
+      productName: products?.find((p) => p.id === productId)?.name ?? productId,
+      deltaBaseUnits: -quantity,
+      kind: "adjust_use",
+      summary: `Batch modifier consumption −${quantity}`,
+      refId: sale.id,
+      supplierId: null,
+    });
   }
 
   return movements;

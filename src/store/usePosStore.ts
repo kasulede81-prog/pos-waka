@@ -312,11 +312,13 @@ import { assertSequentialBusinessDay } from "../lib/sequentialBusinessDays";
 import { buildDayCloseSnapshot } from "../lib/dayCloseDocument";
 import { normalizeProductMenu } from "../lib/menuModifiers";
 import {
-  allocateIngredientConsumption,
+  allocateSaleLineConsumption,
   applyRecipeStockDeduction,
   checkIngredientAvailability,
   computeMenuItemFoodCostUgx,
+  computeModifierIngredientCostUgx,
   creditIngredients,
+  hasBatchPreparedProvenance,
   hasIngredientProvenance,
   ingredientReversalFor,
   restorePrepBatchesForReversal,
@@ -328,9 +330,9 @@ import {
   preparedPortionsAvailable,
   productPrepMode,
   requirementsFoodCostUgx,
-  requirementsFromSaleLines,
   scaleRequirements,
   saleLineConsumesIngredientsAtSale,
+  saleTimeIngredientRequirements,
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
@@ -5413,13 +5415,11 @@ export const usePosStore = create<PosState>((set, get) => {
       }
     }
 
-    // Batch-prepared items consumed their ingredients at preparation time —
-    // only made-to-order recipe lines draw ingredients at sale time.
-    const ingredientLines = state.draftLines.filter((l) => {
-      const product = state.products.find((x) => x.id === l.productId);
-      return !product || saleLineConsumesIngredientsAtSale(product);
-    });
-    const ingredientReq = requirementsFromSaleLines(ingredientLines, state.products);
+    // Batch-prepared items consumed their recipe at preparation time; at sale they
+    // consume only the selected modifier options' ingredients. Made-to-order lines
+    // consume their full recipe + modifiers at sale. One combined requirement map
+    // keeps the shortage policy and ledger honest for both models.
+    const ingredientReq = saleTimeIngredientRequirements(state.draftLines, state.products);
     const ingredientShortages = checkIngredientAvailability(ingredientReq, state.products);
     // Same rule the order-taking step applies (add-time and finalize used to disagree). A permitted
     // shortfall never drives stock below zero — the deduction floors at what is on the shelf — and is
@@ -5490,22 +5490,29 @@ export const usePosStore = create<PosState>((set, get) => {
       // Recipe-driven finished_menu items skip finished-stock deduction, so their
       // COGS must come from recipe ingredient costs (with yield + waste), not the
       // finished product's cost/pack slots — otherwise food sales record COGS ≈ 0.
-      // Batch-prepared items instead use their FIFO batch historical cost.
+      // Batch-prepared items use their FIFO batch historical cost plus the
+      // modifier ingredients actually consumed at sale (the batch recipe already
+      // covers the base dish; it is never added again).
       const recipe = !deductFinished ? effectiveRecipe(p, moneyLine.variantId) : null;
+      const preparedModifierCostUgx = preparedPlan
+        ? computeModifierIngredientCostUgx(p, products, moneyLine.selectedModifiers, moneyLine.quantity)
+        : 0;
       const unitCostUgx = preparedPlan
-        ? preparedPlan.unitCostUgx
+        ? Math.round(
+            (preparedPlan.costUgx + preparedModifierCostUgx) /
+              (Number(moneyLine.quantity) > 0 ? moneyLine.quantity : 1),
+          )
         : recipe
           ? computeMenuItemFoodCostUgx(p, products, moneyLine.variantId, moneyLine.selectedModifiers)
           : slotCosts.unitCostUgx;
       // Prepared portions use the exact FIFO cost of the batches consumed (full
       // batch cost at actual yield), not unitCost × quantity: rounding the
       // weighted unit first would leave a few UGX of COGS unaccounted for
-      // whenever a sale spans batches with different costs. The batch cost
-      // already contains the recipe ingredients consumed at preparation, so no
-      // ingredient cost is added again here. Batch modifiers are not consumed
-      // by the current sale path; made-to-order modifier ingredients are priced
-      // by computeMenuItemFoodCostUgx on their own line.
-      const cogsUgx = preparedPlan ? preparedPlan.costUgx : lineCostUgx(unitCostUgx, moneyLine.quantity);
+      // whenever a sale spans batches with different costs. Modifier ingredient
+      // cost is added separately and only once per sale.
+      const cogsUgx = preparedPlan
+        ? preparedPlan.costUgx + preparedModifierCostUgx
+        : lineCostUgx(unitCostUgx, moneyLine.quantity);
       products[idx] = {
         ...p,
         stockOnHand: deductFinished ? Math.max(0, next) : p.stockOnHand,
@@ -5576,21 +5583,40 @@ export const usePosStore = create<PosState>((set, get) => {
       if (idx >= 0) products[idx] = updated;
     }
 
-    // Made-to-order provenance: which ingredients each recipe line actually took off the shelf. A later
-    // void/return gives back exactly its share of these (see ingredientReversalFor) instead of crediting
-    // a finished dish that never had stock. preCartLines is 1:1 with the draft lines.
-    const madeToOrderIdx = state.draftLines
-      .map((l, i) => ({ l, i, prod: state.products.find((x) => x.id === l.productId) }))
-      .filter((r) => r.prod != null && saleLineConsumesIngredientsAtSale(r.prod))
+    // Provenance: which ingredients each line actually took off the shelf, split by model.
+    // - made-to-order line: its share of the full recipe + modifiers;
+    // - batch-prepared line with selected modifiers: its share of the modifier ingredients only.
+    // A later void/return gives back exactly these (see ingredientReversalFor), and a batch line
+    // ALSO restores its prepared portions. preCartLines is 1:1 with the draft lines.
+    const draftRows = state.draftLines.map((l, i) => ({
+      line: l,
+      i,
+      product: state.products.find((x) => x.id === l.productId),
+    }));
+    const madeToOrderIdx = draftRows
+      .filter((r) => r.product != null && saleLineConsumesIngredientsAtSale(r.product))
       .map((r) => r.i);
-    if (madeToOrderIdx.length > 0) {
-      const provenance = allocateIngredientConsumption(
-        madeToOrderIdx.map((i) => preCartLines[i]!),
-        state.products,
-        new Map(recipeDeduction.deducted.map((d) => [d.productId, d.qty])),
-      );
+    const batchModifierIdx = draftRows
+      .filter(
+        (r) =>
+          r.product != null &&
+          productPrepMode(r.product) === "batch_prepared" &&
+          effectiveRecipe(r.product) != null &&
+          (r.line.selectedModifiers?.length ?? 0) > 0,
+      )
+      .map((r) => r.i);
+    if (madeToOrderIdx.length > 0 || batchModifierIdx.length > 0) {
+      const provenance = allocateSaleLineConsumption({
+        madeToOrderLines: madeToOrderIdx.map((i) => preCartLines[i]!),
+        batchModifierLines: batchModifierIdx.map((i) => preCartLines[i]!),
+        products: state.products,
+        deducted: new Map(recipeDeduction.deducted.map((d) => [d.productId, d.qty])),
+      });
       madeToOrderIdx.forEach((lineIdx, k) => {
-        preCartLines[lineIdx] = { ...preCartLines[lineIdx]!, ingredientConsumption: provenance[k]! };
+        preCartLines[lineIdx] = { ...preCartLines[lineIdx]!, ingredientConsumption: provenance.madeToOrder[k]! };
+      });
+      batchModifierIdx.forEach((lineIdx, k) => {
+        preCartLines[lineIdx] = { ...preCartLines[lineIdx]!, ingredientConsumption: provenance.batchModifiers[k]! };
       });
     }
 
@@ -6100,9 +6126,13 @@ export const usePosStore = create<PosState>((set, get) => {
     let products = [...state.products];
     const pIdx = products.findIndex((p) => p.id === line.productId);
     const preVoidProduct = pIdx >= 0 ? products[pIdx]! : null;
-    // Made-to-order recipe line: it consumed INGREDIENTS at sale, never finished-dish stock, so the
-    // reversal gives back its exact share of those ingredients and leaves the dish alone.
+    // Ingredient-provenance line:
+    // - made-to-order: it consumed ingredients at sale, never finished-dish stock, so the reversal
+    //   gives back its share of those ingredients and leaves the dish alone;
+    // - batch-prepared with modifiers: it consumed a prepared portion AND the modifier ingredients,
+    //   so the reversal restores BOTH (the batch recipe itself is not touched).
     const viaIngredients = hasIngredientProvenance(line);
+    const batchPreparedLine = hasBatchPreparedProvenance(line);
     const ingredientMovements: StockMovement[] = [];
     const ingredientProductsTouched: Product[] = [];
     if (viaIngredients) {
@@ -6128,7 +6158,7 @@ export const usePosStore = create<PosState>((set, get) => {
         });
       }
     }
-    if (!viaIngredients && pIdx >= 0) {
+    if ((!viaIngredients || batchPreparedLine) && pIdx >= 0) {
       const p = products[pIdx]!;
       let restored: Product = {
         ...p,
@@ -6175,7 +6205,10 @@ export const usePosStore = create<PosState>((set, get) => {
       refId: voidRec.id,
       supplierId: null,
     };
-    const voidMovements: StockMovement[] = viaIngredients ? ingredientMovements : [movement];
+    const voidMovements: StockMovement[] = [
+      ...(viaIngredients ? ingredientMovements : []),
+      ...(!viaIngredients || batchPreparedLine ? [movement] : []),
+    ];
 
     const sales = [...state.sales];
     sales[saleIdx] = updatedSale;
@@ -6285,7 +6318,8 @@ export const usePosStore = create<PosState>((set, get) => {
     }
     if (viaIngredients) {
       if (ingredientProductsTouched.length > 0) broadcastInventoryStock(ingredientProductsTouched, "sale_void");
-    } else if (pIdx >= 0) {
+    }
+    if ((!viaIngredients || batchPreparedLine) && pIdx >= 0) {
       broadcastInventoryStock([products[pIdx]!], "sale_void");
     }
     return { ok: true };
@@ -6441,14 +6475,19 @@ export const usePosStore = create<PosState>((set, get) => {
         : returnScoped
             .filter((r) => r.saleId === (saleId ?? null) && r.productId === productId)
             .reduce((sum, r) => sum + r.quantity, 0);
-    // Made-to-order recipe line: the return gives back its share of the ingredients that line consumed
-    // (only for a sellable return reason, like every restock) and never touches the finished dish.
+    // Ingredient provenance:
+    // - made-to-order: the return gives back its share of the ingredients the line consumed and never
+    //   touches a finished dish;
+    // - batch-prepared with modifiers: the return gives back the prepared portion AND its share of the
+    //   modifier ingredients. The batch's base recipe was consumed at preparation and is not restored.
     const returnViaIngredients = Boolean(saleLine && hasIngredientProvenance(saleLine));
+    const returnBatchPrepared = Boolean(saleLine && hasBatchPreparedProvenance(saleLine));
+    const ingredientOnly = returnViaIngredients && !returnBatchPrepared;
     const returnIngredientCredits =
       returnViaIngredients && restock ? ingredientReversalFor(saleLine!, qty, priorReturnedQty) : [];
     const returnCredited = creditIngredients(live.products, returnIngredientCredits, at);
     const products = (returnViaIngredients ? returnCredited.products : live.products).map((p) => {
-      if (returnViaIngredients || p.id !== productId || !restock) return p;
+      if (ingredientOnly || p.id !== productId || !restock) return p;
       let restored: Product = {
         ...p,
         stockOnHand: p.stockOnHand + qty,
@@ -6478,20 +6517,9 @@ export const usePosStore = create<PosState>((set, get) => {
     });
 
     const returnShopKey = inventoryMovementNamespace();
-    const returnMovements: StockMovement[] = !restock
-      ? []
-      : returnViaIngredients
-        ? returnCredited.applied.map((c) => ({
-            id: stableInventoryMovementId(returnShopKey, "return_recipe", returnRec.id, c.productId),
-            at,
-            productId: c.productId,
-            productName: live.products.find((p) => p.id === c.productId)?.name ?? c.productId,
-            deltaBaseUnits: c.quantity,
-            kind: "adjust_other" as const,
-            summary: `Return +${c.quantity} (recipe)`,
-            refId: returnRec.id,
-            supplierId: null,
-          }))
+    const finishedReturnMovements: StockMovement[] =
+      !restock || ingredientOnly
+        ? []
         : [
             {
               id: crypto.randomUUID(),
@@ -6505,6 +6533,25 @@ export const usePosStore = create<PosState>((set, get) => {
               supplierId: null,
             },
           ];
+    const ingredientReturnMovements: StockMovement[] = returnViaIngredients
+      ? returnCredited.applied.map((c) => ({
+          id: stableInventoryMovementId(
+            returnShopKey,
+            returnBatchPrepared ? "return_batch_modifier" : "return_recipe",
+            returnRec.id,
+            c.productId,
+          ),
+          at,
+          productId: c.productId,
+          productName: live.products.find((p) => p.id === c.productId)?.name ?? c.productId,
+          deltaBaseUnits: c.quantity,
+          kind: "adjust_other" as const,
+          summary: `Return +${c.quantity} (${returnBatchPrepared ? "batch modifier" : "recipe"})`,
+          refId: returnRec.id,
+          supplierId: null,
+        }))
+      : [];
+    const returnMovements: StockMovement[] = [...finishedReturnMovements, ...ingredientReturnMovements];
 
     let sales = live.sales;
     let archivedSales = live.archivedSales ?? [];
@@ -6589,8 +6636,14 @@ export const usePosStore = create<PosState>((set, get) => {
       void queueRemote("customer", { id: linkedCustomerId });
     }
     if (restock) {
+      const touched: Product[] = [];
       const updated = get().products.find((p) => p.id === productId);
-      if (updated) broadcastInventoryStock([updated], "sale_return");
+      if (!ingredientOnly && updated) touched.push(updated);
+      for (const c of returnCredited.applied) {
+        const ing = get().products.find((p) => p.id === c.productId);
+        if (ing) touched.push(ing);
+      }
+      if (touched.length > 0) broadcastInventoryStock(touched, "sale_return");
     }
     return { ok: true, returnRecord: returnRec };
     } catch (err) {

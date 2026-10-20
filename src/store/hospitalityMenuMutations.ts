@@ -19,7 +19,7 @@ import {
 } from "../lib/menuModifiers";
 import {
   checkIngredientAvailability,
-  requirementsFromSaleLines,
+  saleTimeIngredientRequirements,
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
 import {
@@ -87,7 +87,9 @@ export function createHospitalityMenuStoreActions(deps: Deps) {
 
       const line = built.line;
       const trialLines = [...state.draftLines, line];
-      const requirements = requirementsFromSaleLines(trialLines, state.products);
+      // Made-to-order lines need their full recipe; batch-prepared lines only their
+      // modifier ingredients (their recipe was consumed during preparation).
+      const requirements = saleTimeIngredientRequirements(trialLines, state.products);
       const shortages = checkIngredientAvailability(requirements, state.products);
       const shortageDecision = decideIngredientShortage({
         prefs: state.preferences,

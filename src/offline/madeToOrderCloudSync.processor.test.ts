@@ -300,6 +300,28 @@ describe("the sale itself", () => {
     expect(lines[0]!.metadata).toMatchObject({ unitCostUgx: 9_500, cogsUgx: 28_500 });
   });
 
+  it("pushes a batch modifier line's frozen COGS and both provenance fields", () => {
+    const batchLine: SaleLine = {
+      ...recipeLine(),
+      unitCostUgx: 4_233,
+      cogsUgx: 8_466,
+      estimatedProfitUgx: 21_534,
+      prepAllocation: [{ batchId: "batch-1", portions: 3 }],
+    };
+    const payload = buildSalePushPayload(
+      { ...sale(), lines: [batchLine], subtotalUgx: 60_000, totalUgx: 60_000, cashPaidUgx: 60_000 },
+      { shopId: SHOP, userId: "11111111-1111-4111-8111-111111111111" },
+    );
+    const meta = (payload.lines as Array<{ metadata: Record<string, unknown> }>)[0]!.metadata;
+    expect(meta).toMatchObject({
+      unitCostUgx: 4_233,
+      cogsUgx: 8_466,
+      estimatedProfitUgx: 21_534,
+      prepAllocation: [{ batchId: "batch-1", portions: 3 }],
+      ingredientConsumption: [{ productId: BEEF, quantity: 3 }],
+    });
+  });
+
   it("a sale with an EMPTY provenance still marks the line as made-to-order (an empty array, not absent)", () => {
     const line = { ...recipeLine(), ingredientConsumption: [] };
     const payload = buildSalePushPayload({ ...sale(), lines: [line] }, { shopId: SHOP, userId: "11111111-1111-4111-8111-111111111111" });

@@ -25,14 +25,28 @@ export function recipeLineQtyWithWaste(line: RecipeLine, sellQty: number, yieldQ
   return base * (1 + waste / 100);
 }
 
-export function aggregateRecipeRequirements(
-  lines: Array<{
-    product: Product;
-    quantity: number;
-    variantId?: string | null;
-    modifiers?: SaleLineModifier[];
-  }>,
-): Map<string, number> {
+type SaleRequirementRow = {
+  product: Product;
+  quantity: number;
+  variantId?: string | null;
+  modifiers?: SaleLineModifier[];
+};
+
+/** Ingredient quantities of the modifier options selected on one sale line. */
+function modifierIngredientQuantities(row: SaleRequirementRow): Array<[string, number]> {
+  const menu = productMenuConfig(row.product);
+  const out: Array<[string, number]> = [];
+  for (const mod of row.modifiers ?? []) {
+    const group = menu?.modifierGroups?.find((g) => g.id === mod.groupId);
+    const opt = group?.options.find((o) => o.id === mod.optionId);
+    if (opt?.ingredientProductId && opt.ingredientQtyBase != null && opt.ingredientQtyBase > 0) {
+      out.push([opt.ingredientProductId, opt.ingredientQtyBase * row.quantity]);
+    }
+  }
+  return out;
+}
+
+export function aggregateRecipeRequirements(lines: SaleRequirementRow[]): Map<string, number> {
   const totals = new Map<string, number>();
 
   const add = (productId: string, qty: number) => {
@@ -48,16 +62,36 @@ export function aggregateRecipeRequirements(
         add(rl.ingredientProductId, recipeLineQtyWithWaste(rl, row.quantity, yieldQty));
       }
     }
-    for (const mod of row.modifiers ?? []) {
-      const menu = productMenuConfig(row.product);
-      const group = menu?.modifierGroups?.find((g) => g.id === mod.groupId);
-      const opt = group?.options.find((o) => o.id === mod.optionId);
-      if (opt?.ingredientProductId && opt.ingredientQtyBase) {
-        add(opt.ingredientProductId, opt.ingredientQtyBase * row.quantity);
-      }
+    for (const [ingredientId, qty] of modifierIngredientQuantities(row)) add(ingredientId, qty);
+  }
+  return totals;
+}
+
+/** Modifier-option ingredients only — never the recipe itself. */
+export function aggregateModifierRequirements(lines: SaleRequirementRow[]): Map<string, number> {
+  const totals = new Map<string, number>();
+  for (const row of lines) {
+    for (const [ingredientId, qty] of modifierIngredientQuantities(row)) {
+      if (qty <= 0) continue;
+      totals.set(ingredientId, (totals.get(ingredientId) ?? 0) + qty);
     }
   }
   return totals;
+}
+
+function saleLineRequirementRows(lines: SaleLine[], products: Product[]): SaleRequirementRow[] {
+  const rows: SaleRequirementRow[] = [];
+  for (const line of lines) {
+    const product = products.find((p) => p.id === line.productId);
+    if (!product) continue;
+    rows.push({
+      product,
+      quantity: line.quantity,
+      variantId: line.variantId,
+      modifiers: line.selectedModifiers,
+    });
+  }
+  return rows;
 }
 
 export function checkIngredientAvailability(
@@ -83,18 +117,45 @@ export function checkIngredientAvailability(
 }
 
 export function requirementsFromSaleLines(lines: SaleLine[], products: Product[]): Map<string, number> {
-  const rows = lines.map((line) => {
+  return aggregateRecipeRequirements(saleLineRequirementRows(lines, products));
+}
+
+/** Modifier-option ingredients selected on these sale lines (no recipe lines). */
+export function modifierRequirementsFromSaleLines(lines: SaleLine[], products: Product[]): Map<string, number> {
+  return aggregateModifierRequirements(saleLineRequirementRows(lines, products));
+}
+
+/**
+ * Ingredients actually consumed when these sale lines complete:
+ * - made-to-order recipe lines consume their recipe + modifiers at sale;
+ * - batch-prepared lines consume modifiers only — their recipe was consumed at preparation.
+ */
+export function saleTimeIngredientRequirements(lines: SaleLine[], products: Product[]): Map<string, number> {
+  const madeToOrder: SaleLine[] = [];
+  const batchModifiers: SaleLine[] = [];
+  for (const line of lines) {
     const product = products.find((p) => p.id === line.productId);
-    return product
-      ? {
-          product,
-          quantity: line.quantity,
-          variantId: line.variantId,
-          modifiers: line.selectedModifiers,
-        }
-      : null;
-  }).filter((x): x is NonNullable<typeof x> => x != null);
-  return aggregateRecipeRequirements(rows);
+    if (!product) continue;
+    if (saleLineConsumesIngredientsAtSale(product)) {
+      madeToOrder.push(line);
+    } else if (
+      productPrepMode(product) === "batch_prepared" &&
+      effectiveRecipe(product) != null &&
+      (line.selectedModifiers?.length ?? 0) > 0
+    ) {
+      batchModifiers.push(line);
+    }
+  }
+  const totals = new Map<string, number>();
+  const addAll = (req: Map<string, number>) => {
+    for (const [ingredientId, qty] of req) {
+      if (qty <= 0) continue;
+      totals.set(ingredientId, (totals.get(ingredientId) ?? 0) + qty);
+    }
+  };
+  addAll(requirementsFromSaleLines(madeToOrder, products));
+  addAll(modifierRequirementsFromSaleLines(batchModifiers, products));
+  return totals;
 }
 
 export function computeRecipeFoodCostUgx(recipe: Recipe, products: Product[], sellQty = 1): number {
@@ -118,8 +179,10 @@ export function computeModifierIngredientCostUgx(
   product: Product,
   products: Product[],
   modifiers?: SaleLineModifier[] | null,
+  quantity = 1,
 ): number {
-  if (!modifiers?.length) return 0;
+  const qty = Math.max(0, Number(quantity) || 0);
+  if (!modifiers?.length || qty <= 0) return 0;
   const menu = productMenuConfig(product);
   if (!menu) return 0;
   let total = 0;
@@ -130,7 +193,7 @@ export function computeModifierIngredientCostUgx(
     if (!opt?.ingredientProductId || qtyBase == null || qtyBase <= 0) continue;
     const ing = products.find((p) => p.id === opt.ingredientProductId);
     if (!ing) continue;
-    total += qtyBase * ing.costPricePerUnitUgx;
+    total += qtyBase * ing.costPricePerUnitUgx * qty;
   }
   return Math.round(total);
 }
@@ -488,20 +551,13 @@ export type IngredientConsumption = Array<{ productId: string; quantity: number 
 
 const round4 = (n: number) => Math.round(n * 10000) / 10000;
 
-/**
- * Attribute the ingredient quantities that were actually deducted at finalize to the made-to-order
- * lines that consumed them (draft order, first come first served). Each line's share is capped by its
- * own requirement, so with a permitted shortfall the recorded provenance never exceeds what really left
- * the shelf, and the shares always sum to the deduction.
- */
-export function allocateIngredientConsumption(
+function allocateConsumption(
   lines: ReadonlyArray<SaleLine>,
-  products: Product[],
-  deducted: ReadonlyMap<string, number>,
+  requirementsFor: (line: SaleLine) => Map<string, number>,
+  remaining: Map<string, number>,
 ): IngredientConsumption[] {
-  const remaining = new Map(deducted);
   return lines.map((line) => {
-    const need = requirementsFromSaleLines([line], products);
+    const need = requirementsFor(line);
     const out: IngredientConsumption = [];
     for (const [productId, required] of need) {
       const left = remaining.get(productId) ?? 0;
@@ -514,9 +570,82 @@ export function allocateIngredientConsumption(
   });
 }
 
+/**
+ * Attribute the ingredient quantities that were actually deducted at finalize to the made-to-order
+ * lines that consumed them (draft order, first come first served). Each line's share is capped by its
+ * own requirement, so with a permitted shortfall the recorded provenance never exceeds what really left
+ * the shelf, and the shares always sum to the deduction.
+ */
+export function allocateIngredientConsumption(
+  lines: ReadonlyArray<SaleLine>,
+  products: Product[],
+  deducted: ReadonlyMap<string, number>,
+): IngredientConsumption[] {
+  return allocateConsumption(
+    lines,
+    (line) => requirementsFromSaleLines([line], products),
+    new Map(deducted),
+  );
+}
+
+/** Same allocation, but only for the modifier-option ingredients a batch-prepared line consumes. */
+export function allocateBatchModifierConsumption(
+  lines: ReadonlyArray<SaleLine>,
+  products: Product[],
+  deducted: ReadonlyMap<string, number>,
+): IngredientConsumption[] {
+  return allocateConsumption(
+    lines,
+    (line) => modifierRequirementsFromSaleLines([line], products),
+    new Map(deducted),
+  );
+}
+
+/**
+ * Allocate ONE deduction across made-to-order recipe lines and batch-prepared modifier lines from a
+ * shared remaining-quantity map. Made-to-order lines are attributed first (their recipe is the reason
+ * the ingredient was required); batch modifiers then take what the shelf actually gave them. This
+ * prevents the same physical units from being claimed by both models under a permitted shortfall.
+ */
+export function allocateSaleLineConsumption(input: {
+  madeToOrderLines: ReadonlyArray<SaleLine>;
+  batchModifierLines: ReadonlyArray<SaleLine>;
+  products: Product[];
+  deducted: ReadonlyMap<string, number>;
+}): { madeToOrder: IngredientConsumption[]; batchModifiers: IngredientConsumption[] } {
+  const remaining = new Map(input.deducted);
+  return {
+    madeToOrder: allocateConsumption(
+      input.madeToOrderLines,
+      (line) => requirementsFromSaleLines([line], input.products),
+      remaining,
+    ),
+    batchModifiers: allocateConsumption(
+      input.batchModifierLines,
+      (line) => modifierRequirementsFromSaleLines([line], input.products),
+      remaining,
+    ),
+  };
+}
+
 /** True for lines that consumed ingredients at sale and carry the provenance to reverse them. */
 export function hasIngredientProvenance(line: Pick<SaleLine, "ingredientConsumption">): boolean {
   return Array.isArray(line.ingredientConsumption);
+}
+
+/**
+ * A batch-prepared line that also consumed modifier ingredients at sale: it carries BOTH the prepared-
+ * portion allocation and the modifier ingredient provenance. Reversals must restore both, unlike a
+ * made-to-order line (ingredients only) or a plain batch line (portions only).
+ */
+export function hasBatchPreparedProvenance(
+  line: Pick<SaleLine, "ingredientConsumption" | "prepAllocation">,
+): boolean {
+  return (
+    Array.isArray(line.ingredientConsumption) &&
+    Array.isArray(line.prepAllocation) &&
+    line.prepAllocation.length > 0
+  );
 }
 
 /**

@@ -7,7 +7,13 @@ import {
 import { cashReduceFromRefund } from "./cashDrawerSales";
 import { hasPackCostAllocation, retractPackCostUnitsDepleted } from "./costPrecision";
 import { remainingVoidableLine } from "./returnLimits";
-import { creditIngredients, hasIngredientProvenance, ingredientReversalFor, restorePrepBatchesForReversal } from "./recipeEngine";
+import {
+  creditIngredients,
+  hasBatchPreparedProvenance,
+  hasIngredientProvenance,
+  ingredientReversalFor,
+  restorePrepBatchesForReversal,
+} from "./recipeEngine";
 import { isCompletedSale, isVoidedSale } from "./saleStatus";
 import { stableVoidLineIdentity, stableVoidLineMovementId, stableVoidRecordId } from "./saleLifecycle";
 
@@ -48,12 +54,20 @@ export function planWholeBillVoid(input: {
   const returnRecords = input.returnRecords ?? [];
 
   /**
-   * Returns the ingredient credits when the line is a made-to-order recipe line (its reversal puts
-   * ingredients back and leaves the dish alone), otherwise null after restocking the finished product.
+   * Reverses one line by its own stock model:
+   * - made-to-order: ingredient credits only (no finished dish ever had stock);
+   * - batch-prepared with modifiers: BOTH the prepared portions and the modifier ingredient credits;
+   * - retail / plain batch: finished stock only.
    */
-  const restockLine = (line: SaleLine, quantity: number): Array<{ productId: string; quantity: number }> | null => {
-    if (quantity <= 0) return null;
-    if (hasIngredientProvenance(line)) {
+  const restockLine = (
+    line: SaleLine,
+    quantity: number,
+  ): { ingredientCredits: Array<{ productId: string; quantity: number }> | null; finishedRestocked: boolean } => {
+    if (quantity <= 0) return { ingredientCredits: null, finishedRestocked: false };
+    const viaIngredients = hasIngredientProvenance(line);
+    const batchPrepared = hasBatchPreparedProvenance(line);
+    let ingredientCredits: Array<{ productId: string; quantity: number }> | null = null;
+    if (viaIngredients) {
       const credited = creditIngredients(
         products,
         ingredientReversalFor(line, quantity, Math.max(0, line.quantity - quantity)),
@@ -62,10 +76,13 @@ export function planWholeBillVoid(input: {
       credited.products.forEach((p, i) => {
         products[i] = p;
       });
-      return credited.applied;
+      ingredientCredits = credited.applied;
+    }
+    if (viaIngredients && !batchPrepared) {
+      return { ingredientCredits, finishedRestocked: false };
     }
     const pIdx = products.findIndex((p) => p.id === line.productId);
-    if (pIdx < 0) return null;
+    if (pIdx < 0) return { ingredientCredits, finishedRestocked: false };
     const p = products[pIdx]!;
     let restored: Product = {
       ...p,
@@ -80,7 +97,7 @@ export function planWholeBillVoid(input: {
     // (no-op for every other product).
     restored = restorePrepBatchesForReversal(restored, line, quantity, Math.max(0, line.quantity - quantity), input.at);
     products[pIdx] = restored;
-    return null;
+    return { ingredientCredits, finishedRestocked: true };
   };
 
   sale.lines.forEach((line, lineIndex) => {
@@ -110,9 +127,9 @@ export function planWholeBillVoid(input: {
       saleLineId: line.id ?? null,
     };
     voidRecords.push(voidRec);
-    const ingredientCredits = restockLine(line, voidQty);
-    if (ingredientCredits) {
-      for (const c of ingredientCredits) {
+    const restocked = restockLine(line, voidQty);
+    if (restocked.ingredientCredits) {
+      for (const c of restocked.ingredientCredits) {
         movements.push({
           id: stableVoidLineMovementId(input.shopKey, sale.id, identity, c.productId),
           at: input.at,
@@ -120,12 +137,13 @@ export function planWholeBillVoid(input: {
           productName: products.find((p) => p.id === c.productId)?.name ?? c.productId,
           deltaBaseUnits: c.quantity,
           kind: "adjust_other",
-          summary: `Void +${c.quantity} (recipe)`,
+          summary: `Void +${c.quantity} (${hasBatchPreparedProvenance(line) ? "batch modifier" : "recipe"})`,
           refId: voidRec.id,
           supplierId: null,
         });
       }
-    } else {
+    }
+    if (restocked.finishedRestocked) {
       movements.push({
         id: stableVoidLineMovementId(input.shopKey, sale.id, identity, line.productId),
         at: input.at,
