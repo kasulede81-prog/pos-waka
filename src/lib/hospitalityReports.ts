@@ -1,4 +1,5 @@
 import type {
+  AuditLogEntry,
   HospitalityFloorState,
   Language,
   PrepBatchCostBasis,
@@ -6,6 +7,7 @@ import type {
   PrepBatchYieldBasis,
   Product,
   Recipe,
+  ReturnRecord,
   Sale,
   StaffAccount,
   TableSession,
@@ -13,7 +15,13 @@ import type {
 } from "../types";
 import { t } from "./i18n";
 import { completedSales } from "./saleStatus";
-import { aggregateRecipeRequirements, effectiveRecipe } from "./recipeEngine";
+import {
+  aggregateRecipeRequirements,
+  effectiveRecipe,
+  prepAllocationWindow,
+  productPrepMode,
+} from "./recipeEngine";
+import { returnRecordsForLine } from "./returnLimits";
 import { resolveProductStationType } from "./kitchenRouting";
 import { dateKeyKampala } from "./datesUg";
 import { resolveSaleWaiterAttribution } from "./waiterAttribution";
@@ -272,10 +280,20 @@ export type HospitalityTableServiceReport = {
   outsideRangeCount: number;
 };
 
+export type HospitalityPrepBatchReconciliation = "reconciled" | "unreconciled" | "unknown";
+
+/** How complete the recorded sale-line financial evidence is for a batch row. */
+export type HospitalityPrepBatchSnapshotEvidence = "complete" | "partial" | "missing";
+
 /**
  * One persisted prep batch in the selected production period. Production figures
  * (portions prepared, yield, cost, waste) are historical; remaining portions/value
  * are the CURRENT stock left on that batch and are never added into production totals.
+ *
+ * Sold/returned figures are batch-lifetime and come from completed, non-voided sale
+ * lines' frozen `prepAllocation`; revenue/COGS are allocated from those lines' recorded
+ * financial snapshots and reduced by recorded returns. A missing event is null/unknown,
+ * never zero.
  */
 export type HospitalityPrepBatchReportRow = {
   batchId: string;
@@ -306,6 +324,38 @@ export type HospitalityPrepBatchReportRow = {
   remainingValueUgx: number;
   /** True when the batch has no explicit total cost (legacy ingredient-only record). */
   legacyCost: boolean;
+  /** Gross portions allocated from completed, non-voided sale lines. */
+  soldPortionsGross: number;
+  /** Portions returned against those lines and attributed to this batch. Null when return records were not supplied. */
+  returnedPortions: number | null;
+  /** Gross sold minus returns, never below zero. Null when return records were not supplied. */
+  soldPortionsNet: number | null;
+  /** Recorded sale-line revenue allocated to the gross sold portions. */
+  grossSalesRevenueUgx: number;
+  /** Recorded sale-line COGS allocated to the gross sold portions. */
+  grossSalesCogsUgx: number;
+  /** Recorded return refunds allocated to this batch. Null when return records were not supplied. */
+  returnRefundUgx: number | null;
+  /** Recorded return COGS allocated to this batch. Null when return records were not supplied. */
+  returnCogsUgx: number | null;
+  /** Recorded net revenue after returns. Null when return records were not supplied. */
+  salesRevenueUgx: number | null;
+  /** Recorded net COGS after returns. Null when return records were not supplied. */
+  salesCogsUgx: number | null;
+  /** Completeness of the sale-line snapshots behind the revenue/COGS figures. */
+  salesSnapshotEvidence: HospitalityPrepBatchSnapshotEvidence;
+  /**
+   * True when this product has completed batch-prepared lines with no batch allocation,
+   * so sold portions may be understated and reconciliation cannot be proven.
+   */
+  allocationEvidenceIncomplete: boolean;
+  /** Portions cancelled. Null when no recorded cancel-event quantity exists. */
+  cancelledPortions: number | null;
+  /** Where the cancelled portion count came from. */
+  cancelledEvidence: "audit_event" | "batch_status_only" | "unavailable";
+  /** prepared − (net sold + wasted + cancelled + remaining); null when unknown. */
+  reconciliationDeltaPortions: number | null;
+  reconciliation: HospitalityPrepBatchReconciliation;
 };
 
 /**
@@ -313,6 +363,10 @@ export type HospitalityPrepBatchReportRow = {
  * The app never prunes exhausted/wasted/cancelled batches, but product history can
  * still be absent after a shop reset/restore or on a device that never received a
  * batch from another device. The report therefore never claims complete history.
+ *
+ * Sales evidence has the same limitation: only completed sales persisted on this
+ * device are visible. Missing allocations/snapshots/returns are reported as unknown
+ * counts, never as zero.
  */
 export type HospitalityPrepBatchReport = {
   rows: HospitalityPrepBatchReportRow[];
@@ -324,6 +378,10 @@ export type HospitalityPrepBatchReport = {
   expectedPortions: number;
   actualPortions: number;
   yieldVariancePortions: number;
+  /** Sum of every recorded actual yield, including batches without an expected figure. */
+  recordedActualPortions: number;
+  /** Batches with a recorded actual yield (expected may be missing). */
+  actualPortionBatchCount: number;
   totalBatchCostUgx: number;
   wastedPortions: number;
   wasteValueUgx: number;
@@ -337,6 +395,63 @@ export type HospitalityPrepBatchReport = {
   outsideRangeBatchCount: number;
   /** Explicit scope so no caller can present this as complete history. */
   historyScope: "persisted_batches_only";
+  /** Gross portions allocated from completed, non-voided sale lines. */
+  soldPortionsGross: number;
+  /** Returned portions attributed to these batches. Null when return records were not supplied. */
+  returnedPortions: number | null;
+  /** Gross sold minus returns. Null when return records were not supplied. */
+  soldPortionsNet: number | null;
+  /** Recorded sale-line revenue allocated to gross sold portions. */
+  grossSalesRevenueUgx: number;
+  /** Recorded sale-line COGS allocated to gross sold portions. */
+  grossSalesCogsUgx: number;
+  /** Recorded return refunds allocated to these batches. Null when return records were not supplied. */
+  returnRefundUgx: number | null;
+  /** Recorded return COGS allocated to these batches. Null when return records were not supplied. */
+  returnCogsUgx: number | null;
+  /** Net recorded revenue after returns. Null when return records were not supplied. */
+  salesRevenueUgx: number | null;
+  /** Net recorded COGS after returns. Null when return records were not supplied. */
+  salesCogsUgx: number | null;
+  /** Cancelled portions across these batches; null when any cancelled batch lacks a recorded quantity. */
+  cancelledPortions: number | null;
+  /** Known cancelled-portion subtotal, even when some batches are unknown. */
+  cancelledPortionsKnown: number;
+  /** Cancelled batches with no recorded cancel-event quantity. */
+  cancelledPortionsUnknownBatchCount: number;
+  reconciledBatchCount: number;
+  unreconciledBatchCount: number;
+  unknownReconciliationBatchCount: number;
+  /** Completed batch-prepared lines with no prepAllocation. Their sold portions are unknown. */
+  missingAllocationLineCount: number;
+  /** Sold quantity on those lines (an upper bound of the unknown batch portions). */
+  missingAllocationQuantity: number;
+  /** Lines whose allocation does not cover their sold quantity or names an unknown batch. */
+  inconsistentAllocationLineCount: number;
+  /** Net sold quantity not covered by any allocation on otherwise allocated lines. */
+  unallocatedPortions: number;
+  /** Recorded snapshot revenue on missing-allocation lines that could not be attributed to a batch. */
+  unallocatedSalesRevenueUgx: number;
+  /** Recorded snapshot COGS on missing-allocation lines that could not be attributed to a batch. */
+  unallocatedSalesCogsUgx: number;
+  /** Lines with sold portions but no usable sale financial snapshot. */
+  missingFinancialSnapshotLineCount: number;
+  /** Lines whose financial evidence is only a partial (legacy unit-cost) snapshot. */
+  partialFinancialSnapshotLineCount: number;
+  /** Returns with a quantity but no recorded COGS reversal. */
+  missingReturnCogsCount: number;
+  /** Returns that could not be linked to a completed sale line. */
+  unattributedReturnCount: number;
+  /** Whether return records were supplied and included. */
+  returnsEvidence: "included" | "unavailable";
+  /** Whether cancel audit events were supplied and searched. */
+  auditEvidence: "included" | "unavailable";
+  /** Sold/returned/cancelled figures are lifetime for these batches, not period activity. */
+  usageScope: "batch_lifetime";
+  /** Batch records come from this device's persisted product records. */
+  batchSource: "device_product_records";
+  /** Revenue/COGS are allocated from recorded sale-line snapshots. */
+  salesFinancialsBasis: "allocated_from_sale_line_snapshots";
 };
 
 export function formatHospitalityDurationMinutes(minutes: number): string {
@@ -686,8 +801,27 @@ function finiteNonNegative(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null;
 }
 
+/** Audit payloads can arrive as numbers or numeric strings depending on the source. */
+function finiteNonNegativeLike(value: unknown): number | null {
+  if (typeof value === "string" && value.trim() !== "") {
+    return finiteNonNegative(Number(value));
+  }
+  return finiteNonNegative(value);
+}
+
 function roundBatchQty(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function uniqueById<T extends { id: string }>(items: readonly T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    out.push(item);
+  }
+  return out;
 }
 
 /**
@@ -696,17 +830,34 @@ function roundBatchQty(value: number): number {
  * missing waste stays zero; current remaining stock is kept separate from the
  * historical production totals. Batches are never pruned by the app, but only
  * batches present in the device's product records can be reported.
+ *
+ * Sold/returned portions come from completed, non-voided sale lines' frozen
+ * prepAllocation. Revenue/COGS are allocated from the same lines' recorded
+ * financial snapshots and reduced by recorded return refunds/COGS. A missing
+ * allocation, snapshot, return link or cancel event is reported as unknown.
+ * Cancel quantities exist only in the `hospitality_prep_cancel` audit event;
+ * the batch record stores no cancelled-portions field.
  */
 function computePrepBatchReport(
   products: Product[],
   range: HospitalityReportRange,
+  sales: Sale[] = [],
+  returnsInput: readonly ReturnRecord[] | null = null,
+  auditInput: readonly AuditLogEntry[] | null = null,
 ): HospitalityPrepBatchReport {
   const rows: HospitalityPrepBatchReportRow[] = [];
+  const rowByBatchId = new Map<string, HospitalityPrepBatchReportRow>();
+  const productHasCohortBatch = new Set<string>();
+  // Every batch, including out-of-period ones, so an allocation to a real batch
+  // outside the period is not confused with an unknown batch id.
+  const batchProductIdById = new Map<string, string>();
   let undatedBatchCount = 0;
   let outsideRangeBatchCount = 0;
+  const returnsIncluded = returnsInput != null;
 
   for (const product of products) {
     for (const batch of product.menu?.prepBatches ?? []) {
+      batchProductIdById.set(batch.id, product.id);
       const preparedAt = typeof batch.preparedAt === "string" ? batch.preparedAt : "";
       const preparedMs = preparedAt ? new Date(preparedAt).getTime() : Number.NaN;
       if (!Number.isFinite(preparedMs)) {
@@ -739,7 +890,7 @@ function computePrepBatchReport(
       const wasteValueUgx =
         finiteNonNegative(batch.wasteCostUgx) ?? Math.round(wastedPortions * costPerPlateUgx);
 
-      rows.push({
+      const row: HospitalityPrepBatchReportRow = {
         batchId: batch.id,
         productId: product.id,
         productName: product.name,
@@ -764,7 +915,25 @@ function computePrepBatchReport(
         remainingPortions: roundBatchQty(remainingPortions),
         remainingValueUgx: Math.round(remainingPortions * costPerPlateUgx),
         legacyCost,
-      });
+        soldPortionsGross: 0,
+        returnedPortions: returnsIncluded ? 0 : null,
+        soldPortionsNet: returnsIncluded ? 0 : null,
+        grossSalesRevenueUgx: 0,
+        grossSalesCogsUgx: 0,
+        returnRefundUgx: returnsIncluded ? 0 : null,
+        returnCogsUgx: returnsIncluded ? 0 : null,
+        salesRevenueUgx: returnsIncluded ? 0 : null,
+        salesCogsUgx: returnsIncluded ? 0 : null,
+        salesSnapshotEvidence: "complete",
+        allocationEvidenceIncomplete: false,
+        cancelledPortions: batch.status === "cancelled" ? null : 0,
+        cancelledEvidence: batch.status === "cancelled" ? "unavailable" : "batch_status_only",
+        reconciliationDeltaPortions: null,
+        reconciliation: "unknown",
+      };
+      rows.push(row);
+      rowByBatchId.set(batch.id, row);
+      productHasCohortBatch.add(product.id);
     }
   }
 
@@ -772,9 +941,274 @@ function computePrepBatchReport(
     (a, b) => a.preparedAt.localeCompare(b.preparedAt) || a.productName.localeCompare(b.productName),
   );
 
+  const productById = new Map(products.map((p) => [p.id, p]));
+  const returns = returnsInput ? uniqueById(returnsInput) : [];
+  const usedReturnIds = new Set<string>();
+  const productEvidenceIncomplete = new Set<string>();
+  const salesBySaleId = new Map<string, Sale>();
+  for (const sale of completedSales(sales)) {
+    if (!salesBySaleId.has(sale.id)) salesBySaleId.set(sale.id, sale);
+  }
+
+  let missingAllocationLineCount = 0;
+  let missingAllocationQuantity = 0;
+  let inconsistentAllocationLineCount = 0;
+  let unallocatedPortions = 0;
+  let unallocatedSalesRevenueUgx = 0;
+  let unallocatedSalesCogsUgx = 0;
+  let missingFinancialSnapshotLineCount = 0;
+  let partialFinancialSnapshotLineCount = 0;
+  let missingReturnCogsCount = 0;
+  let unattributedReturnCount = 0;
+
+  for (const sale of salesBySaleId.values()) {
+    for (const line of sale.lines) {
+      if (line.voided) continue;
+      const lineQuantity = Math.max(0, Number(line.quantity) || 0);
+      if (lineQuantity <= 0) continue;
+      const product = productById.get(line.productId) ?? null;
+      const batchPrepared = product ? productPrepMode(product) === "batch_prepared" : false;
+      const relevantToCohort = product != null && productHasCohortBatch.has(product.id);
+      const allocation = (line.prepAllocation ?? [])
+        .map((a) => ({ batchId: a.batchId, portions: Math.max(0, Number(a.portions) || 0) }))
+        .filter((a) => Boolean(a.batchId) && a.portions > 0);
+      const uniqueLineReturns = returnsIncluded
+        ? uniqueById(returnRecordsForLine(sale, line, returns)).sort(
+            (a, b) => (a.createdAt || "").localeCompare(b.createdAt || "") || a.id.localeCompare(b.id),
+          )
+        : [];
+
+      if (allocation.length === 0) {
+        if (!batchPrepared || !relevantToCohort) continue;
+        missingAllocationLineCount += 1;
+        missingAllocationQuantity += lineQuantity;
+        productEvidenceIncomplete.add(line.productId);
+        // A missing allocation does not hide the recorded financial amount; report
+        // it as unallocated instead of silently dropping it or claiming zero.
+        const snapshot = resolveSaleLineHistoricalFinancials(line);
+        if (snapshot) {
+          if (snapshot.basis === "partial") partialFinancialSnapshotLineCount += 1;
+          let refund = 0;
+          let cogsReversed = 0;
+          for (const r of uniqueLineReturns) {
+            usedReturnIds.add(r.id);
+            refund += Math.max(0, Math.floor(Number(r.refundAmountUgx) || 0));
+            if (Number.isFinite(r.cogsUgx)) {
+              cogsReversed += Math.max(0, Math.round(r.cogsUgx!));
+            } else if (Math.max(0, Number(r.quantity) || 0) > 0) {
+              missingReturnCogsCount += 1;
+            }
+          }
+          unallocatedSalesRevenueUgx += Math.max(0, snapshot.revenueUgx - refund);
+          unallocatedSalesCogsUgx += Math.max(0, snapshot.cogsUgx - cogsReversed);
+        } else {
+          missingFinancialSnapshotLineCount += 1;
+        }
+        continue;
+      }
+
+      let lineInconsistent = false;
+      const grossAllByBatch = new Map<string, number>();
+      for (const entry of allocation) {
+        const batchProductId = batchProductIdById.get(entry.batchId);
+        if (batchProductId == null || batchProductId !== line.productId) {
+          lineInconsistent = true;
+          continue;
+        }
+        grossAllByBatch.set(
+          entry.batchId,
+          (grossAllByBatch.get(entry.batchId) ?? 0) + entry.portions,
+        );
+      }
+      const allocationTotal = [...grossAllByBatch.values()].reduce((sum, value) => sum + value, 0);
+      if (Math.abs(allocationTotal - lineQuantity) > 0.0001) lineInconsistent = true;
+      if (lineInconsistent) {
+        inconsistentAllocationLineCount += 1;
+        if (product) productEvidenceIncomplete.add(product.id);
+      }
+
+      const grossCohortByBatch = new Map<string, number>();
+      let grossCohortPortions = 0;
+      for (const [batchId, portions] of grossAllByBatch) {
+        const row = rowByBatchId.get(batchId);
+        if (!row) continue;
+        grossCohortByBatch.set(batchId, portions);
+        grossCohortPortions += portions;
+      }
+
+      // Attribute returns before deciding whether every portion is outside the
+      // selected period, so their ids are always marked as used.
+      let alreadyReversed = 0;
+      let lineReturnQty = 0;
+      const returnedAllByBatch = new Map<string, number>();
+      const returnRefundByBatch = new Map<string, number>();
+      const returnCogsByBatch = new Map<string, number>();
+      for (const r of uniqueLineReturns) {
+        usedReturnIds.add(r.id);
+        const qty = Math.max(0, Number(r.quantity) || 0);
+        if (qty <= 0) continue;
+        lineReturnQty += qty;
+        const refund = Math.max(0, Math.floor(Number(r.refundAmountUgx) || 0));
+        const cogs = Number.isFinite(r.cogsUgx) ? Math.max(0, Math.round(r.cogsUgx!)) : null;
+        const credits = prepAllocationWindow(allocation, alreadyReversed, qty);
+        const totalCredit = credits.reduce((sum, credit) => sum + credit.portions, 0);
+        if (cogs == null && credits.some((credit) => rowByBatchId.has(credit.batchId))) {
+          missingReturnCogsCount += 1;
+        }
+        for (const credit of credits) {
+          returnedAllByBatch.set(
+            credit.batchId,
+            (returnedAllByBatch.get(credit.batchId) ?? 0) + credit.portions,
+          );
+          if (totalCredit <= 0) continue;
+          const share = credit.portions / totalCredit;
+          returnRefundByBatch.set(
+            credit.batchId,
+            (returnRefundByBatch.get(credit.batchId) ?? 0) + refund * share,
+          );
+          if (cogs != null) {
+            returnCogsByBatch.set(
+              credit.batchId,
+              (returnCogsByBatch.get(credit.batchId) ?? 0) + cogs * share,
+            );
+          }
+        }
+        alreadyReversed += qty;
+      }
+
+      if (returnsIncluded) {
+        const expectedNetQty = Math.max(0, lineQuantity - Math.min(lineReturnQty, lineQuantity));
+        let netAllocated = 0;
+        for (const [batchId, gross] of grossAllByBatch) {
+          const returned = Math.min(gross, returnedAllByBatch.get(batchId) ?? 0);
+          netAllocated += Math.max(0, gross - returned);
+        }
+        if (netAllocated < expectedNetQty - 0.0001) {
+          unallocatedPortions += expectedNetQty - netAllocated;
+          if (product) productEvidenceIncomplete.add(product.id);
+        }
+      } else if (allocationTotal < lineQuantity - 0.0001) {
+        unallocatedPortions += lineQuantity - allocationTotal;
+      }
+
+      if (grossCohortPortions <= 0) continue;
+
+      const snapshot = resolveSaleLineHistoricalFinancials(line);
+      if (snapshot) {
+        if (snapshot.basis === "partial") partialFinancialSnapshotLineCount += 1;
+      } else {
+        missingFinancialSnapshotLineCount += 1;
+      }
+      const financialScale =
+        allocationTotal > lineQuantity && allocationTotal > 0 ? lineQuantity / allocationTotal : 1;
+      const revenuePerPortion = snapshot ? snapshot.revenueUgx / lineQuantity : 0;
+      const cogsPerPortion = snapshot ? snapshot.cogsUgx / lineQuantity : 0;
+
+      for (const [batchId, gross] of grossCohortByBatch) {
+        const row = rowByBatchId.get(batchId)!;
+        const returned = Math.min(gross, returnedAllByBatch.get(batchId) ?? 0);
+        const net = Math.max(0, gross - returned);
+        row.soldPortionsGross += gross;
+        if (row.returnedPortions != null) row.returnedPortions += returned;
+        if (row.soldPortionsNet != null) row.soldPortionsNet += net;
+        if (snapshot) {
+          row.grossSalesRevenueUgx += Math.round(gross * financialScale * revenuePerPortion);
+          row.grossSalesCogsUgx += Math.round(gross * financialScale * cogsPerPortion);
+          if (snapshot.basis === "partial" && row.salesSnapshotEvidence === "complete") {
+            row.salesSnapshotEvidence = "partial";
+          }
+        } else {
+          row.salesSnapshotEvidence = "missing";
+        }
+        if (row.returnRefundUgx != null) {
+          row.returnRefundUgx += returnRefundByBatch.get(batchId) ?? 0;
+        }
+        if (row.returnCogsUgx != null) {
+          row.returnCogsUgx += returnCogsByBatch.get(batchId) ?? 0;
+        }
+      }
+    }
+  }
+
+  if (returnsIncluded) {
+    const allSalesById = new Map(sales.map((sale) => [sale.id, sale]));
+    for (const record of returns) {
+      if (usedReturnIds.has(record.id)) continue;
+      if (!productHasCohortBatch.has(record.productId)) continue;
+      const linkedSale = record.saleId ? allSalesById.get(record.saleId) : undefined;
+      // A return linked to a sale that exists but is voided or pending is outside
+      // this report's completed-sale scope. A return whose sale is entirely absent
+      // is unknown evidence and must be reported, not silently dropped.
+      if (record.saleId && linkedSale && !salesBySaleId.has(record.saleId)) continue;
+      if (linkedSale && record.saleLineId) {
+        const linkedLine = linkedSale.lines.find((line) => line.id === record.saleLineId);
+        if (linkedLine?.voided) continue;
+      }
+      unattributedReturnCount += 1;
+      productEvidenceIncomplete.add(record.productId);
+    }
+  }
+
+  if (auditInput) {
+    const seenCancelBatch = new Set<string>();
+    for (const entry of uniqueById(auditInput)) {
+      if (entry.action !== "hospitality_prep_cancel") continue;
+      const batchId = typeof entry.payload.batchId === "string" ? entry.payload.batchId : null;
+      if (!batchId || seenCancelBatch.has(batchId)) continue;
+      const row = rowByBatchId.get(batchId);
+      if (!row || row.status !== "cancelled") continue;
+      const portions = finiteNonNegativeLike(entry.payload.reversedPortions);
+      if (portions == null) continue;
+      seenCancelBatch.add(batchId);
+      row.cancelledPortions = roundBatchQty(portions);
+      row.cancelledEvidence = "audit_event";
+    }
+  }
+
+  for (const row of rows) {
+    row.allocationEvidenceIncomplete = productEvidenceIncomplete.has(row.productId);
+    if (row.returnedPortions != null) row.returnedPortions = roundBatchQty(row.returnedPortions);
+    if (row.soldPortionsNet != null) row.soldPortionsNet = roundBatchQty(row.soldPortionsNet);
+    if (row.returnRefundUgx != null) row.returnRefundUgx = Math.round(row.returnRefundUgx);
+    if (row.returnCogsUgx != null) row.returnCogsUgx = Math.round(row.returnCogsUgx);
+    if (row.salesRevenueUgx != null) {
+      row.salesRevenueUgx = Math.max(
+        0,
+        Math.round(row.grossSalesRevenueUgx - (row.returnRefundUgx ?? 0)),
+      );
+    }
+    if (row.salesCogsUgx != null) {
+      row.salesCogsUgx = Math.max(
+        0,
+        Math.round(row.grossSalesCogsUgx - (row.returnCogsUgx ?? 0)),
+      );
+    }
+    if (
+      row.soldPortionsNet == null ||
+      row.cancelledPortions == null ||
+      row.allocationEvidenceIncomplete
+    ) {
+      row.reconciliation = "unknown";
+      row.reconciliationDeltaPortions = null;
+      continue;
+    }
+    const accounted =
+      row.soldPortionsNet + row.wastedPortions + row.cancelledPortions + row.remainingPortions;
+    const delta = roundBatchQty(row.portionsPrepared - accounted);
+    row.reconciliationDeltaPortions = delta;
+    row.reconciliation = Math.abs(delta) <= 0.0001 ? "reconciled" : "unreconciled";
+  }
+
   const measured = rows.filter((row) => row.yieldVariancePortions != null);
+  const actualRecorded = rows.filter((row) => row.actualPortions != null);
   const sum = (get: (row: HospitalityPrepBatchReportRow) => number) =>
     rows.reduce((total, row) => total + get(row), 0);
+  const sumNullable = (get: (row: HospitalityPrepBatchReportRow) => number | null) =>
+    returnsIncluded ? rows.reduce((total, row) => total + (get(row) ?? 0), 0) : null;
+  const cancelledKnown = sum((row) => row.cancelledPortions ?? 0);
+  const cancelledUnknown = rows.filter(
+    (row) => row.status === "cancelled" && row.cancelledPortions == null,
+  ).length;
 
   return {
     rows,
@@ -786,6 +1220,10 @@ function computePrepBatchReport(
     yieldVariancePortions: roundBatchQty(
       measured.reduce((total, row) => total + (row.yieldVariancePortions ?? 0), 0),
     ),
+    recordedActualPortions: roundBatchQty(
+      actualRecorded.reduce((total, row) => total + (row.actualPortions ?? 0), 0),
+    ),
+    actualPortionBatchCount: actualRecorded.length,
     totalBatchCostUgx: sum((row) => row.totalBatchCostUgx),
     wastedPortions: roundBatchQty(sum((row) => row.wastedPortions)),
     wasteValueUgx: sum((row) => row.wasteValueUgx),
@@ -795,6 +1233,36 @@ function computePrepBatchReport(
     undatedBatchCount,
     outsideRangeBatchCount,
     historyScope: "persisted_batches_only",
+    soldPortionsGross: roundBatchQty(sum((row) => row.soldPortionsGross)),
+    returnedPortions: sumNullable((row) => row.returnedPortions),
+    soldPortionsNet: sumNullable((row) => row.soldPortionsNet),
+    grossSalesRevenueUgx: sum((row) => row.grossSalesRevenueUgx),
+    grossSalesCogsUgx: sum((row) => row.grossSalesCogsUgx),
+    returnRefundUgx: sumNullable((row) => row.returnRefundUgx),
+    returnCogsUgx: sumNullable((row) => row.returnCogsUgx),
+    salesRevenueUgx: sumNullable((row) => row.salesRevenueUgx),
+    salesCogsUgx: sumNullable((row) => row.salesCogsUgx),
+    cancelledPortions: cancelledUnknown > 0 ? null : roundBatchQty(cancelledKnown),
+    cancelledPortionsKnown: roundBatchQty(cancelledKnown),
+    cancelledPortionsUnknownBatchCount: cancelledUnknown,
+    reconciledBatchCount: rows.filter((row) => row.reconciliation === "reconciled").length,
+    unreconciledBatchCount: rows.filter((row) => row.reconciliation === "unreconciled").length,
+    unknownReconciliationBatchCount: rows.filter((row) => row.reconciliation === "unknown").length,
+    missingAllocationLineCount,
+    missingAllocationQuantity: roundBatchQty(missingAllocationQuantity),
+    inconsistentAllocationLineCount,
+    unallocatedPortions: roundBatchQty(unallocatedPortions),
+    unallocatedSalesRevenueUgx: Math.round(unallocatedSalesRevenueUgx),
+    unallocatedSalesCogsUgx: Math.round(unallocatedSalesCogsUgx),
+    missingFinancialSnapshotLineCount,
+    partialFinancialSnapshotLineCount,
+    missingReturnCogsCount,
+    unattributedReturnCount,
+    returnsEvidence: returnsIncluded ? "included" : "unavailable",
+    auditEvidence: auditInput ? "included" : "unavailable",
+    usageScope: "batch_lifetime",
+    batchSource: "device_product_records",
+    salesFinancialsBasis: "allocated_from_sale_line_snapshots",
   };
 }
 
@@ -1023,6 +1491,10 @@ export function computeHospitalityReports(
     staffAccounts?: StaffAccount[] | null;
     voidRecords?: readonly VoidRecord[] | null;
     archivedVoidRecords?: readonly VoidRecord[] | null;
+    /** Persisted return records, when available. Null means returns are unknown, not zero. */
+    returns?: readonly ReturnRecord[] | null;
+    /** Audit events used only for recorded prep-batch cancel quantities. */
+    auditLogs?: readonly AuditLogEntry[] | null;
     /** Deterministic "now" for current open-table elapsed time. */
     now?: Date;
   },
@@ -1099,7 +1571,13 @@ export function computeHospitalityReports(
     tables,
     peakHours,
     menu: computeHospitalityMenuReport(scoped, products),
-    prepBatches: computePrepBatchReport(products, range),
+    prepBatches: computePrepBatchReport(
+      products,
+      range,
+      sales,
+      options?.returns ?? null,
+      options?.auditLogs ?? null,
+    ),
     cancellations: computeCancelledMenuReport(
       sales,
       options?.voidRecords ?? [],

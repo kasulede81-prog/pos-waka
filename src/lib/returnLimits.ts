@@ -42,7 +42,11 @@ export function activeSaleLine(sale: Sale, productId: string, lineId?: string | 
 
 /** Records that count against ONE line: those stamped with its id, plus — for the product's first
  *  active line only — legacy records that name no line (they always meant "the first line"). */
-function recordsForLine(sale: Sale, line: SaleLine, records: readonly ReturnRecord[]): ReturnRecord[] {
+export function returnRecordsForLine(
+  sale: Sale,
+  line: SaleLine,
+  records: readonly ReturnRecord[],
+): ReturnRecord[] {
   const first = sale.lines.find((l) => l.productId === line.productId && !l.voided);
   const isFirst = first === line || (first?.id != null && first.id === line.id);
   return records.filter(
@@ -54,11 +58,14 @@ function recordsForLine(sale: Sale, line: SaleLine, records: readonly ReturnReco
 }
 
 export function returnedQuantityOnLine(sale: Sale, line: SaleLine, records: readonly ReturnRecord[]): number {
-  return recordsForLine(sale, line, records).reduce((sum, r) => sum + Math.max(0, r.quantity), 0);
+  return returnRecordsForLine(sale, line, records).reduce((sum, r) => sum + Math.max(0, r.quantity), 0);
 }
 
 export function refundsOnLine(sale: Sale, line: SaleLine, records: readonly ReturnRecord[]): number {
-  return recordsForLine(sale, line, records).reduce((sum, r) => sum + Math.max(0, Math.floor(r.refundAmountUgx)), 0);
+  return returnRecordsForLine(sale, line, records).reduce(
+    (sum, r) => sum + Math.max(0, Math.floor(r.refundAmountUgx)),
+    0,
+  );
 }
 
 /** Sale total before linked returns (header is reduced after each return). */

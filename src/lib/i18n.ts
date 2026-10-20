@@ -3532,18 +3532,54 @@ const en: Dict = {
   hospitalityReportsNoMenuSales: "No completed menu sales in this period.",
   hospitalityReportsNoLowMargin: "No low-margin sold items with a usable margin.",
   hospitalityReportsNoIngredientGaps: "No ingredient cost gaps.",
-  hospitalityPrepBatchReportTitle: "Prep batch production",
+  hospitalityPrepBatchReportTitle: "Prep batch report",
   hospitalityPrepBatchReportHint:
-    "Batches prepared in the selected period and persisted in this device's product records. Exhausted batches stay in history; batches removed by a reset/restore, or not yet synced to this device, cannot be reconstructed.",
+    "Batches prepared in the selected period and persisted in this device's product records. Sold, returned, wasted and cancelled figures are lifetime for these batches; remaining is current stock. Sales revenue and COGS are allocated from recorded completed-sale snapshots, net of recorded returns. Missing allocations, snapshots, returns or cancel events are shown as unknown, never zero. Server-authoritative prep-batch events are not assumed.",
   hospitalityPrepBatchReportEmpty: "No prep batches recorded in this period.",
   hospitalityPrepBatchReportBatches: "Batches",
   hospitalityPrepBatchReportPortions: "Portions prepared",
+  hospitalityPrepBatchReportActualPortions: "Actual portions (recorded)",
   hospitalityPrepBatchReportExpected: "Expected",
   hospitalityPrepBatchReportActual: "Actual",
   hospitalityPrepBatchReportYieldVariance: "Yield variance",
   hospitalityPrepBatchReportCostPerPlate: "Full batch cost / plate (sale COGS)",
   hospitalityPrepBatchReportWasted: "Wasted",
   hospitalityPrepBatchReportCurrentStock: "Current remaining stock",
+  hospitalityPrepBatchReportUsage: "Recorded batch usage (lifetime)",
+  hospitalityPrepBatchReportSoldNet: "Sold (net)",
+  hospitalityPrepBatchReportSoldGross: "Gross sold",
+  hospitalityPrepBatchReportReturned: "Returned",
+  hospitalityPrepBatchReportCancelled: "Cancelled",
+  hospitalityPrepBatchReportSalesRevenue: "Recorded sales revenue (allocated)",
+  hospitalityPrepBatchReportSalesCogs: "Recorded sales COGS (allocated)",
+  hospitalityPrepBatchReportUnknown: "Unknown",
+  hospitalityPrepBatchReportReturnsUnavailable:
+    "Return records were not supplied — sales are shown before returns.",
+  hospitalityPrepBatchReportReconciliationLine: "Batch reconciliation",
+  hospitalityPrepBatchReportReconciled: "Reconciled",
+  hospitalityPrepBatchReportUnreconciled: "Unreconciled",
+  hospitalityPrepBatchReportReconciliationSummary:
+    "{reconciled} reconciled · {unreconciled} unreconciled · {unknown} unknown",
+  hospitalityPrepBatchReportScopeNote:
+    "Based on this device's persisted prep-batch records and completed sales. Sold, returned, wasted and cancelled figures are lifetime for these batches; remaining is current stock. Missing events are unknown, not zero.",
+  hospitalityPrepBatchReportSalesNote:
+    "Sales revenue and COGS are allocated from recorded completed-sale line snapshots, net of recorded returns, to the portions consumed from these batches.",
+  hospitalityPrepBatchReportSnapshotMissing: "sale snapshot missing",
+  hospitalityPrepBatchReportSnapshotPartial: "partial sale snapshot",
+  hospitalityPrepBatchReportMissingAllocation:
+    "{count} completed line(s) have no batch allocation; sold portions may be incomplete.",
+  hospitalityPrepBatchReportUnallocatedSales:
+    "UGX {revenue} revenue / UGX {cogs} COGS on missing-allocation line(s) could not be linked to a batch.",
+  hospitalityPrepBatchReportMissingSnapshot:
+    "{count} sold line(s) have no usable sale snapshot; revenue and COGS are incomplete.",
+  hospitalityPrepBatchReportPartialSnapshot:
+    "{count} sold line(s) use a partial sale snapshot.",
+  hospitalityPrepBatchReportMissingReturnCogs:
+    "{count} return(s) have no recorded COGS reversal; net COGS is incomplete.",
+  hospitalityPrepBatchReportUnattributedReturns:
+    "{count} return(s) could not be linked to a sale line; net revenue/COGS may be overstated.",
+  hospitalityPrepBatchReportCancelledUnknown:
+    "Cancelled portion count is unavailable for {count} batch(es).",
   hospitalityPrepBatchReportYieldUnknown:
     "{count} batch(es) have no recorded actual yield; variance is not shown.",
   hospitalityPrepBatchReportLegacy:
@@ -16632,18 +16668,54 @@ const lgBase: Dict = {
   hospitalityReportsNoMenuSales: "Tewali kutunda menu kukakasiddwa mu kiseera kino.",
   hospitalityReportsNoLowMargin: "Tewali bintu byatundiddwa na magini matono agakozesebwa.",
   hospitalityReportsNoIngredientGaps: "Tewali bibula ku miwendo gy'ebikozesebwa.",
-  hospitalityPrepBatchReportTitle: "Okukola ebibinja by'okufumba",
+  hospitalityPrepBatchReportTitle: "Alipoota y'ebibinja ebyategekeddwa",
   hospitalityPrepBatchReportHint:
-    "Ebibinja ebyategekeddwa mu kiseera ekilondeddwa era ebiterekiddwa mu ndaga z'ebintu ku kifaananyi kino. Ebibinja ebimaze okukozesebwa bisigala mu byafaayo; ebyaggyibwa mu reset/restore oba ebitannasindikibwa ku kifaananyi kino tebisobola kudda.",
+    "Ebibinja ebyategekeddwa mu kiseera ekilondeddwa era ebiterekiddwa mu ndaga z'ebintu ku kifaananyi kino. Ebika ebitundiddwa, ebizziddwa, ebyonooneddwa n'ebisaziddwa biramba ku bibinja bino okutuusa kati; ebisigadde ye sitoka ey'ekiseera kino. Ensimbi n'omuwendo gw'ebikozesebwa ku byatundiddwa bigabanyizibwa okuva ku snapshot ya sale line ekkakasiddwa, nga mwe muli ebyaziddwa. Ebibula mu kugabanya, snapshot, ebyaziddwa oba ebikozesebwa ku kusaazaamu biragibwa nga tebimanyiddwa, si zero. Ebikozesebwa ku server bya batch tebiteeberezebwa.",
   hospitalityPrepBatchReportEmpty: "Tewali bibinja by'okufumba mu kiseera kino.",
   hospitalityPrepBatchReportBatches: "Ebibinja",
   hospitalityPrepBatchReportPortions: "Ebika ebyategekeddwa",
+  hospitalityPrepBatchReportActualPortions: "Ebika ebyakolebwa ddala (ebiteekeddwa)",
   hospitalityPrepBatchReportExpected: "Ekyasuubirwa",
   hospitalityPrepBatchReportActual: "Ekyamala",
   hospitalityPrepBatchReportYieldVariance: "Enjawulo y'ebivaamu",
   hospitalityPrepBatchReportCostPerPlate: "Omuwendo gwonna ogw'ekibinja / kkala (COGS y'okutunda)",
   hospitalityPrepBatchReportWasted: "Ebyonooneddwa",
   hospitalityPrepBatchReportCurrentStock: "Sitoka esigadde kati",
+  hospitalityPrepBatchReportUsage: "Enkola y'ebibinja ebyategekeddwa (okutuusa kati)",
+  hospitalityPrepBatchReportSoldNet: "Ebitundiddwa (net)",
+  hospitalityPrepBatchReportSoldGross: "Ebitundiddwa byonna (gross)",
+  hospitalityPrepBatchReportReturned: "Ebizziddwa",
+  hospitalityPrepBatchReportCancelled: "Ebisaziddwa",
+  hospitalityPrepBatchReportSalesRevenue: "Ensimbi ezitundiddwa eziteekeddwa (ezigabanyizibwa)",
+  hospitalityPrepBatchReportSalesCogs: "COGS y'okutunda eteekeddwa (eyagabanyizibwa)",
+  hospitalityPrepBatchReportUnknown: "Tekimanyiddwa",
+  hospitalityPrepBatchReportReturnsUnavailable:
+    "Ebiteerekebwa by'ebizziddwa tebiweereddwa — ensimbi ziraga nga tonnaggya ebizziddwa.",
+  hospitalityPrepBatchReportReconciliationLine: "Okukwataganya ekibinja",
+  hospitalityPrepBatchReportReconciled: "Kikwataganyiziddwa",
+  hospitalityPrepBatchReportUnreconciled: "Tekikwataganyiziddwa",
+  hospitalityPrepBatchReportReconciliationSummary:
+    "{reconciled} bikwataganyiziddwa · {unreconciled} tebikwataganyiziddwa · {unknown} tebimanyiddwa",
+  hospitalityPrepBatchReportScopeNote:
+    "Kisinziira ku ndaga z'ebibinja ebyategekeddwa ku kifaananyi kino n'okutunda okukakasiddwa. Ebitundiddwa, ebizziddwa, ebyonooneddwa n'ebisaziddwa biramba ku bibinja bino okutuusa kati; ebisigadde ye sitoka ey'ekiseera kino. Ebintu ebibula biragibwa nga tebimanyiddwa, si zero.",
+  hospitalityPrepBatchReportSalesNote:
+    "Ensimbi n'omuwendo gw'ebikozesebwa ku byatundiddwa bigabanyizibwa okuva ku snapshot ya sale line ekkakasiddwa, nga mwe muli ebyaziddwa, ku bika ebyakozesebwa okuva mu bibinja bino.",
+  hospitalityPrepBatchReportSnapshotMissing: "snapshot ya kutunda tewali",
+  hospitalityPrepBatchReportSnapshotPartial: "snapshot ya kutunda etuukiridde",
+  hospitalityPrepBatchReportMissingAllocation:
+    "Emisittale {count} egyakomekkerezibwa tegirina kugabanya ku kibinja; ebika ebitundiddwa biyinza okuba nga tebituukiridde.",
+  hospitalityPrepBatchReportUnallocatedSales:
+    "UGX {revenue} ensimbi / UGX {cogs} COGS ku misittale egitali na kugabanya teyasobola kukwataganyizibwa ku kibinja.",
+  hospitalityPrepBatchReportMissingSnapshot:
+    "Emisittale {count} egyatundiddwa tegirina snapshot ya kutunda eyokukozesa; ensimbi ne COGS tebijjudde.",
+  hospitalityPrepBatchReportPartialSnapshot:
+    "Emisittale {count} egyatundiddwa gikozesa snapshot ya kutunda etuukiridde.",
+  hospitalityPrepBatchReportMissingReturnCogs:
+    "Ebizziddwa {count} tebirina COGS eyakomekkerezibwa; COGS ya net tejjuviddwa.",
+  hospitalityPrepBatchReportUnattributedReturns:
+    "Ebizziddwa {count} tebyasobola kukwataganyizibwa ku mstari gwa kutunda; ensimbi ne COGS biyinza okuba nga bisukka.",
+  hospitalityPrepBatchReportCancelledUnknown:
+    "Omuwendo gw'ebika ebisaziddwa tegumanyiddwa ku bibinja {count}.",
   hospitalityPrepBatchReportYieldUnknown:
     "Ebibinja {count} tebirina muwendo gwa mavuno ogwakakasiddwa; enjawulo teragiddwa.",
   hospitalityPrepBatchReportLegacy:

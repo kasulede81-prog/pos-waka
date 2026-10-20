@@ -1005,18 +1005,54 @@ export const swOverrides: Record<string, string> = {
   hospitalityReportsNoIngredientGaps: "Hakuna mapungufu ya gharama za viungo.",
   hospitalityReportsTopDishes: "Vyakula vinavyoongoza",
   hospitalityReportsTopModifiers: "Viongezeo vinavyoongoza",
-  hospitalityPrepBatchReportTitle: "Uzalishaji wa makundi ya maandalizi",
+  hospitalityPrepBatchReportTitle: "Ripoti ya makundi ya maandalizi",
   hospitalityPrepBatchReportHint:
-    "Makundi yaliyoandaliwa katika kipindi kilichochaguliwa na yaliyohifadhiwa kwenye kumbukumbu za bidhaa za kifaa hiki. Makundi yaliyotumika yanabaki kwenye historia; yaliyoondolewa kwa reset/restore, au ambayo bado hayajasawazishwa hapa, hayawezi kujengwa upya.",
+    "Makundi yaliyoandaliwa katika kipindi kilichochaguliwa kutoka rekodi za bidhaa za kifaa hiki. Sehemu zilizouzwa, zilizorejeshwa, zilizoharibiwa na zilizoghairiwa ni za maisha yote ya makundi haya; zilizobaki ni hisa ya sasa. Mapato na COGS hutengwa kutoka picha za mistari ya mauzo iliyokamilika, baada ya kutoa marejesho yaliyorekodiwa. Ukosefu wa ugawaji, picha, marejesho au matukio ya kughairi huonyeshwa kama haujulikani, si sifuri. Matukio ya kundi yanayotokana na seva hayachukuliwa.",
   hospitalityPrepBatchReportEmpty: "Hakuna makundi ya maandalizi yaliyorekodiwa katika kipindi hiki.",
   hospitalityPrepBatchReportBatches: "Makundi",
   hospitalityPrepBatchReportPortions: "Sehemu zilizoandaliwa",
+  hospitalityPrepBatchReportActualPortions: "Sehemu halisi (zilizorekodiwa)",
   hospitalityPrepBatchReportExpected: "Inayotarajiwa",
   hospitalityPrepBatchReportActual: "Halisi",
   hospitalityPrepBatchReportYieldVariance: "Tofauti ya mavuno",
   hospitalityPrepBatchReportCostPerPlate: "Gharama kamili ya kundi / sahani (COGS ya mauzo)",
   hospitalityPrepBatchReportWasted: "Zilizoharibiwa",
   hospitalityPrepBatchReportCurrentStock: "Hisa iliyobaki sasa",
+  hospitalityPrepBatchReportUsage: "Matumizi ya kundi yaliyorekodiwa (maisha yote)",
+  hospitalityPrepBatchReportSoldNet: "Zilizouzwa (net)",
+  hospitalityPrepBatchReportSoldGross: "Zilizouzwa zote (gross)",
+  hospitalityPrepBatchReportReturned: "Zilizorejeshwa",
+  hospitalityPrepBatchReportCancelled: "Zilizoghairiwa",
+  hospitalityPrepBatchReportSalesRevenue: "Mapato ya mauzo yaliyorekodiwa (yaliyotengwa)",
+  hospitalityPrepBatchReportSalesCogs: "COGS ya mauzo iliyorekodiwa (iliyotengwa)",
+  hospitalityPrepBatchReportUnknown: "Haijulikani",
+  hospitalityPrepBatchReportReturnsUnavailable:
+    "Rekodi za marejesho hazikutolewa — mauzo yanaonyeshwa kabla ya marejesho.",
+  hospitalityPrepBatchReportReconciliationLine: "Upatanisho wa kundi",
+  hospitalityPrepBatchReportReconciled: "Imepatanishwa",
+  hospitalityPrepBatchReportUnreconciled: "Haijapatanishwa",
+  hospitalityPrepBatchReportReconciliationSummary:
+    "{reconciled} zimepatanishwa · {unreconciled} hazijapatanishwa · {unknown} hazijulikani",
+  hospitalityPrepBatchReportScopeNote:
+    "Inatokana na rekodi za makundi ya maandalizi za kifaa hiki na mauzo yaliyokamilika. Zilizouzwa, zilizorejeshwa, zilizoharibiwa na zilizoghairiwa ni za maisha yote ya makundi haya; zilizobaki ni hisa ya sasa. Matukio yanayokosekana huonyeshwa kama hayajulikani, si sifuri.",
+  hospitalityPrepBatchReportSalesNote:
+    "Mapato na COGS hutengwa kutoka picha za mistari ya mauzo yaliyokamilika, baada ya kutoa marejesho yaliyorekodiwa, kwa sehemu zilizotumika kutoka makundi haya.",
+  hospitalityPrepBatchReportSnapshotMissing: "picha ya mauzo haipo",
+  hospitalityPrepBatchReportSnapshotPartial: "picha ya mauzo kwa sehemu",
+  hospitalityPrepBatchReportMissingAllocation:
+    "Mistari {count} iliyokamilika haina ugawaji wa kundi; sehemu zilizouzwa zinaweza kuwa hazijakamilika.",
+  hospitalityPrepBatchReportUnallocatedSales:
+    "UGX {revenue} mapato / UGX {cogs} COGS kwenye mistari isiyo na ugawaji haikuweza kuunganishwa na kundi.",
+  hospitalityPrepBatchReportMissingSnapshot:
+    "Mistari {count} iliyouzwa haina picha ya mauzo inayotumika; mapato na COGS hazijakamilika.",
+  hospitalityPrepBatchReportPartialSnapshot:
+    "Mistari {count} iliyouzwa inatumia picha ya mauzo kwa sehemu.",
+  hospitalityPrepBatchReportMissingReturnCogs:
+    "Marejesho {count} hayana COGS iliyorekodiwa; COGS ya net haijakamilika.",
+  hospitalityPrepBatchReportUnattributedReturns:
+    "Marejesho {count} hayakuweza kuunganishwa na mstari wa mauzo; mapato/COGS ya net yanaweza kuwa yamezidishwa.",
+  hospitalityPrepBatchReportCancelledUnknown:
+    "Idadi ya sehemu zilizoghairiwa haijulikani kwa makundi {count}.",
   hospitalityPrepBatchReportYieldUnknown:
     "Makundi {count} hayana mavuno halisi yaliyorekodiwa; tofauti haijaonyeshwa.",
   hospitalityPrepBatchReportLegacy:

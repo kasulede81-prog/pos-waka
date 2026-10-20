@@ -223,6 +223,20 @@ export function HospitalityReportsSection({
   const hasDemandGaps =
     demand.missingIngredients.length > 0 || demand.noRecipeDishes.length > 0;
   const prepBatches = hospitalityReports.prepBatches;
+  const prepReturnsIncluded = prepBatches.returnsEvidence === "included";
+  // A missing snapshot with no known subtotal is unknown; a known subtotal from
+  // the other lines is still shown and flagged as incomplete by the row suffix.
+  const prepRowMoney = (
+    row: (typeof prepBatches.rows)[number],
+    net: number | null,
+    gross: number,
+  ) => {
+    const value = prepReturnsIncluded ? net : gross;
+    if (row.salesSnapshotEvidence === "missing" && (value ?? 0) <= 0) {
+      return t(lang, "hospitalityPrepBatchReportUnknown");
+    }
+    return `UGX ${(value ?? 0).toLocaleString()}`;
+  };
   const prepYieldUnknownCount = prepBatches.batchCount - prepBatches.yieldMeasuredBatchCount;
   const cancellations = hospitalityReports.cancellations;
   const tableService = hospitalityReports.tableService;
@@ -410,6 +424,13 @@ export function HospitalityReportsSection({
                   value: formatIngredientDemandQty(prepBatches.portionsPrepared),
                 },
                 {
+                  label: t(lang, "hospitalityPrepBatchReportActualPortions"),
+                  value:
+                    prepBatches.actualPortionBatchCount > 0
+                      ? formatIngredientDemandQty(prepBatches.recordedActualPortions)
+                      : t(lang, "hospitalityPrepBatchReportUnknown"),
+                },
+                {
                   label: t(lang, "hospitalityPrepBatchReportYieldVariance"),
                   value:
                     prepBatches.yieldMeasuredBatchCount > 0
@@ -461,6 +482,77 @@ export function HospitalityReportsSection({
                 </article>
               ))}
             </div>
+            <p className="mt-3 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+              {t(lang, "hospitalityPrepBatchReportUsage")}
+            </p>
+            <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                {
+                  label: t(lang, "hospitalityPrepBatchReportSoldNet"),
+                  value:
+                    prepBatches.soldPortionsNet == null
+                      ? t(lang, "hospitalityPrepBatchReportUnknown")
+                      : formatIngredientDemandQty(prepBatches.soldPortionsNet),
+                },
+                {
+                  label: t(lang, "hospitalityPrepBatchReportReturned"),
+                  value:
+                    prepBatches.returnedPortions == null
+                      ? t(lang, "hospitalityPrepBatchReportUnknown")
+                      : formatIngredientDemandQty(prepBatches.returnedPortions),
+                },
+                {
+                  label: t(lang, "hospitalityPrepBatchReportCancelled"),
+                  value:
+                    prepBatches.cancelledPortions != null
+                      ? formatIngredientDemandQty(prepBatches.cancelledPortions)
+                      : prepBatches.cancelledPortionsUnknownBatchCount > 0
+                        ? `${formatIngredientDemandQty(prepBatches.cancelledPortionsKnown)} + ?`
+                        : t(lang, "hospitalityPrepBatchReportUnknown"),
+                },
+                {
+                  label: t(lang, "hospitalityPrepBatchReportSalesRevenue"),
+                  value:
+                    prepBatches.salesRevenueUgx == null
+                      ? `UGX ${prepBatches.grossSalesRevenueUgx.toLocaleString()}`
+                      : `UGX ${prepBatches.salesRevenueUgx.toLocaleString()}`,
+                },
+                {
+                  label: t(lang, "hospitalityPrepBatchReportSalesCogs"),
+                  value:
+                    prepBatches.salesCogsUgx == null
+                      ? `UGX ${prepBatches.grossSalesCogsUgx.toLocaleString()}`
+                      : `UGX ${prepBatches.salesCogsUgx.toLocaleString()}`,
+                },
+              ].map((tile) => (
+                <article key={tile.label} className="rounded-xl bg-muted/60 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                    {tile.label}
+                  </p>
+                  <p className="mt-0.5 text-lg font-black text-foreground">{tile.value}</p>
+                </article>
+              ))}
+            </div>
+            <p
+              className={`mt-2 text-xs font-semibold ${
+                prepBatches.unreconciledBatchCount > 0 || prepBatches.unknownReconciliationBatchCount > 0
+                  ? "text-amber-800"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {t(lang, "hospitalityPrepBatchReportReconciliationLine")}:{" "}
+              {tTemplate(lang, "hospitalityPrepBatchReportReconciliationSummary", {
+                reconciled: String(prepBatches.reconciledBatchCount),
+                unreconciled: String(prepBatches.unreconciledBatchCount),
+                unknown: String(prepBatches.unknownReconciliationBatchCount),
+              })}
+            </p>
+            <p className="mt-1 text-[10px] font-medium text-muted-foreground">
+              {t(lang, "hospitalityPrepBatchReportScopeNote")}
+            </p>
+            <p className="mt-1 text-[10px] font-medium text-muted-foreground">
+              {t(lang, "hospitalityPrepBatchReportSalesNote")}
+            </p>
             <ul className="mt-3 space-y-2">
               {prepBatches.rows.map((row) => (
                 <li
@@ -502,6 +594,49 @@ export function HospitalityReportsSection({
                     {row.totalBatchCostUgx.toLocaleString()}
                   </p>
                   <p className="mt-0.5 text-muted-foreground">
+                    {t(lang, "hospitalityPrepBatchReportSoldNet")}:{" "}
+                    {row.soldPortionsNet == null
+                      ? t(lang, "hospitalityPrepBatchReportUnknown")
+                      : formatIngredientDemandQty(row.soldPortionsNet)}{" "}
+                    · {t(lang, "hospitalityPrepBatchReportSoldGross")}:{" "}
+                    {formatIngredientDemandQty(row.soldPortionsGross)} ·{" "}
+                    {t(lang, "hospitalityPrepBatchReportReturned")}:{" "}
+                    {row.returnedPortions == null
+                      ? t(lang, "hospitalityPrepBatchReportUnknown")
+                      : formatIngredientDemandQty(row.returnedPortions)}{" "}
+                    · {t(lang, "hospitalityPrepBatchReportCancelled")}:{" "}
+                    {row.cancelledPortions == null
+                      ? t(lang, "hospitalityPrepBatchReportUnknown")
+                      : formatIngredientDemandQty(row.cancelledPortions)}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {t(lang, "hospitalityPrepBatchReportSalesRevenue")}:{" "}
+                    {prepRowMoney(row, row.salesRevenueUgx, row.grossSalesRevenueUgx)} ·{" "}
+                    {t(lang, "hospitalityPrepBatchReportSalesCogs")}:{" "}
+                    {prepRowMoney(row, row.salesCogsUgx, row.grossSalesCogsUgx)}
+                    {row.salesSnapshotEvidence === "missing"
+                      ? ` · ${t(lang, "hospitalityPrepBatchReportSnapshotMissing")}`
+                      : row.salesSnapshotEvidence === "partial"
+                        ? ` · ${t(lang, "hospitalityPrepBatchReportSnapshotPartial")}`
+                        : ""}
+                  </p>
+                  <p
+                    className={`mt-0.5 font-semibold ${
+                      row.reconciliation === "reconciled"
+                        ? "text-muted-foreground"
+                        : "text-amber-800"
+                    }`}
+                  >
+                    {t(lang, "hospitalityPrepBatchReportReconciliationLine")}:{" "}
+                    {row.reconciliation === "reconciled"
+                      ? t(lang, "hospitalityPrepBatchReportReconciled")
+                      : row.reconciliation === "unreconciled"
+                        ? `${t(lang, "hospitalityPrepBatchReportUnreconciled")} (${
+                            (row.reconciliationDeltaPortions ?? 0) > 0 ? "+" : ""
+                          }${formatIngredientDemandQty(row.reconciliationDeltaPortions ?? 0)})`
+                        : t(lang, "hospitalityPrepBatchReportUnknown")}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
                     {t(lang, "hospitalityPrepBatchReportWasted")}:{" "}
                     {formatIngredientDemandQty(row.wastedPortions)} ·{" "}
                     {t(lang, "menuPrepWasteValue")}: UGX {row.wasteValueUgx.toLocaleString()} ·{" "}
@@ -514,6 +649,62 @@ export function HospitalityReportsSection({
             <p className="mt-2 text-[10px] font-medium text-muted-foreground">
               {t(lang, "menuPrepBatchCostBasisNote")}
             </p>
+            {!prepReturnsIncluded ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                {t(lang, "hospitalityPrepBatchReportReturnsUnavailable")}
+              </p>
+            ) : null}
+            {prepBatches.missingAllocationLineCount > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                {tTemplate(lang, "hospitalityPrepBatchReportMissingAllocation", {
+                  count: String(prepBatches.missingAllocationLineCount),
+                })}
+              </p>
+            ) : null}
+            {prepBatches.unallocatedSalesRevenueUgx > 0 ||
+            prepBatches.unallocatedSalesCogsUgx > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                {tTemplate(lang, "hospitalityPrepBatchReportUnallocatedSales", {
+                  revenue: prepBatches.unallocatedSalesRevenueUgx.toLocaleString(),
+                  cogs: prepBatches.unallocatedSalesCogsUgx.toLocaleString(),
+                })}
+              </p>
+            ) : null}
+            {prepBatches.missingFinancialSnapshotLineCount > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                {tTemplate(lang, "hospitalityPrepBatchReportMissingSnapshot", {
+                  count: String(prepBatches.missingFinancialSnapshotLineCount),
+                })}
+              </p>
+            ) : null}
+            {prepBatches.partialFinancialSnapshotLineCount > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                {tTemplate(lang, "hospitalityPrepBatchReportPartialSnapshot", {
+                  count: String(prepBatches.partialFinancialSnapshotLineCount),
+                })}
+              </p>
+            ) : null}
+            {prepBatches.missingReturnCogsCount > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                {tTemplate(lang, "hospitalityPrepBatchReportMissingReturnCogs", {
+                  count: String(prepBatches.missingReturnCogsCount),
+                })}
+              </p>
+            ) : null}
+            {prepBatches.unattributedReturnCount > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                {tTemplate(lang, "hospitalityPrepBatchReportUnattributedReturns", {
+                  count: String(prepBatches.unattributedReturnCount),
+                })}
+              </p>
+            ) : null}
+            {prepBatches.cancelledPortionsUnknownBatchCount > 0 ? (
+              <p className="mt-1 text-xs font-semibold text-amber-800">
+                {tTemplate(lang, "hospitalityPrepBatchReportCancelledUnknown", {
+                  count: String(prepBatches.cancelledPortionsUnknownBatchCount),
+                })}
+              </p>
+            ) : null}
           </>
         )}
         {prepBatches.rows.length > 0 && prepYieldUnknownCount > 0 ? (

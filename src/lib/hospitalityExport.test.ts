@@ -138,6 +138,21 @@ const sample: HospitalityReportSummary = {
         remainingPortions: 14,
         remainingValueUgx: 56_462,
         legacyCost: false,
+        soldPortionsGross: 2,
+        returnedPortions: 0,
+        soldPortionsNet: 2,
+        grossSalesRevenueUgx: 10_000,
+        grossSalesCogsUgx: 4_000,
+        returnRefundUgx: 0,
+        returnCogsUgx: 0,
+        salesRevenueUgx: 10_000,
+        salesCogsUgx: 4_000,
+        salesSnapshotEvidence: "complete",
+        allocationEvidenceIncomplete: false,
+        cancelledPortions: 0,
+        cancelledEvidence: "batch_status_only",
+        reconciliationDeltaPortions: 0,
+        reconciliation: "reconciled",
       },
       {
         batchId: "batch-legacy",
@@ -161,6 +176,21 @@ const sample: HospitalityReportSummary = {
         remainingPortions: 0,
         remainingValueUgx: 0,
         legacyCost: true,
+        soldPortionsGross: 20,
+        returnedPortions: 0,
+        soldPortionsNet: 20,
+        grossSalesRevenueUgx: 100_000,
+        grossSalesCogsUgx: 55_600,
+        returnRefundUgx: 0,
+        returnCogsUgx: 0,
+        salesRevenueUgx: 100_000,
+        salesCogsUgx: 55_600,
+        salesSnapshotEvidence: "complete",
+        allocationEvidenceIncomplete: false,
+        cancelledPortions: 0,
+        cancelledEvidence: "batch_status_only",
+        reconciliationDeltaPortions: 0,
+        reconciliation: "reconciled",
       },
     ],
     batchCount: 2,
@@ -169,6 +199,8 @@ const sample: HospitalityReportSummary = {
     expectedPortions: 20,
     actualPortions: 18,
     yieldVariancePortions: -2,
+    recordedActualPortions: 18,
+    actualPortionBatchCount: 1,
     totalBatchCostUgx: 128_200,
     wastedPortions: 2,
     wasteValueUgx: 8_066,
@@ -178,6 +210,36 @@ const sample: HospitalityReportSummary = {
     undatedBatchCount: 1,
     outsideRangeBatchCount: 2,
     historyScope: "persisted_batches_only",
+    soldPortionsGross: 22,
+    returnedPortions: 0,
+    soldPortionsNet: 22,
+    grossSalesRevenueUgx: 110_000,
+    grossSalesCogsUgx: 59_600,
+    returnRefundUgx: 0,
+    returnCogsUgx: 0,
+    salesRevenueUgx: 110_000,
+    salesCogsUgx: 59_600,
+    cancelledPortions: 0,
+    cancelledPortionsKnown: 0,
+    cancelledPortionsUnknownBatchCount: 0,
+    reconciledBatchCount: 2,
+    unreconciledBatchCount: 0,
+    unknownReconciliationBatchCount: 0,
+    missingAllocationLineCount: 0,
+    missingAllocationQuantity: 0,
+    inconsistentAllocationLineCount: 0,
+    unallocatedPortions: 0,
+    unallocatedSalesRevenueUgx: 0,
+    unallocatedSalesCogsUgx: 0,
+    missingFinancialSnapshotLineCount: 0,
+    partialFinancialSnapshotLineCount: 0,
+    missingReturnCogsCount: 0,
+    unattributedReturnCount: 0,
+    returnsEvidence: "included",
+    auditEvidence: "included",
+    usageScope: "batch_lifetime",
+    batchSource: "device_product_records",
+    salesFinancialsBasis: "allocated_from_sale_line_snapshots",
   },
   tableService: {
     completedCount: 2,
@@ -275,8 +337,9 @@ describe("hospitalityExport", () => {
   it("builds the prep batch export block with production and current stock separated", () => {
     const block = buildHospitalityPrepBatchExportBlock("en", sample);
     const text = block.lines.join("\n");
-    expect(block.title).toBe("Prep batch production");
+    expect(block.title).toBe("Prep batch report");
     expect(text).toContain("Yield variance: -2");
+    expect(text).toContain("Actual portions (recorded): 18");
     expect(text).toContain("Current remaining stock");
     expect(text).toContain("legacy");
     expect(text).toContain("have no readable prepared date");
@@ -287,6 +350,13 @@ describe("hospitalityExport", () => {
     expect(text).toContain("Full batch cost (ingredients + extras): UGX 72,600");
     expect(text).toContain("Full batch cost / plate (sale COGS): UGX 4,033");
     expect(text).toContain("sale COGS and stock value use it");
+    // Aggregate lifecycle and recorded-sale figures are exported separately.
+    expect(text).toContain("Sold (net): 22 · Gross sold: 22 · Returned: 0 · Cancelled: 0");
+    expect(text).toContain("Recorded sales revenue (allocated): UGX 110,000");
+    expect(text).toContain("Recorded sales COGS (allocated): UGX 59,600");
+    expect(text).toContain("Batch reconciliation: 2 reconciled · 0 unreconciled · 0 unknown");
+    expect(text).toContain("Sold (net): 2 · Gross sold: 2 · Returned: 0 · Cancelled: 0");
+    expect(text).toContain("Batch reconciliation: Reconciled");
   });
 
   it("does not show expected yield alone when actual yield is unrecorded", () => {

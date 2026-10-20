@@ -59,6 +59,13 @@ export function buildHospitalityPrepBatchExportBlock(
       )}: UGX ${batches.totalBatchCostUgx.toLocaleString()}`,
     );
     lines.push(t(lang, "menuPrepBatchCostBasisNote"));
+    lines.push(
+      `${t(lang, "hospitalityPrepBatchReportActualPortions")}: ${
+        batches.actualPortionBatchCount > 0
+          ? formatIngredientDemandQty(batches.recordedActualPortions)
+          : t(lang, "hospitalityPrepBatchReportUnknown")
+      }`,
+    );
     if (batches.yieldMeasuredBatchCount > 0) {
       lines.push(
         `${t(lang, "hospitalityPrepBatchReportYieldVariance")}: ${
@@ -86,6 +93,53 @@ export function buildHospitalityPrepBatchExportBlock(
         "menuPrepRemainingValue",
       )}: UGX ${batches.remainingValueUgx.toLocaleString()}`,
     );
+
+    const returnsIncluded = batches.returnsEvidence === "included";
+    const soldNet =
+      batches.soldPortionsNet == null
+        ? t(lang, "hospitalityPrepBatchReportUnknown")
+        : formatIngredientDemandQty(batches.soldPortionsNet);
+    const returned =
+      batches.returnedPortions == null
+        ? t(lang, "hospitalityPrepBatchReportUnknown")
+        : formatIngredientDemandQty(batches.returnedPortions);
+    const cancelled =
+      batches.cancelledPortions == null
+        ? t(lang, "hospitalityPrepBatchReportUnknown")
+        : formatIngredientDemandQty(batches.cancelledPortions);
+    lines.push(
+      `${t(lang, "hospitalityPrepBatchReportSoldNet")}: ${soldNet} · ${t(
+        lang,
+        "hospitalityPrepBatchReportSoldGross",
+      )}: ${formatIngredientDemandQty(batches.soldPortionsGross)} · ${t(
+        lang,
+        "hospitalityPrepBatchReportReturned",
+      )}: ${returned} · ${t(lang, "hospitalityPrepBatchReportCancelled")}: ${cancelled}`,
+    );
+    const revenue = returnsIncluded ? batches.salesRevenueUgx : batches.grossSalesRevenueUgx;
+    const cogs = returnsIncluded ? batches.salesCogsUgx : batches.grossSalesCogsUgx;
+    lines.push(
+      `${t(lang, "hospitalityPrepBatchReportSalesRevenue")}: UGX ${(revenue ?? 0).toLocaleString()} · ${t(
+        lang,
+        "hospitalityPrepBatchReportSalesCogs",
+      )}: UGX ${(cogs ?? 0).toLocaleString()}`,
+    );
+    if (!returnsIncluded) {
+      lines.push(t(lang, "hospitalityPrepBatchReportReturnsUnavailable"));
+    }
+    lines.push(
+      `${t(lang, "hospitalityPrepBatchReportReconciliationLine")}: ${tTemplate(
+        lang,
+        "hospitalityPrepBatchReportReconciliationSummary",
+        {
+          reconciled: String(batches.reconciledBatchCount),
+          unreconciled: String(batches.unreconciledBatchCount),
+          unknown: String(batches.unknownReconciliationBatchCount),
+        },
+      )}`,
+    );
+    lines.push(t(lang, "hospitalityPrepBatchReportScopeNote"));
+    lines.push(t(lang, "hospitalityPrepBatchReportSalesNote"));
 
     for (const row of batches.rows) {
       lines.push(`  ${row.productName} — ${row.preparedAt.slice(0, 10)} — ${row.status}`);
@@ -138,6 +192,61 @@ export function buildHospitalityPrepBatchExportBlock(
           "menuPrepRemainingValue",
         )}: UGX ${row.remainingValueUgx.toLocaleString()}`,
       );
+      const rowSoldNet =
+        row.soldPortionsNet == null
+          ? t(lang, "hospitalityPrepBatchReportUnknown")
+          : formatIngredientDemandQty(row.soldPortionsNet);
+      const rowReturned =
+        row.returnedPortions == null
+          ? t(lang, "hospitalityPrepBatchReportUnknown")
+          : formatIngredientDemandQty(row.returnedPortions);
+      const rowCancelled =
+        row.cancelledPortions == null
+          ? t(lang, "hospitalityPrepBatchReportUnknown")
+          : formatIngredientDemandQty(row.cancelledPortions);
+      lines.push(
+        `    ${t(lang, "hospitalityPrepBatchReportSoldNet")}: ${rowSoldNet} · ${t(
+          lang,
+          "hospitalityPrepBatchReportSoldGross",
+        )}: ${formatIngredientDemandQty(row.soldPortionsGross)} · ${t(
+          lang,
+          "hospitalityPrepBatchReportReturned",
+        )}: ${rowReturned} · ${t(lang, "hospitalityPrepBatchReportCancelled")}: ${rowCancelled}`,
+      );
+      const rowSnapshot = row.salesSnapshotEvidence;
+      const rowRevenue = returnsIncluded ? row.salesRevenueUgx : row.grossSalesRevenueUgx;
+      const rowCogs = returnsIncluded ? row.salesCogsUgx : row.grossSalesCogsUgx;
+      const snapshotSuffix =
+        rowSnapshot === "missing"
+          ? ` · ${t(lang, "hospitalityPrepBatchReportSnapshotMissing")}`
+          : rowSnapshot === "partial"
+            ? ` · ${t(lang, "hospitalityPrepBatchReportSnapshotPartial")}`
+            : "";
+      const rowRevenueText =
+        rowSnapshot === "missing" && (rowRevenue ?? 0) <= 0
+          ? t(lang, "hospitalityPrepBatchReportUnknown")
+          : `UGX ${(rowRevenue ?? 0).toLocaleString()}`;
+      const rowCogsText =
+        rowSnapshot === "missing" && (rowCogs ?? 0) <= 0
+          ? t(lang, "hospitalityPrepBatchReportUnknown")
+          : `UGX ${(rowCogs ?? 0).toLocaleString()}`;
+      lines.push(
+        `    ${t(lang, "hospitalityPrepBatchReportSalesRevenue")}: ${rowRevenueText} · ${t(
+          lang,
+          "hospitalityPrepBatchReportSalesCogs",
+        )}: ${rowCogsText}${snapshotSuffix}`,
+      );
+      const rowReconciliation =
+        row.reconciliation === "reconciled"
+          ? t(lang, "hospitalityPrepBatchReportReconciled")
+          : row.reconciliation === "unreconciled"
+            ? `${t(lang, "hospitalityPrepBatchReportUnreconciled")} (${
+                (row.reconciliationDeltaPortions ?? 0) > 0 ? "+" : ""
+              }${formatIngredientDemandQty(row.reconciliationDeltaPortions ?? 0)})`
+            : t(lang, "hospitalityPrepBatchReportUnknown");
+      lines.push(
+        `    ${t(lang, "hospitalityPrepBatchReportReconciliationLine")}: ${rowReconciliation}`,
+      );
     }
   }
 
@@ -167,6 +276,56 @@ export function buildHospitalityPrepBatchExportBlock(
     lines.push(
       tTemplate(lang, "hospitalityPrepBatchReportOutsideRange", {
         count: String(batches.outsideRangeBatchCount),
+      }),
+    );
+  }
+  if (batches.missingAllocationLineCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportMissingAllocation", {
+        count: String(batches.missingAllocationLineCount),
+      }),
+    );
+  }
+  if (batches.unallocatedSalesRevenueUgx > 0 || batches.unallocatedSalesCogsUgx > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportUnallocatedSales", {
+        revenue: batches.unallocatedSalesRevenueUgx.toLocaleString(),
+        cogs: batches.unallocatedSalesCogsUgx.toLocaleString(),
+      }),
+    );
+  }
+  if (batches.missingFinancialSnapshotLineCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportMissingSnapshot", {
+        count: String(batches.missingFinancialSnapshotLineCount),
+      }),
+    );
+  }
+  if (batches.partialFinancialSnapshotLineCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportPartialSnapshot", {
+        count: String(batches.partialFinancialSnapshotLineCount),
+      }),
+    );
+  }
+  if (batches.missingReturnCogsCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportMissingReturnCogs", {
+        count: String(batches.missingReturnCogsCount),
+      }),
+    );
+  }
+  if (batches.unattributedReturnCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportUnattributedReturns", {
+        count: String(batches.unattributedReturnCount),
+      }),
+    );
+  }
+  if (batches.cancelledPortionsUnknownBatchCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportCancelledUnknown", {
+        count: String(batches.cancelledPortionsUnknownBatchCount),
       }),
     );
   }

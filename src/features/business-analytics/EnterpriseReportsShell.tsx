@@ -65,6 +65,8 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const dayCloses = useDayClosesForAuthority();
   const preferences = usePosStore((s) => s.preferences);
   const auditLogs = usePosStore((s) => s.auditLogs);
+  const archivedAuditLogs = usePosStore((s) => s.archivedAuditLogs);
+  const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
   const stockMovements = usePosStore((s) => s.stockMovements);
   const voidRecords = usePosStore((s) => s.voidRecords);
   const archivedVoidRecords = usePosStore((s) => s.archivedVoidRecords);
@@ -170,8 +172,23 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       staffAccounts: preferences.staffAccounts,
       voidRecords,
       archivedVoidRecords,
+      // Batch usage is lifetime, so archived returns are relevant even when the
+      // report's include-archived toggle is off. The report dedupes by return id.
+      returns: [...returnRecords, ...(archivedReturnRecords ?? [])],
+      auditLogs: [...auditLogs, ...(archivedAuditLogs ?? [])],
     });
-  }, [preferences, bounds, sales, products, voidRecords, archivedVoidRecords]);
+  }, [
+    preferences,
+    bounds,
+    sales,
+    products,
+    voidRecords,
+    archivedVoidRecords,
+    returnRecords,
+    archivedReturnRecords,
+    auditLogs,
+    archivedAuditLogs,
+  ]);
 
   const hospitalityOpenBills = useMemo(() => {
     if (!hospitalityReports || !preferences.hospitalityFloor) return null;
