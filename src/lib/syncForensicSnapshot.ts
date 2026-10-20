@@ -34,6 +34,7 @@ export const KNOWN_SYNC_OPERATION_KINDS = [
   "pending_transfer_dispatch",
   "pending_transfer_receive",
   "pending_hospitality",
+  "pending_prep_batches",
   "pending_catalog",
   "pending_shop_policy",
   "pending_staff",
@@ -216,6 +217,7 @@ export function classifySyncForensicPayload(
   if (kind === "pending_shop_policy") return "shop_policy";
   if (kind === "pending_catalog") return "catalog";
   if (kind === "pending_hospitality") return "hospitality";
+  if (kind === "pending_prep_batches") return "hospitality";
   if (kind === "pending_shifts") return "shift";
   if (kind === "pending_day_closes") return "day_close";
   if (kind === "pending_day_drawer_opens") return "day_drawer_open";

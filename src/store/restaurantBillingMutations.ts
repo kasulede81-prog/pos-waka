@@ -32,6 +32,7 @@ import { canRoleBypassDiscountApproval, discountPercentOfSubtotal } from "../lib
 import { inventoryMovementNamespace } from "../lib/shopSyncContext";
 import { planWholeBillVoid } from "../lib/voidCompletedSale";
 import { r3SaleVoidStockPayload } from "../lib/stockDurableSync";
+import type { PrepBatchSyncPayload } from "../lib/prepBatchSync";
 import { hasIngredientProvenance } from "../lib/recipeEngine";
 import { shiftOwnerUserId } from "../lib/sessionActor";
 import { requireActiveShift } from "../lib/shiftEnforcement";
@@ -50,7 +51,11 @@ type Deps = {
   ) => { ok: false; errorKey: string } | null;
   denyIfBusinessDateLocked: (dateKey: string, action: string) => { ok: false; errorKey: string } | null;
   finalizeDraftSale: PosState["finalizeDraftSale"];
-  queueRemote: (kind: import("../types").SyncOperationKind, payload: unknown) => void;
+  queueRemote: (
+    kind: import("../types").SyncOperationKind,
+    payload: unknown,
+    opts?: { id?: string },
+  ) => void;
   queueHospitalityChange: (input: { sessionIds?: string[] }) => void;
   flushPendingPersist: () => void;
   onTableBillFinalized?: (input: {
@@ -594,6 +599,23 @@ export function createRestaurantBillingStoreActions(deps: Deps) {
             recipeLine: hasIngredientProvenance(planned.plan.sale.lines[voidRec.lineIndex] ?? {}),
           }),
         );
+        // Batch portions are reversed by the server-authoritative batch event; the
+        // existing void stock RPC remains the sole dish/ingredient stock path.
+        const voidedLine = planned.plan.sale.lines[voidRec.lineIndex];
+        if (voidedLine?.id && Array.isArray(voidedLine.prepAllocation) && voidedLine.prepAllocation.length > 0) {
+          void queueRemote(
+            "pending_prep_batches",
+            {
+              kind: "sale_void",
+              eventId: voidRec.id,
+              saleId: sale.id,
+              saleLineId: voidedLine.id,
+              quantity: voidRec.quantity,
+              createdAt: at,
+            } satisfies PrepBatchSyncPayload,
+            { id: `prep-void:${voidRec.id}` },
+          );
+        }
       }
       if (sale.customerId) void queueRemote("customer", { id: sale.customerId });
       queueHospitalityChange({ sessionIds: [input.sessionId] });

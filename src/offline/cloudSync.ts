@@ -2871,6 +2871,12 @@ async function processCloudSyncOperationLegacy(
       const { processHospitalitySyncOperation } = await import("./hospitalityCloudSync");
       return processHospitalitySyncOperation(payload);
     }
+    case "pending_prep_batches": {
+      const { processPrepBatchSyncOperation } = await import("./prepBatchCloudSync");
+      const prepPayload = payload as import("../lib/prepBatchSync").PrepBatchSyncPayload;
+      if (!prepPayload?.kind || !prepPayload?.eventId) return true;
+      return processPrepBatchSyncOperation(prepPayload, ctx);
+    }
     case "pending_catalog": {
       const { processCatalogSyncOperation } = await import("../lib/catalogCloudSync");
       return processCatalogSyncOperation(ctx);

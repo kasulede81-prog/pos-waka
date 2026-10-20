@@ -335,6 +335,7 @@ import {
   saleTimeIngredientRequirements,
   shouldDeductFinishedProductStock,
 } from "../lib/recipeEngine";
+import type { PrepBatchSyncPayload } from "../lib/prepBatchSync";
 import { buildArchiveForensicSummary } from "../lib/archiveForensics";
 import { remainingVoidableLine, returnedQuantityOnLine, validateReturnAgainstSale } from "../lib/returnLimits";
 import { returnRestocksInventory, validateReturnAuthorization } from "../lib/returnPolicy";
@@ -6003,6 +6004,23 @@ export const usePosStore = create<PosState>((set, get) => {
     void writeTodayKpiSnapshot(bumpTodayKpiSnapshot(state.todayKpiSnapshot, sale)).catch(() => undefined);
 
     void queueRemote("pending_sales", { saleId: sale.id });
+    // Server-authoritative batch consumption. This changes batch portions only; the
+    // existing sale stock application above remains the sole dish/ingredient stock path.
+    for (const line of sale.lines) {
+      const lineId = line.id;
+      if (!lineId || !Array.isArray(line.prepAllocation) || line.prepAllocation.length === 0) continue;
+      void queueRemote(
+        "pending_prep_batches",
+        {
+          kind: "sale_consume",
+          eventId: lineId,
+          saleId: sale.id,
+          saleLineId: lineId,
+          createdAt: finalizeAt,
+        } satisfies PrepBatchSyncPayload,
+        { id: `prep-sale:${sale.id}:${lineId}` },
+      );
+    }
     if (closedSessionId) queueHospitalityChange({ sessionIds: [closedSessionId] });
     for (const entry of auditEntries) {
       void queueRemote("audit_log", { entry });
@@ -6313,6 +6331,22 @@ export const usePosStore = create<PosState>((set, get) => {
       },
       { id: saleAdjustmentQueueId(voidRec.id) },
     );
+    // Batch portions are reversed by the server-authoritative batch event; the
+    // existing void stock RPC remains the sole dish/ingredient stock path.
+    if (line.id && Array.isArray(line.prepAllocation) && line.prepAllocation.length > 0) {
+      void queueRemote(
+        "pending_prep_batches",
+        {
+          kind: "sale_void",
+          eventId: voidRec.id,
+          saleId,
+          saleLineId: line.id,
+          quantity: voidQty,
+          createdAt: at,
+        } satisfies PrepBatchSyncPayload,
+        { id: `prep-void:${voidRec.id}` },
+      );
+    }
     if (sale.customerId && debtReduce > 0) {
       void queueRemote("customer", { id: sale.customerId });
     }
@@ -6632,6 +6666,28 @@ export const usePosStore = create<PosState>((set, get) => {
       },
       { id: saleAdjustmentQueueId(returnRec.id) },
     );
+    // Server-authoritative batch portion credit; the existing return stock path above
+    // remains the sole dish/ingredient stock path.
+    if (
+      restock &&
+      saleId &&
+      saleLine?.id &&
+      Array.isArray(saleLine.prepAllocation) &&
+      saleLine.prepAllocation.length > 0
+    ) {
+      void queueRemote(
+        "pending_prep_batches",
+        {
+          kind: "sale_return",
+          eventId: returnRec.id,
+          saleId,
+          saleLineId: saleLine.id,
+          quantity: qty,
+          createdAt: at,
+        } satisfies PrepBatchSyncPayload,
+        { id: `prep-return:${returnRec.id}` },
+      );
+    }
     if (linkedCustomerId && debtReduce > 0) {
       void queueRemote("customer", { id: linkedCustomerId });
     }
@@ -7508,6 +7564,28 @@ export const usePosStore = create<PosState>((set, get) => {
         baseStockOnHand: baseBefore?.stockOnHand,
       }),
     );
+    // Authoritative batch record on the server. Creation stock stays on the existing
+    // pending_stock_updates path above; this event carries only batch state and the
+    // frozen full-batch requirements used by a later server-side cancellation.
+    void queueRemote(
+      "pending_prep_batches",
+      {
+        kind: "create",
+        eventId: batchId,
+        batchId,
+        productId: p.id,
+        batch,
+        ingredientRequirements: [...requirements.entries()]
+          .filter(([, quantity]) => quantity > 0)
+          .map(([productId, quantityBase]) => ({
+            productId,
+            quantityBase: Math.round(quantityBase * 10000) / 10000,
+          })),
+        ingredientBasisPortions: preparedQty,
+        createdAt: at,
+      } satisfies PrepBatchSyncPayload,
+      { id: `prep-create:${batchId}` },
+    );
     // Batch metadata lives inside products.metadata.menu. The stock channel does
     // not carry it, so queue the existing per-product catalog upsert as well.
     void queueRemote("product", { id: p.id, catalogOnly: true });
@@ -7596,7 +7674,6 @@ export const usePosStore = create<PosState>((set, get) => {
       supplierId: null,
     };
 
-    const before = product.stockOnHand;
     set((s) => ({
       products: s.products.map((x) =>
         x.id === product.id
@@ -7612,16 +7689,22 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(s, [movement]),
     }));
 
+    // The server clamps waste to its authoritative remaining/stock and applies the
+    // dish stock itself with this durable adjustment id. Do not also queue a
+    // pending_stock_update for the same movement.
     void queueRemote(
-      "pending_stock_updates",
-      r3AdjustmentStockPayload({
+      "pending_prep_batches",
+      {
+        kind: "waste",
+        eventId: movement.id,
+        batchId,
         productId: product.id,
-        delta: -qty,
-        adjustmentId: movement.id,
-        note: `prep_waste:${wasteReason}`,
-        baseUpdatedAt: product.updatedAt,
-        baseStockOnHand: before,
-      }),
+        portions: qty,
+        reason: wasteReason,
+        dishStockAdjustmentId: movement.id,
+        createdAt: at,
+      } satisfies PrepBatchSyncPayload,
+      { id: `prep-waste:${movement.id}` },
     );
     void queueRemote("product", { id: product.id, catalogOnly: true });
 
@@ -7718,7 +7801,6 @@ export const usePosStore = create<PosState>((set, get) => {
         : b,
     );
 
-    const menuBefore = product.stockOnHand;
     // Negative movement for the prepared-stock removal keeps the ledger complete.
     const cancelStockMovement: StockMovement = {
       id: stableInventoryMovementId(shopKey, "prep_cancel_stock", batchId, product.id),
@@ -7756,30 +7838,31 @@ export const usePosStore = create<PosState>((set, get) => {
       ...movementMergePatch(s, [...movements, cancelStockMovement]),
     }));
 
-    for (const m of movements) {
-      const before = state.products.find((x) => x.id === m.productId);
-      void queueRemote(
-        "pending_stock_updates",
-        r3AdjustmentStockPayload({
-          productId: m.productId,
-          delta: m.deltaBaseUnits,
-          adjustmentId: m.id,
-          note: `prep_cancel:${batchId}`,
-          baseUpdatedAt: before?.updatedAt,
-          baseStockOnHand: before?.stockOnHand,
-        }),
-      );
-    }
+    // The server owns cancel stock restoration: it uses its authoritative remaining
+    // portions and the frozen requirements, applies the same durable adjustment ids,
+    // and never restores more than the stock that exists. No separate stock ops here.
+    const cancelStockAdjustmentId = stableInventoryMovementId(
+      shopKey,
+      "prep_cancel_stock",
+      batchId,
+      product.id,
+    );
     void queueRemote(
-      "pending_stock_updates",
-      r3AdjustmentStockPayload({
+      "pending_prep_batches",
+      {
+        kind: "cancel",
+        eventId: cancelStockAdjustmentId,
+        batchId,
         productId: product.id,
-        delta: -reversePortions,
-        adjustmentId: stableInventoryMovementId(shopKey, "prep_cancel_stock", batchId, product.id),
-        note: `prep_cancel_stock:${batchId}`,
-        baseUpdatedAt: product.updatedAt,
-        baseStockOnHand: menuBefore,
-      }),
+        portions: reversePortions,
+        dishStockAdjustmentId: cancelStockAdjustmentId,
+        ingredientAdjustments: movements.map((m) => ({
+          productId: m.productId,
+          adjustmentId: m.id,
+        })),
+        createdAt: at,
+      } satisfies PrepBatchSyncPayload,
+      { id: `prep-cancel:${batchId}` },
     );
     void queueRemote("product", { id: product.id, catalogOnly: true });
 

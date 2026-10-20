@@ -246,6 +246,7 @@ export function collectPendingSyncBreakdown(
     countPendingSync(state.inventoryCountSessions) +
     state.products.filter((p) => (p as { pendingSync?: boolean }).pendingSync).length +
     (byKind.pending_stock_updates ?? 0) +
+    (byKind.pending_prep_batches ?? 0) +
     (byKind.pending_inventory_counts ?? 0);
   const hospitality = byKind.pending_hospitality ?? 0;
   const dayCloses = countPendingSync(state.dayCloses);

@@ -14,6 +14,7 @@ export function syncKindPriority(kind: SyncOperationKind): 0 | 1 | 2 {
     case "pending_day_closes":
     case "pending_expenses":
     case "pending_cash_expenses":
+    case "pending_prep_batches":
       return 0;
     case "customer":
     case "pending_purchases":
@@ -62,6 +63,10 @@ export function coalesceKeyForOp(kind: SyncOperationKind, payload: unknown): str
   }
   if (kind === "pending_shop_policy") {
     return "pending_shop_policy:shop";
+  }
+  if (kind === "pending_prep_batches") {
+    const eventId = String(p.eventId ?? "");
+    return eventId ? `pending_prep_batches:${eventId}` : null;
   }
   return null;
 }

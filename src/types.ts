@@ -2782,6 +2782,7 @@ export type SyncOperationKind =
   | "pending_transfer_dispatch"
   | "pending_transfer_receive"
   | "pending_hospitality"
+  | "pending_prep_batches"
   | "pending_catalog"
   | "pending_shop_policy"
   | "pending_staff"
