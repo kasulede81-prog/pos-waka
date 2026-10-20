@@ -9,6 +9,7 @@ import { usePosStore } from "../../store/usePosStore";
 import { useDeferredReportingSales } from "../../hooks/useDeferredReportingSales";
 import { useReportingReturnRecords } from "../../hooks/useReportingReturnRecords";
 import { useDayClosesForAuthority } from "../../hooks/useDayClosesForAuthority";
+import { useHospitalityLowStockPolicyRevision } from "../../hooks/useHospitalityLowStockPolicyRevision";
 import { IncludeArchivedFilter } from "../office/IncludeArchivedFilter";
 import {
   buildMonthlyBusinessReport,
@@ -53,23 +54,24 @@ export function MonthlyReportsPanel({ lang }: Props) {
   const cashExpenses = usePosStore((s) => s.cashExpenses);
   const dayCloses = useDayClosesForAuthority();
   const preferences = usePosStore((s) => s.preferences);
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
 
   const months = useMemo(() => monthOptions(), []);
 
-  const report = useMemo(
-    () =>
-      buildMonthlyBusinessReport({
-        monthKey,
-        shopName: preferences.shopDisplayName?.trim() || "DKASU POS",
-        sales,
-        returnRecords,
-        products,
-        staffAccounts: preferences.staffAccounts ?? [],
-        cashExpenses,
-        dayCloses,
-      }),
-    [monthKey, preferences.shopDisplayName, preferences.staffAccounts, sales, returnRecords, products, cashExpenses, dayCloses],
-  );
+  const report = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return buildMonthlyBusinessReport({
+      monthKey,
+      shopName: preferences.shopDisplayName?.trim() || "DKASU POS",
+      sales,
+      returnRecords,
+      products,
+      staffAccounts: preferences.staffAccounts ?? [],
+      cashExpenses,
+      dayCloses,
+    });
+  }, [monthKey, preferences.shopDisplayName, preferences.staffAccounts, sales, returnRecords, products, cashExpenses, dayCloses, lowStockPolicyRevision]);
 
   const showToast = (msg: string) => {
     setToast(msg);

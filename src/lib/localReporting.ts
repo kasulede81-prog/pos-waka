@@ -14,7 +14,7 @@ import type { CashExpense } from "../types";
 import { getCompletedFinancials, getCompletedFinancialsFromScoped, isRevenueSale } from "./financialMetrics";
 import { computeTodayProfitBreakdown, mergeLinkedReturnsForScopedSales } from "./homeProfit";
 import { inventoryValueAtCostUgx } from "./costPrecision";
-import { isLowStock } from "./sellingEngine";
+import { isLowStock, lowStockThreshold } from "./sellingEngine";
 import { resolveReturnFinancials, resolveSaleLineFinancialsWithSale, findSaleLineForReturn } from "./saleFinancialEngine";
 import { createReportFinancialCache, cachedCompletedFinancials, type ReportFinancialCache } from "./reportFinancialCache";
 import { physicalCashCollectedFromSale } from "./cashDrawerSales";
@@ -376,7 +376,7 @@ export function localGetInventoryInsights(products: Product[]): InventoryInsight
       productId: p.id,
       name: p.name,
       stockOnHand: p.stockOnHand,
-      minimumStockAlert: p.minimumStockAlert,
+      minimumStockAlert: lowStockThreshold(p),
     }));
   const outOfStock = products
     .filter((p) => p.stockOnHand <= 0)
@@ -386,13 +386,16 @@ export function localGetInventoryInsights(products: Product[]): InventoryInsight
     .filter((p) => isLowStock(p) || p.stockOnHand <= 0)
     .sort((a, b) => a.stockOnHand - b.stockOnHand)
     .slice(0, 15)
-    .map((p) => ({
-      productId: p.id,
-      name: p.name,
-      stockOnHand: p.stockOnHand,
-      minimumStockAlert: p.minimumStockAlert,
-      suggestedReorderQty: Math.max(p.minimumStockAlert * 2 - p.stockOnHand, p.minimumStockAlert),
-    }));
+    .map((p) => {
+      const minimum = lowStockThreshold(p);
+      return {
+        productId: p.id,
+        name: p.name,
+        stockOnHand: p.stockOnHand,
+        minimumStockAlert: minimum,
+        suggestedReorderQty: Math.max(minimum * 2 - p.stockOnHand, minimum),
+      };
+    });
   return { stockValueAtCostUgx, lowStock, outOfStock, restockRecommendations };
 }
 

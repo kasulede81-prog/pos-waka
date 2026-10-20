@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { Package, Star } from "lucide-react";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
-import { formatStockLabel } from "../../lib/sellingEngine";
+import { formatStockLabel, isLowStockForSellCard } from "../../lib/sellingEngine";
 import { POS_CATALOG_TILE_TOUCH_CLASS } from "../../lib/posTouchInteraction";
 
 type Props = {
@@ -32,7 +32,7 @@ export function PosDesktopProductCard({
   onPick,
   onToggleFavorite,
 }: Props) {
-  const lowStock = product.stockOnHand <= product.minimumStockAlert;
+  const lowStock = isLowStockForSellCard(product);
 
   return (
     <article

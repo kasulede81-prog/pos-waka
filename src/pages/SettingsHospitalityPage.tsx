@@ -229,6 +229,9 @@ function HospitalitySettingsBody({ lang }: { lang: Language }) {
             className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 font-semibold"
           />
         </label>
+        <p className="mt-1 text-[11px] font-medium text-muted-foreground">
+          {t(lang, "hospitalityIngredientLowStockHint")}
+        </p>
       </article>
     </>
   );

@@ -10,6 +10,7 @@ import {
   resolvePeriodReportAuthority,
 } from "./closedDayAuthority";
 import { inventoryValueAtCostUgx } from "./costPrecision";
+import { isLowStock } from "./sellingEngine";
 import { saveExportedFile } from "./fileDownload";
 import { t } from "./i18n";
 import { statusFromAuthority, ugxLabel, type ReportDocumentModel } from "./reportDocumentModel";
@@ -123,7 +124,10 @@ export function buildMonthlyBusinessReport(params: {
     }
   }
 
-  const lowStockCount = products.filter((p) => p.stockOnHand <= (p.minimumStockAlert ?? 5)).length;
+  // Same effective threshold as Inventory/dashboards (explicit product minimum,
+  // then the Hospitality ingredient policy). The old `?? 5` default disagreed
+  // with every other low-stock surface for products without a threshold.
+  const lowStockCount = products.filter((p) => isLowStock(p)).length;
   const stockValueAtCostUgx = inventoryValueAtCostUgx(products);
 
   return {

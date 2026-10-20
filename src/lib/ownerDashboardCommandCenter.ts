@@ -4,6 +4,7 @@
 
 import { partitionAttentionByAck } from "./ownerAlertAcknowledgement";
 import { getCachedComputation } from "./computationResultCache";
+import { hospitalityLowStockPolicyToken } from "./lowStockPolicyContext";
 import {
   buildAttentionCenter,
   buildShiftAccountabilityRows,
@@ -178,6 +179,7 @@ export function buildOwnerCommandCenterFingerprint(input: OwnerCommandCenterInpu
     voidsMutationFingerprint(input.voidRecords),
     input.devicesOnline ?? 0,
     input.devicesStale ?? 0,
+    hospitalityLowStockPolicyToken(),
   ].join(":");
 }
 

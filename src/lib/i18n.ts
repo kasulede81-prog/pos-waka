@@ -3753,6 +3753,8 @@ const en: Dict = {
   hospitalityIngredientAllowNegative: "Allow negative ingredient inventory",
   hospitalityIngredientAutoReserve: "Auto-reserve ingredients on order",
   hospitalityIngredientLowStock: "Low stock warning threshold",
+  hospitalityIngredientLowStockHint:
+    "Applies only to Hospitality ingredients without their own minimum alert, in each ingredient's stock unit. A product's minimum alert always wins. Leave blank or 0 to turn it off.",
   restaurantBillPaySplit: "Pay by guest / split",
   restaurantBillPayMaster: "Full bill",
   menuVariantsTitle: "Sizes & flavours",
@@ -11862,6 +11864,8 @@ const lgBase: Dict = {
   hospitalityIngredientAllowNegative: "Allow negative ingredient inventory",
   hospitalityIngredientAutoReserve: "Auto-reserve ingredients on order",
   hospitalityIngredientLowStock: "Low stock warning threshold",
+  hospitalityIngredientLowStockHint:
+    "Kikozesebwa ku bikozesebwa bya Hospitality ebitali na kikomo kyabyo eky'okulabula, mu kigero kya buli kikozesebwa. Ekikomo ky'ekintu kye kisinga obukulu. Bika obumu oba 0 okukizimya.",
   restaurantBillPaySplit: "Pay by guest / split",
   restaurantBillPayMaster: "Full bill",
   menuVariantsTitle: "Sizes & flavours",

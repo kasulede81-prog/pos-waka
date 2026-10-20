@@ -2,7 +2,7 @@ import clsx from "clsx";
 import type { Language, Product } from "../../types";
 import { t } from "../../lib/i18n";
 import { formatProductPriceLabel } from "../../store/usePosStore";
-import { formatStockLabel } from "../../lib/sellingEngine";
+import { formatStockLabel, isLowStockForSellCard } from "../../lib/sellingEngine";
 import { formatPharmacyStockPrimary } from "../../lib/pharmacyPackaging";
 import { isPharmacyPackagingActive } from "../../lib/pharmacyPackaging";
 import {
@@ -42,7 +42,7 @@ export function PharmacySellMedicineCard({
   const stockText = isPharmacyPackagingActive(p) ? formatPharmacyStockPrimary(p) : formatStockLabel(p);
   const prescriptionRequired = master?.otcOrPrescription === "prescription";
   const controlled = Boolean(master?.controlledDrug);
-  const lowStock = p.stockOnHand <= p.minimumStockAlert;
+  const lowStock = isLowStockForSellCard(p);
   const title = brand || formatMedicineListPrimary(p);
 
   return (

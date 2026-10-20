@@ -12,6 +12,7 @@ import { resolveEffectivePlanTier, maxProductsForTier } from "../lib/subscriptio
 import { lockedProductIds } from "../lib/productPlanLock";
 import { useSessionActor } from "../context/SessionActorContext";
 import { resolveDesktopLicenseDisplay } from "../lib/desktopLicenseDisplay";
+import { useHospitalityLowStockPolicyRevision } from "./useHospitalityLowStockPolicyRevision";
 
 export type HomeHealthItem = {
   id: string;
@@ -34,6 +35,7 @@ export function useHomeBusinessHealthItems(lang: Language): HomeBusinessHealthMo
   const { snapshot, authMode } = useSubscription();
   const { unseenCount: riskCount } = useOwnerRiskCards(lang, false);
   const products = usePosStore((s) => s.products);
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
   const sync = useSyncStatus();
   const syncErrors = countSalesWithSyncErrors();
   const pending = sync.pendingCount;
@@ -51,10 +53,11 @@ export function useHomeBusinessHealthItems(lang: Language): HomeBusinessHealthMo
     () => (productLimit === null ? products : products.filter((p) => !lockedIds.has(p.id))),
     [products, productLimit, lockedIds],
   );
-  const lowStockCount = useMemo(
-    () => unlockedProducts.filter((p) => isLowStock(p)).length,
-    [unlockedProducts],
-  );
+  const lowStockCount = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return unlockedProducts.filter((p) => isLowStock(p)).length;
+  }, [unlockedProducts, lowStockPolicyRevision]);
 
   const canCommandCenter = actorHasEffectivePermission(actor, "owner.dashboard", snapshot, authMode);
 

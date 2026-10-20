@@ -43,6 +43,7 @@ import { useHomeBusinessHealthItems } from "../../hooks/useHomeBusinessHealthIte
 import { useHomeDashboardAnimationPause } from "../../hooks/useHomeDashboardAnimationPause";
 import { useHomeRegionLayout } from "../../hooks/useHomeRegionLayout";
 import { useHomeTileSpotlight } from "../../hooks/useHomeTileSpotlight";
+import { useHospitalityLowStockPolicyRevision } from "../../hooks/useHospitalityLowStockPolicyRevision";
 import { useHomeCashDrawerKick } from "../../hooks/useHomeCashDrawerKick";
 import { useSessionHydration } from "../../context/SessionHydrationContext";
 import { Caption, SectionTitle } from "../enterprise/EnterpriseTypography";
@@ -62,6 +63,7 @@ export function DesktopHomeTiles({ lang }: Props) {
   const preferences = usePosStore((s) => s.preferences);
   const pharmacyPrescriptions = usePosStore((s) => s.pharmacyPrescriptions);
   const products = usePosStore((s) => s.products);
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
   const savedOrder = usePosStore((s) => s.preferences.launcherTileOrder) ?? EMPTY_ORDER;
   const layout = usePosStore((s) => s.preferences.launcherTileLayout) ?? EMPTY_LAYOUT;
   const pharmacyMode = isPharmacyMode(preferences.businessType, preferences.pharmacyModeEnabled);
@@ -79,10 +81,11 @@ export function DesktopHomeTiles({ lang }: Props) {
     () => (productLimit === null ? products : products.filter((p) => !lockedIds.has(p.id))),
     [products, productLimit, lockedIds],
   );
-  const lowStockCount = useMemo(
-    () => unlockedProducts.filter((p) => isLowStock(p)).length,
-    [unlockedProducts],
-  );
+  const lowStockCount = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return unlockedProducts.filter((p) => isLowStock(p)).length;
+  }, [unlockedProducts, lowStockPolicyRevision]);
 
   const { byTile: liveStats, executive, weekTrend, sparkMode } = useHomeDashboardMetrics(
     lang,

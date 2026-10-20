@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import type { Product } from "../../types";
 import { formatProductPriceLabel } from "../../store/usePosStore";
-import { formatStockLabel } from "../../lib/sellingEngine";
+import { formatStockLabel, isLowStockForSellCard } from "../../lib/sellingEngine";
 import { POS_CATALOG_TILE_TOUCH_CLASS } from "../../lib/posTouchInteraction";
 
 type Props = {
@@ -28,7 +28,7 @@ export function PosSellProductCard({
   cartQty = 0,
   onPick,
 }: Props) {
-  const lowStock = product.stockOnHand <= product.minimumStockAlert;
+  const lowStock = isLowStockForSellCard(product);
 
   return (
     <button

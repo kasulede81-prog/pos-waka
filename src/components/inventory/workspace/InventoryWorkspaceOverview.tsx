@@ -15,6 +15,7 @@ import {
   resolveInventoryOverviewQuickActions,
 } from "../../../lib/inventoryWorkspaceTiles";
 import { computeInventoryWorkspaceDashboardStats } from "../../../lib/inventoryWorkspaceStats";
+import { useHospitalityLowStockPolicyRevision } from "../../../hooks/useHospitalityLowStockPolicyRevision";
 import { InventoryWorkspaceShell } from "./InventoryWorkspaceShell";
 import { InventorySearchBar } from "./InventorySearchBar";
 import { InventoryDashboardCards, InventoryOpsBoard } from "./InventoryDashboardCards";
@@ -51,6 +52,7 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onA
     })),
   );
 
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
   const mode = inventoryWorkspaceMode(preferences.businessType, preferences.pharmacyModeEnabled);
   const basePath = inventoryWorkspaceBasePath(mode);
   const productLimit = maxProductsForTier(resolveEffectivePlanTier(snapshot));
@@ -59,20 +61,20 @@ export function InventoryWorkspaceOverview({ lang, onSetTab, onReceiveStock, onA
     [products, productLimit],
   );
 
-  const stats = useMemo(
-    () =>
-      computeInventoryWorkspaceDashboardStats({
-        products,
-        catalogProducts,
-        purchases,
-        supplierPayments,
-        suppliers,
-        businessType: preferences.businessType,
-        pharmacyModeEnabled: preferences.pharmacyModeEnabled,
-        complianceAlertCount: pharmacyComplianceAlerts.length,
-      }),
-    [products, catalogProducts, purchases, supplierPayments, suppliers, preferences.businessType, preferences.pharmacyModeEnabled, pharmacyComplianceAlerts.length],
-  );
+  const stats = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return computeInventoryWorkspaceDashboardStats({
+      products,
+      catalogProducts,
+      purchases,
+      supplierPayments,
+      suppliers,
+      businessType: preferences.businessType,
+      pharmacyModeEnabled: preferences.pharmacyModeEnabled,
+      complianceAlertCount: pharmacyComplianceAlerts.length,
+    });
+  }, [products, catalogProducts, purchases, supplierPayments, suppliers, preferences.businessType, preferences.pharmacyModeEnabled, pharmacyComplianceAlerts.length, lowStockPolicyRevision]);
 
   const quickActions = useMemo(() => resolveInventoryOverviewQuickActions(mode), [mode]);
   const navTiles = useMemo(() => resolveInventoryNavTiles(mode, basePath), [mode, basePath]);

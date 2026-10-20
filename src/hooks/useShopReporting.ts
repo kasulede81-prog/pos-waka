@@ -4,6 +4,7 @@ import { useDeferredReportingSales } from "./useDeferredReportingSales";
 import { useReportingSales } from "./useReportingSales";
 import { useReportingReturnRecords } from "./useReportingReturnRecords";
 import { useDayClosesForAuthority } from "./useDayClosesForAuthority";
+import { useHospitalityLowStockPolicyRevision } from "./useHospitalityLowStockPolicyRevision";
 import { DEFAULT_DATE_FILTER, resolveDateFilterBounds, type DateFilterValue } from "../lib/dateFilters";
 import type { HomeMetricScope } from "../lib/homeVisibility";
 import { filterReturnsForHomeScope, filterSalesForHomeScope } from "../lib/homeVisibility";
@@ -74,6 +75,7 @@ function reportFilterFingerprint(filter: DateFilterValue): string {
 }
 
 export function useShopReportBundle(filter: DateFilterValue, includeArchived: boolean): ShopReportBundle {
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
   const sales = useReportingSales(includeArchived);
   const returns = useReportingReturnRecords(includeArchived);
   const products = usePosStore((s) => s.products);
@@ -89,13 +91,13 @@ export function useShopReportBundle(filter: DateFilterValue, includeArchived: bo
       .filter((d) => !d.supersededAt)
       .map((d) => `${d.dateKey}:${d.id}:${d.totalSalesUgx}`)
       .join(",");
-    const fp = `${buildSalesFingerprint(sales)}:${buildReportingProductsFingerprint(products)}:${customers.length}:${returns.length}:${suppliers.length}:${buildReportingExpensesFingerprint(cashExpenses)}:${reportFilterFingerprint(filter)}:${closesFp}`;
+    const fp = `${buildSalesFingerprint(sales)}:${buildReportingProductsFingerprint(products)}:${customers.length}:${returns.length}:${suppliers.length}:${buildReportingExpensesFingerprint(cashExpenses)}:${reportFilterFingerprint(filter)}:${closesFp}:${lowStockPolicyRevision}`;
     return getCachedComputation("localGetRangeSummary", fp, () =>
       timedComputation("localGetRangeSummary", () =>
         localGetRangeSummary(sales, products, customers, returns, suppliers, filter, cashExpenses, dayCloses),
       ),
     );
-  }, [sales, products, customers, returns, suppliers, filter, cashExpenses, dayCloses]);
+  }, [sales, products, customers, returns, suppliers, filter, cashExpenses, dayCloses, lowStockPolicyRevision]);
 
   const summary = local.summary;
   const cash =

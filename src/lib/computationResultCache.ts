@@ -1,4 +1,5 @@
 /** Weak fingerprint cache for expensive pure computations (same inputs → same outputs). */
+import { hospitalityLowStockPolicyToken } from "./lowStockPolicyContext";
 
 type CacheEntry<T> = {
   fingerprint: string;
@@ -177,12 +178,14 @@ export function buildReportingProductsFingerprint(
   products: readonly ReportingProductFingerprintInput[],
 ): string {
   if (products.length === 0) return "0";
-  return reportingMutationFingerprint(
+  // The Hospitality ingredient low-stock policy changes which products are low
+  // without changing any product field, so it must invalidate cached reports.
+  return `${reportingMutationFingerprint(
     [...products]
       .map(
         (p) =>
           `${p.id}:${p.costPricePerUnitUgx ?? ""}:${p.stockOnHand ?? ""}:${p.minimumStockAlert ?? ""}:${p.buyingPackCostUgx ?? ""}:${p.conversionRate ?? ""}:${p.packCostUnitsDepleted ?? ""}:${reportingProductBatchToken(p)}`,
       )
       .sort(),
-  );
+  )}:${hospitalityLowStockPolicyToken()}`;
 }

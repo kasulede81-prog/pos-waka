@@ -1076,6 +1076,9 @@ export const swOverrides: Record<string, string> = {
   hospitalityIngredientDemandMissingProduct: "{name} — {units} zimeuzwa, bidhaa haipo",
   hospitalityIngredientDemandMissingIngredient:
     "Kiungo {name} hakipo — {quantity}{unit} kinahitajika · chakula {count}",
+  hospitalityIngredientLowStock: "Kiwango cha tahadhari ya hisa ndogo",
+  hospitalityIngredientLowStockHint:
+    "Hutumika tu kwa viungo vya ukarimu visivyo na kikomo chao cha tahadhari, kwa kipimo cha kila kiungo. Kikomo cha bidhaa yenyewe ndicho kinachotumika kwanza. Acha wazi au 0 kuzima.",
   hospitalityExportMenuPdf: "PDF ya Menyu",
   hospitalityMenuExportPeriod: "Kipindi",
   hospitalityMenuExportSnapshotNote:

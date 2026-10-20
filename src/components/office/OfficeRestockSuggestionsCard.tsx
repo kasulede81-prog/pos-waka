@@ -10,6 +10,7 @@ import { buildRestockProductSuggestions } from "../../lib/purchaseReporting";
 import { buildRestockSuggestions } from "../../lib/restockSuggestions";
 
 import { useSessionActor } from "../../context/SessionActorContext";
+import { useHospitalityLowStockPolicyRevision } from "../../hooks/useHospitalityLowStockPolicyRevision";
 
 export function OfficeRestockSuggestionsCard({ lang }: { lang: Language }) {
   const actor = useSessionActor();
@@ -17,16 +18,19 @@ export function OfficeRestockSuggestionsCard({ lang }: { lang: Language }) {
   const products = usePosStore((s) => s.products);
   const purchases = usePosStore((s) => s.purchases);
   const sales = useDeferredSales();
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
 
-  const suggestions = useMemo(
-    () => buildRestockProductSuggestions(products, sales, 6),
-    [products, sales],
-  );
+  const suggestions = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return buildRestockProductSuggestions(products, sales, 6);
+  }, [products, sales, lowStockPolicyRevision]);
 
-  const hintLines = useMemo(
-    () => buildRestockSuggestions(lang, products, sales, purchases, 3),
-    [lang, products, sales, purchases],
-  );
+  const hintLines = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return buildRestockSuggestions(lang, products, sales, purchases, 3);
+  }, [lang, products, sales, purchases, lowStockPolicyRevision]);
 
   if (!canRestock || (suggestions.length === 0 && hintLines.length === 0)) return null;
 

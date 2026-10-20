@@ -14,6 +14,7 @@ import {
   weightedCostAfterStockInPrecise,
 } from "./costPrecision";
 import { resolveSaleLineFinancials } from "./saleFinancialEngine";
+import { getHospitalityLowStockPolicyContext } from "./lowStockPolicyContext";
 
 const MONEY_ROUND = 4;
 
@@ -275,17 +276,48 @@ export function estimatedProfitForLine(_product: Product, line: SaleLine): numbe
   return resolveSaleLineFinancials(line).grossProfitUgx;
 }
 
+function isHospitalityIngredientKind(product: Product): boolean {
+  const kind = product.menu?.productKind;
+  return kind === "ingredient" || kind === "semi_finished";
+}
+
 export function lowStockThreshold(product: Product): number {
   if (isPharmacyPackagingActive(product)) {
     return lowStockThresholdBaseUnits(product);
   }
+  // An explicit per-product threshold always wins.
   const m = product.minimumStockAlert;
-  return m > 0 ? m : 0;
+  if (m > 0) return m;
+  // Hospitality ingredient fallback: only recipe inputs, only in Hospitality
+  // mode, only when the saved policy has a valid positive threshold.
+  if (isHospitalityIngredientKind(product)) {
+    const policy = getHospitalityLowStockPolicyContext();
+    if (policy.enabled && policy.threshold != null) return policy.threshold;
+  }
+  return 0;
 }
 
 export function isLowStock(product: Product): boolean {
   const t = lowStockThreshold(product);
   return t > 0 && product.stockOnHand <= t;
+}
+
+/**
+ * POS sell-tile badge. Keeps the historical card rule (stock at or below the
+ * product minimum, including zero stock) and adds the Hospitality ingredient
+ * policy fallback for recipe inputs that have no minimum of their own. Pharmacy
+ * packaging and retail behavior remain exactly as before.
+ */
+export function isLowStockForSellCard(product: Product): boolean {
+  const explicit = product.minimumStockAlert;
+  if (explicit > 0) return product.stockOnHand <= explicit;
+  if (isHospitalityIngredientKind(product)) {
+    const policy = getHospitalityLowStockPolicyContext();
+    if (policy.enabled && policy.threshold != null) {
+      return product.stockOnHand <= policy.threshold;
+    }
+  }
+  return product.stockOnHand <= explicit;
 }
 
 /** How many base units (kg, bottles, …) one buying unit (sack, crate, jerrican) contains. */

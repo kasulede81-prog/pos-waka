@@ -15,6 +15,7 @@ import { useSessionActor } from "../../context/SessionActorContext";
 import { summarizeTodaySales } from "../../lib/todaySalesSummary";
 import { pendingSales } from "../../lib/saleStatus";
 import { POS_RECEIPTS_ROUTE } from "../../lib/posNavigation";
+import { useHospitalityLowStockPolicyRevision } from "../../hooks/useHospitalityLowStockPolicyRevision";
 
 type Props = { lang: Language };
 
@@ -22,6 +23,7 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
   const actor = useSessionActor();
   const products = usePosStore((s) => s.products);
   const sales = usePosStore((s) => s.sales);
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
   const { snapshot } = useSubscription();
   const sync = useSyncStatus();
   const syncErrors = countSalesWithSyncErrors();
@@ -38,10 +40,11 @@ export function DesktopLauncherStatusBar({ lang }: Props) {
     () => (productLimit === null ? products : products.filter((p) => !lockedIds.has(p.id))),
     [products, productLimit, lockedIds],
   );
-  const lowStockCount = useMemo(
-    () => unlockedProducts.filter((p) => isLowStock(p)).length,
-    [unlockedProducts],
-  );
+  const lowStockCount = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return unlockedProducts.filter((p) => isLowStock(p)).length;
+  }, [unlockedProducts, lowStockPolicyRevision]);
 
   const today = useMemo(() => summarizeTodaySales(sales), [sales]);
   const pendingSaleCount = useMemo(() => pendingSales(sales).length, [sales]);

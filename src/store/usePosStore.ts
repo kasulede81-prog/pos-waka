@@ -66,7 +66,8 @@ import { createRestaurantBillingStoreActions } from "./restaurantBillingMutation
 import { createHospitalityMenuStoreActions } from "./hospitalityMenuMutations";
 import { createHardwarePrintStoreActions, ensureHardwarePrefsOnBootstrap } from "./hardwarePrintMutations";
 import { publishCustomerDisplay } from "../lib/customerDisplayChannel";
-import { decideIngredientShortage, resolveHospitalityHardware } from "../lib/hospitalityHardware";
+import { decideIngredientShortage, resolveHospitalityHardware, resolveIngredientPolicyConfig } from "../lib/hospitalityHardware";
+import { applyHospitalityLowStockPolicy } from "../lib/lowStockPolicyContext";
 import { normalizeDayDrawerOpen, isFormulaV2, resolveCashDrawerFormulaVersion } from "../lib/dayDrawerOpen";
 import { getActiveAccountKey } from "../offline/accountScope";
 import { getActiveShopId, getPersistenceNamespace } from "../offline/shopScope";
@@ -9914,6 +9915,29 @@ export const usePosStore = create<PosState>((set, get) => {
     return dayDrawerActions;
   })(),
 };
+});
+
+/**
+ * Keep the non-React low-stock predicate in sync with the saved Hospitality
+ * ingredient policy. Runs before React subscriptions, so every render sees the
+ * same effective threshold as the store.
+ */
+function syncHospitalityLowStockPolicy(preferences: ShopPreferences): void {
+  applyHospitalityLowStockPolicy({
+    hospitalityMode: isHospitalityMode(
+      preferences.businessType,
+      preferences.hospitalityModeEnabled,
+    ),
+    lowStockThreshold: resolveIngredientPolicyConfig(preferences).lowStockThreshold,
+  });
+}
+
+let lastLowStockPolicyPreferences = usePosStore.getState().preferences;
+syncHospitalityLowStockPolicy(lastLowStockPolicyPreferences);
+usePosStore.subscribe((state) => {
+  if (state.preferences === lastLowStockPolicyPreferences) return;
+  lastLowStockPolicyPreferences = state.preferences;
+  syncHospitalityLowStockPolicy(state.preferences);
 });
 
 export function persistRelevantUnchanged(a: PosState, b: PosState): boolean {

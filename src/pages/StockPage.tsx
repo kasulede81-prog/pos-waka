@@ -57,6 +57,7 @@ import { useReconciledInventorySearchIndex } from "../hooks/useReconciledProduct
 import { InventorySelectionProvider } from "../features/inventory/selection/InventorySelectionProvider";
 import { InventorySelectionToolbar } from "../features/inventory/selection/InventorySelectionToolbar";
 import { useInventorySavedFilters } from "../features/inventory/filters/InventoryFilterBar";
+import { useHospitalityLowStockPolicyRevision } from "../hooks/useHospitalityLowStockPolicyRevision";
 import { defaultInventoryAdvancedFilters, mergeAdvancedFilters } from "../features/inventory/filters/types";
 import { buildLastSupplierByProductId } from "../features/inventory/filters/inventoryAdvancedFilters";
 import { InventoryProductsControlBar } from "../features/inventory/InventoryProductsControlBar";
@@ -164,6 +165,9 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     canPrepareBatches,
     canConfigureMenu: canOpenMenuBuilder,
   } = resolveHospitalityPrepAccess(actor, snapshot, authMode);
+  // Invalidates the memoised low-stock lists when the Hospitality ingredient
+  // policy changes, so this page cannot show a stale "healthy" count.
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
 
   const { products, suppliers, stockMovements, preferences, hydrated } = usePosStore(
     useShallow((s) => ({
@@ -516,10 +520,18 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     ],
   );
 
-  const stockStatus = useMemo(() => countInventoryStockStatus(unlockedProducts), [unlockedProducts]);
+  const stockStatus = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return countInventoryStockStatus(unlockedProducts);
+  }, [unlockedProducts, lowStockPolicyRevision]);
   const lowStockCount = stockStatus.lowStockCount;
   const inventoryValueUgx = useMemo(() => inventoryValueAtCostUgx(unlockedProducts), [unlockedProducts]);
-  const lowStockProducts = useMemo(() => unlockedProducts.filter((p) => isLowStock(p)), [unlockedProducts]);
+  const lowStockProducts = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return unlockedProducts.filter((p) => isLowStock(p));
+  }, [unlockedProducts, lowStockPolicyRevision]);
 
   const hierarchyEnabled = stockHierarchyEnabled(preferences);
   const catalogBrowseIndex = useMemo(() => {

@@ -8,6 +8,7 @@ import { useReportingSales } from "../../hooks/useReportingSales";
 import { useReportingReturnRecords } from "../../hooks/useReportingReturnRecords";
 import { useDayClosesForAuthority } from "../../hooks/useDayClosesForAuthority";
 import { useShopReportBundle } from "../../hooks/useShopReporting";
+import { useHospitalityLowStockPolicyRevision } from "../../hooks/useHospitalityLowStockPolicyRevision";
 import { dateKeyKampala } from "../../lib/datesUg";
 import { MONTH_TO_DATE_FILTER } from "../../lib/dateFilters";
 import { useReportingDateFilter } from "../../hooks/useReportingDateFilter";
@@ -64,6 +65,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
   const shifts = usePosStore((s) => s.preferences.shifts ?? []);
   const dayCloses = useDayClosesForAuthority();
   const preferences = usePosStore((s) => s.preferences);
+  const lowStockPolicyRevision = useHospitalityLowStockPolicyRevision();
   const auditLogs = usePosStore((s) => s.auditLogs);
   const archivedAuditLogs = usePosStore((s) => s.archivedAuditLogs);
   const archivedReturnRecords = usePosStore((s) => s.archivedReturnRecords);
@@ -104,21 +106,21 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
     actorPermissions: authOperatorPermissions(actor),
   });
 
-  const analytics = useMemo(
-    () =>
-      computeRangeAnalytics(
-        sales,
-        products,
-        customers,
-        returnRecords,
-        suppliers,
-        filter,
-        cashExpenses,
-        compareEnabled,
-        dayCloses,
-      ),
-    [sales, products, customers, returnRecords, suppliers, filter, cashExpenses, compareEnabled, dayCloses],
-  );
+  const analytics = useMemo(() => {
+    // Read the revision so a policy change invalidates this memo.
+    void lowStockPolicyRevision;
+    return computeRangeAnalytics(
+      sales,
+      products,
+      customers,
+      returnRecords,
+      suppliers,
+      filter,
+      cashExpenses,
+      compareEnabled,
+      dayCloses,
+    );
+  }, [sales, products, customers, returnRecords, suppliers, filter, cashExpenses, compareEnabled, dayCloses, lowStockPolicyRevision]);
 
   const reportDayKey = selectedDayKeyForFilter(filter) ?? dateKeyKampala(new Date());
   const showDailyExport = isSingleDayFilter(filter);
@@ -473,7 +475,7 @@ export function EnterpriseReportsShell({ lang }: { lang: Language }) {
       setReportHint(t(lang, "baReportExportNotReady"));
       return;
     }
-    let ok = false;
+    let ok: boolean;
     if (showDailyExport) {
       ok = await printDailyReportPdf(dailyPdfInput);
     } else {
