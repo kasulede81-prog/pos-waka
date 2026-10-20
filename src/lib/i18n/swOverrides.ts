@@ -1005,6 +1005,26 @@ export const swOverrides: Record<string, string> = {
   hospitalityReportsNoIngredientGaps: "Hakuna mapungufu ya gharama za viungo.",
   hospitalityReportsTopDishes: "Vyakula vinavyoongoza",
   hospitalityReportsTopModifiers: "Viongezeo vinavyoongoza",
+  hospitalityPrepBatchReportTitle: "Uzalishaji wa makundi ya maandalizi",
+  hospitalityPrepBatchReportHint:
+    "Makundi yaliyoandaliwa katika kipindi kilichochaguliwa na yaliyohifadhiwa kwenye kumbukumbu za bidhaa za kifaa hiki. Makundi yaliyotumika yanabaki kwenye historia; yaliyoondolewa kwa reset/restore, au ambayo bado hayajasawazishwa hapa, hayawezi kujengwa upya.",
+  hospitalityPrepBatchReportEmpty: "Hakuna makundi ya maandalizi yaliyorekodiwa katika kipindi hiki.",
+  hospitalityPrepBatchReportBatches: "Makundi",
+  hospitalityPrepBatchReportPortions: "Sehemu zilizoandaliwa",
+  hospitalityPrepBatchReportExpected: "Inayotarajiwa",
+  hospitalityPrepBatchReportActual: "Halisi",
+  hospitalityPrepBatchReportYieldVariance: "Tofauti ya mavuno",
+  hospitalityPrepBatchReportCostPerPlate: "Gharama / sahani",
+  hospitalityPrepBatchReportWasted: "Zilizoharibiwa",
+  hospitalityPrepBatchReportCurrentStock: "Hisa iliyobaki sasa",
+  hospitalityPrepBatchReportYieldUnknown:
+    "Makundi {count} hayana mavuno halisi yaliyorekodiwa; tofauti haijaonyeshwa.",
+  hospitalityPrepBatchReportLegacy:
+    "Makundi {count} ya zamani yanatumia gharama ya viungo iliyorekodiwa.",
+  hospitalityPrepBatchReportUndated:
+    "Makundi {count} hayana tarehe ya maandalizi inayosomeka na yameondolewa.",
+  hospitalityPrepBatchReportOutsideRange:
+    "Makundi {count} yaliyohifadhiwa yako nje ya kipindi hiki.",
   hospitalityIngredientDemandTitle: "Mahitaji ya viungo (yakikadiriwa kutoka mapishi)",
   hospitalityIngredientDemandHint:
     "Mahitaji yanayotokana na mapishi kutoka mauzo ya menyu yaliyokamilika. Hii si matumizi ya hifadhi wala mwendo wa hesabu za hifadhi. Idadi inazingatia mavuno na upotezaji wa mapishi; UGX huonyeshwa tu kwa gharama ya sasa ya kiungo inayotegemewa.",

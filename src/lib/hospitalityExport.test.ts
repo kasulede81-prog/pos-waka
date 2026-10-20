@@ -3,6 +3,7 @@ import {
   buildHospitalityCancellationExportBlock,
   buildHospitalityKitchenPdfBlob,
   buildHospitalityMenuPdfBlob,
+  buildHospitalityPrepBatchExportBlock,
   buildHospitalityTableRevenuePdfBlob,
   buildHospitalityTableServiceExportBlock,
   buildHospitalityWaiterPdfBlob,
@@ -113,6 +114,71 @@ const sample: HospitalityReportSummary = {
       ],
     },
   },
+  prepBatches: {
+    rows: [
+      {
+        batchId: "batch-1",
+        productId: "p1",
+        productName: "Chicken plate",
+        preparedAt: "2026-06-02T10:00:00.000Z",
+        status: "active",
+        yieldBasis: "actual",
+        costBasis: "recipe_estimate",
+        portionsPrepared: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        yieldVariancePortions: -2,
+        ingredientCostPerPlateUgx: 2_780,
+        costPerPlateUgx: 4_033,
+        ingredientCostUgx: 55_600,
+        additionalCostUgx: 17_000,
+        totalBatchCostUgx: 72_600,
+        wastedPortions: 2,
+        wasteValueUgx: 8_066,
+        remainingPortions: 14,
+        remainingValueUgx: 56_462,
+        legacyCost: false,
+      },
+      {
+        batchId: "batch-legacy",
+        productId: "p1",
+        productName: "Chicken plate",
+        preparedAt: "2026-06-03T10:00:00.000Z",
+        status: "depleted",
+        yieldBasis: null,
+        costBasis: null,
+        portionsPrepared: 20,
+        expectedPortions: null,
+        actualPortions: null,
+        yieldVariancePortions: null,
+        ingredientCostPerPlateUgx: 2_780,
+        costPerPlateUgx: 2_780,
+        ingredientCostUgx: 55_600,
+        additionalCostUgx: 0,
+        totalBatchCostUgx: 55_600,
+        wastedPortions: 0,
+        wasteValueUgx: 0,
+        remainingPortions: 0,
+        remainingValueUgx: 0,
+        legacyCost: true,
+      },
+    ],
+    batchCount: 2,
+    portionsPrepared: 38,
+    yieldMeasuredBatchCount: 1,
+    expectedPortions: 20,
+    actualPortions: 18,
+    yieldVariancePortions: -2,
+    totalBatchCostUgx: 128_200,
+    wastedPortions: 2,
+    wasteValueUgx: 8_066,
+    remainingPortions: 14,
+    remainingValueUgx: 56_462,
+    legacyBatchCount: 1,
+    undatedBatchCount: 1,
+    outsideRangeBatchCount: 2,
+    historyScope: "persisted_batches_only",
+  },
   tableService: {
     completedCount: 2,
     completedDurationMinutes: 135,
@@ -204,6 +270,47 @@ describe("hospitalityExport", () => {
   it("builds kitchen PDF", () => {
     const blob = buildHospitalityKitchenPdfBlob("en", sample);
     expect(blob.size).toBeGreaterThan(200);
+  });
+
+  it("builds the prep batch export block with production and current stock separated", () => {
+    const block = buildHospitalityPrepBatchExportBlock("en", sample);
+    const text = block.lines.join("\n");
+    expect(block.title).toBe("Prep batch production");
+    expect(text).toContain("Yield variance: -2");
+    expect(text).toContain("Current remaining stock");
+    expect(text).toContain("legacy");
+    expect(text).toContain("have no readable prepared date");
+    expect(text).toContain("fall outside this period");
+  });
+
+  it("does not show expected yield alone when actual yield is unrecorded", () => {
+    const unknownYield: HospitalityReportSummary = {
+      ...sample,
+      prepBatches: {
+        ...sample.prepBatches,
+        rows: [
+          {
+            ...sample.prepBatches.rows[0]!,
+            batchId: "unknown-yield",
+            actualPortions: null,
+            yieldVariancePortions: null,
+          },
+        ],
+        batchCount: 1,
+        yieldMeasuredBatchCount: 0,
+        expectedPortions: 0,
+        actualPortions: 0,
+        yieldVariancePortions: 0,
+        legacyBatchCount: 0,
+        undatedBatchCount: 0,
+        outsideRangeBatchCount: 0,
+      },
+    };
+    const text = buildHospitalityPrepBatchExportBlock("en", unknownYield).lines.join("\n");
+    expect(text).toContain("Portions prepared: 18");
+    expect(text).not.toContain("Expected:");
+    expect(text).not.toContain("Yield variance:");
+    expect(text).toContain("no recorded actual yield");
   });
 
   it("builds table PDF", () => {

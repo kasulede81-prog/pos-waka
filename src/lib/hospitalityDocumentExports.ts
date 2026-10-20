@@ -28,10 +28,169 @@ export function buildHospitalityWaiterPdfBlob(lang: Language, report: Summary): 
   return doc.output("blob");
 }
 
-export function buildHospitalityKitchenPdfBlob(lang: Language, report: Summary): Blob {
+export type HospitalityPrepBatchExportBlock = {
+  title: string;
+  hint: string;
+  lines: string[];
+};
+
+/**
+ * Format the already-computed prep-batch report for export. Production totals are
+ * historical; current remaining portions/value are labelled separately and never
+ * added into production totals. Missing evidence is reported as missing, not zero.
+ */
+export function buildHospitalityPrepBatchExportBlock(
+  lang: Language,
+  report: Summary,
+): HospitalityPrepBatchExportBlock {
+  const batches = report.prepBatches;
+  const lines: string[] = [];
+
+  if (batches.rows.length === 0) {
+    lines.push(t(lang, "hospitalityPrepBatchReportEmpty"));
+  } else {
+    lines.push(
+      `${t(lang, "hospitalityPrepBatchReportBatches")}: ${batches.batchCount} · ${t(
+        lang,
+        "hospitalityPrepBatchReportPortions",
+      )}: ${formatIngredientDemandQty(batches.portionsPrepared)} · ${t(
+        lang,
+        "menuPrepBatchCost",
+      )}: UGX ${batches.totalBatchCostUgx.toLocaleString()}`,
+    );
+    if (batches.yieldMeasuredBatchCount > 0) {
+      lines.push(
+        `${t(lang, "hospitalityPrepBatchReportYieldVariance")}: ${
+          batches.yieldVariancePortions > 0 ? "+" : ""
+        }${formatIngredientDemandQty(batches.yieldVariancePortions)} (${t(
+          lang,
+          "hospitalityPrepBatchReportExpected",
+        )}: ${formatIngredientDemandQty(batches.expectedPortions)} · ${t(
+          lang,
+          "hospitalityPrepBatchReportActual",
+        )}: ${formatIngredientDemandQty(batches.actualPortions)})`,
+      );
+    }
+    lines.push(
+      `${t(lang, "hospitalityPrepBatchReportWasted")}: ${formatIngredientDemandQty(
+        batches.wastedPortions,
+      )} · ${t(lang, "menuPrepWasteValue")}: UGX ${batches.wasteValueUgx.toLocaleString()}`,
+    );
+    lines.push(
+      `${t(lang, "hospitalityPrepBatchReportCurrentStock")} — ${t(
+        lang,
+        "menuPrepRemaining",
+      )}: ${formatIngredientDemandQty(batches.remainingPortions)} · ${t(
+        lang,
+        "menuPrepRemainingValue",
+      )}: UGX ${batches.remainingValueUgx.toLocaleString()}`,
+    );
+
+    for (const row of batches.rows) {
+      lines.push(`  ${row.productName} — ${row.preparedAt.slice(0, 10)} — ${row.status}`);
+      const yieldParts = [
+        `${t(lang, "hospitalityPrepBatchReportPortions")}: ${formatIngredientDemandQty(
+          row.portionsPrepared,
+        )}`,
+      ];
+      // Expected and actual are shown together only when BOTH are recorded; a missing
+      // actual yield must not be implied as zero variance.
+      if (row.expectedPortions != null && row.actualPortions != null) {
+        yieldParts.push(
+          `${t(lang, "hospitalityPrepBatchReportExpected")}: ${formatIngredientDemandQty(
+            row.expectedPortions,
+          )}`,
+          `${t(lang, "hospitalityPrepBatchReportActual")}: ${formatIngredientDemandQty(
+            row.actualPortions,
+          )}`,
+          `${t(lang, "hospitalityPrepBatchReportYieldVariance")}: ${
+            (row.yieldVariancePortions ?? 0) > 0 ? "+" : ""
+          }${formatIngredientDemandQty(row.yieldVariancePortions ?? 0)}`,
+        );
+      }
+      lines.push(`    ${yieldParts.join(" · ")}`);
+      lines.push(
+        `    ${t(lang, "hospitalityPrepBatchReportCostPerPlate")}: UGX ${row.costPerPlateUgx.toLocaleString()} · ${t(
+          lang,
+          "menuPrepBatchCost",
+        )}: UGX ${row.totalBatchCostUgx.toLocaleString()}${
+          row.legacyCost ? ` · ${t(lang, "menuPrepLegacyBatch")}` : ""
+        }`,
+      );
+      lines.push(
+        `    ${t(lang, "hospitalityPrepBatchReportWasted")}: ${formatIngredientDemandQty(
+          row.wastedPortions,
+        )} · ${t(lang, "menuPrepWasteValue")}: UGX ${row.wasteValueUgx.toLocaleString()} · ${t(
+          lang,
+          "menuPrepRemaining",
+        )}: ${formatIngredientDemandQty(row.remainingPortions)} · ${t(
+          lang,
+          "menuPrepRemainingValue",
+        )}: UGX ${row.remainingValueUgx.toLocaleString()}`,
+      );
+    }
+  }
+
+  const yieldUnknownCount = batches.batchCount - batches.yieldMeasuredBatchCount;
+  if (batches.rows.length > 0 && yieldUnknownCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportYieldUnknown", {
+        count: String(yieldUnknownCount),
+      }),
+    );
+  }
+  if (batches.rows.length > 0 && batches.legacyBatchCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportLegacy", {
+        count: String(batches.legacyBatchCount),
+      }),
+    );
+  }
+  if (batches.undatedBatchCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportUndated", {
+        count: String(batches.undatedBatchCount),
+      }),
+    );
+  }
+  if (batches.outsideRangeBatchCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityPrepBatchReportOutsideRange", {
+        count: String(batches.outsideRangeBatchCount),
+      }),
+    );
+  }
+
+  return {
+    title: t(lang, "hospitalityPrepBatchReportTitle"),
+    hint: t(lang, "hospitalityPrepBatchReportHint"),
+    lines,
+  };
+}
+
+export function buildHospitalityKitchenPdfBlob(
+  lang: Language,
+  report: Summary,
+  periodLabel?: string,
+): Blob {
   const doc = new jsPDF({ unit: "pt", format: "a4" });
   const layout = createPdfLayout(doc);
   pdfLine(layout, doc, t(lang, "hospitalityKitchenExportTitle"), { size: 14, bold: true });
+  if (periodLabel?.trim()) {
+    pdfLine(layout, doc, `${t(lang, "hospitalityMenuExportPeriod")}: ${periodLabel.trim()}`, {
+      size: 9,
+    });
+  }
+
+  const batchBlock = buildHospitalityPrepBatchExportBlock(lang, report);
+  pdfGap(layout, 6);
+  pdfLine(layout, doc, batchBlock.title, { bold: true, size: 11 });
+  pdfLine(layout, doc, batchBlock.hint, { size: 8 });
+  for (const line of batchBlock.lines) {
+    pdfLine(layout, doc, line, { size: 8 });
+  }
+
+  pdfGap(layout, 6);
   pdfLine(layout, doc, `${t(lang, "hospitalityReportsMix")}:`, { bold: true });
   for (const row of report.categoryMix) {
     pdfLine(layout, doc, `  ${row.kind}: ${row.quantity} · UGX ${row.revenueUgx.toLocaleString()}`, { size: 9 });
@@ -410,8 +569,15 @@ export async function downloadHospitalityWaiterPdf(lang: Language, report: Summa
   return downloadPdfBlob(sanitizePdfStem("waka-hospitality-waiters") + ".pdf", buildHospitalityWaiterPdfBlob(lang, report));
 }
 
-export async function downloadHospitalityKitchenPdf(lang: Language, report: Summary): Promise<boolean> {
-  return downloadPdfBlob(sanitizePdfStem("waka-hospitality-kitchen") + ".pdf", buildHospitalityKitchenPdfBlob(lang, report));
+export async function downloadHospitalityKitchenPdf(
+  lang: Language,
+  report: Summary,
+  periodLabel?: string,
+): Promise<boolean> {
+  return downloadPdfBlob(
+    sanitizePdfStem("waka-hospitality-kitchen") + ".pdf",
+    buildHospitalityKitchenPdfBlob(lang, report, periodLabel),
+  );
 }
 
 export async function downloadHospitalityTablePdf(lang: Language, report: Summary): Promise<boolean> {

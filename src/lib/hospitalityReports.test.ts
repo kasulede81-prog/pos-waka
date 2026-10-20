@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Product, Sale, SaleLine, SaleLineModifier } from "../types";
+import type { PrepBatch, Product, Sale, SaleLine, SaleLineModifier } from "../types";
 import { computeHospitalityReports, hospitalityMenuMarginLabel } from "./hospitalityReports";
 
 function product(partial: Partial<Product> & Pick<Product, "id" | "name">): Product {
@@ -713,5 +713,181 @@ describe("ingredient demand", () => {
       estimatedCostUgx: null,
       costStatus: "unavailable",
     });
+  });
+});
+
+describe("prep batch production report", () => {
+  const range = { fromKey: "2026-06-02", toKey: "2026-06-03" };
+
+  function batch(partial: Partial<PrepBatch> & Pick<PrepBatch, "id" | "preparedAt">): PrepBatch {
+    return {
+      menuProductId: "batch-dish",
+      portionsPrepared: 0,
+      remainingPortions: 0,
+      unitCostUgx: 0,
+      status: "active",
+      createdAt: partial.preparedAt,
+      updatedAt: partial.preparedAt,
+      ...partial,
+    };
+  }
+
+  const batchDish = product({
+    id: "batch-dish",
+    name: "Batch chicken plate",
+    menu: {
+      productKind: "finished_menu",
+      prepMode: "batch_prepared",
+      prepBatches: [
+        batch({
+          id: "actual-yield",
+          preparedAt: "2026-06-02T10:00:00.000Z",
+          portionsPrepared: 18,
+          remainingPortions: 14,
+          unitCostUgx: 2_780,
+          expectedPortions: 20,
+          actualPortions: 18,
+          yieldBasis: "actual",
+          costBasis: "recipe_estimate",
+          ingredientCostUgx: 55_600,
+          additionalCostUgx: 17_000,
+          totalCostUgx: 72_600,
+          batchCostPerPlateUgx: 4_033,
+          wastedPortions: 2,
+          wasteCostUgx: 8_066,
+        }),
+        batch({
+          id: "unknown-yield",
+          preparedAt: "2026-06-03T10:00:00.000Z",
+          portionsPrepared: 20,
+          remainingPortions: 20,
+          unitCostUgx: 2_780,
+          expectedPortions: 20,
+          actualPortions: null,
+          yieldBasis: "estimated",
+          costBasis: "recipe_estimate",
+          ingredientCostUgx: 55_600,
+          additionalCostUgx: 0,
+          totalCostUgx: 55_600,
+          batchCostPerPlateUgx: 2_780,
+        }),
+        batch({
+          id: "legacy",
+          preparedAt: "2026-06-03T12:00:00.000Z",
+          portionsPrepared: 10,
+          remainingPortions: 5,
+          unitCostUgx: 2_780,
+          wastedPortions: 1,
+        }),
+        batch({
+          id: "outside-range",
+          preparedAt: "2026-05-01T10:00:00.000Z",
+          portionsPrepared: 99,
+          remainingPortions: 99,
+          unitCostUgx: 1_000,
+        }),
+        batch({
+          id: "undated",
+          preparedAt: "not-a-date",
+          portionsPrepared: 5,
+          remainingPortions: 5,
+          unitCostUgx: 1_000,
+        }),
+      ],
+    },
+  });
+
+  const report = computeHospitalityReports([], [batchDish], range).prepBatches;
+
+  it("filters by preparedAt and reports undated/outside-range evidence separately", () => {
+    expect(report.rows.map((row) => row.batchId)).toEqual([
+      "actual-yield",
+      "unknown-yield",
+      "legacy",
+    ]);
+    expect(report.undatedBatchCount).toBe(1);
+    expect(report.outsideRangeBatchCount).toBe(1);
+    expect(report.historyScope).toBe("persisted_batches_only");
+  });
+
+  it("shows yield variance only when both expected and actual are recorded", () => {
+    const actual = report.rows[0]!;
+    expect(actual).toMatchObject({
+      expectedPortions: 20,
+      actualPortions: 18,
+      yieldVariancePortions: -2,
+      yieldBasis: "actual",
+    });
+
+    const unknown = report.rows[1]!;
+    expect(unknown.expectedPortions).toBe(20);
+    expect(unknown.actualPortions).toBeNull();
+    expect(unknown.yieldVariancePortions).toBeNull();
+
+    expect(report.yieldMeasuredBatchCount).toBe(1);
+    expect(report.expectedPortions).toBe(20);
+    expect(report.actualPortions).toBe(18);
+    expect(report.yieldVariancePortions).toBe(-2);
+  });
+
+  it("values waste and remaining portions at the frozen cost basis", () => {
+    expect(report.rows[0]).toMatchObject({
+      costPerPlateUgx: 4_033,
+      totalBatchCostUgx: 72_600,
+      wastedPortions: 2,
+      wasteValueUgx: 8_066,
+      remainingPortions: 14,
+      remainingValueUgx: 56_462,
+      legacyCost: false,
+    });
+    expect(report.wastedPortions).toBe(3);
+    expect(report.wasteValueUgx).toBe(10_846);
+    expect(report.remainingPortions).toBe(39);
+    expect(report.remainingValueUgx).toBe(125_962);
+  });
+
+  it("uses a legacy batch's recorded ingredient-only cost", () => {
+    const legacy = report.rows[2]!;
+    expect(legacy).toMatchObject({
+      expectedPortions: null,
+      actualPortions: null,
+      yieldVariancePortions: null,
+      costPerPlateUgx: 2_780,
+      totalBatchCostUgx: 27_800,
+      wastedPortions: 1,
+      wasteValueUgx: 2_780,
+      remainingPortions: 5,
+      remainingValueUgx: 13_900,
+      legacyCost: true,
+    });
+    expect(report.legacyBatchCount).toBe(1);
+  });
+
+  it("keeps historical production totals separate from current remaining stock", () => {
+    expect(report.portionsPrepared).toBe(48); // 18 + 20 + 10, historical
+    expect(report.remainingPortions).toBe(39); // 14 + 20 + 5, current
+    expect(report.totalBatchCostUgx).toBe(156_000);
+    expect(report.remainingValueUgx).toBe(125_962);
+  });
+
+  it("reports only persisted batches and never infers pruned or missing history", () => {
+    const empty = computeHospitalityReports(
+      [],
+      [
+        product({
+          id: "empty-dish",
+          name: "Empty dish",
+          menu: { productKind: "finished_menu", prepMode: "batch_prepared", prepBatches: [] },
+        }),
+        product({ id: "no-menu", name: "No menu product" }),
+      ],
+      range,
+    ).prepBatches;
+
+    expect(empty.rows).toEqual([]);
+    expect(empty.batchCount).toBe(0);
+    expect(empty.totalBatchCostUgx).toBe(0);
+    expect(empty.remainingPortions).toBe(0);
+    expect(empty.historyScope).toBe("persisted_batches_only");
   });
 });

@@ -222,6 +222,8 @@ export function HospitalityReportsSection({
   const demand = hospitalityReports.menu.ingredientDemand;
   const hasDemandGaps =
     demand.missingIngredients.length > 0 || demand.noRecipeDishes.length > 0;
+  const prepBatches = hospitalityReports.prepBatches;
+  const prepYieldUnknownCount = prepBatches.batchCount - prepBatches.yieldMeasuredBatchCount;
   const cancellations = hospitalityReports.cancellations;
   const tableService = hospitalityReports.tableService;
 
@@ -382,6 +384,153 @@ export function HospitalityReportsSection({
               ))}
             </ul>
           </div>
+        ) : null}
+      </div>
+      <div className="rounded-2xl border border-waka-200 bg-card p-3">
+        <p className="text-xs font-black uppercase text-muted-foreground">
+          {t(lang, "hospitalityPrepBatchReportTitle")}
+        </p>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">
+          {t(lang, "hospitalityPrepBatchReportHint")}
+        </p>
+        {prepBatches.rows.length === 0 ? (
+          <p className="mt-2 text-sm font-semibold text-muted-foreground">
+            {t(lang, "hospitalityPrepBatchReportEmpty")}
+          </p>
+        ) : (
+          <>
+            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                {
+                  label: t(lang, "hospitalityPrepBatchReportBatches"),
+                  value: String(prepBatches.batchCount),
+                },
+                {
+                  label: t(lang, "hospitalityPrepBatchReportPortions"),
+                  value: formatIngredientDemandQty(prepBatches.portionsPrepared),
+                },
+                {
+                  label: t(lang, "hospitalityPrepBatchReportYieldVariance"),
+                  value:
+                    prepBatches.yieldMeasuredBatchCount > 0
+                      ? `${prepBatches.yieldVariancePortions > 0 ? "+" : ""}${formatIngredientDemandQty(
+                          prepBatches.yieldVariancePortions,
+                        )}`
+                      : "—",
+                },
+                {
+                  label: t(lang, "menuPrepBatchCost"),
+                  value: `UGX ${prepBatches.totalBatchCostUgx.toLocaleString()}`,
+                },
+                {
+                  label: t(lang, "hospitalityPrepBatchReportWasted"),
+                  value: formatIngredientDemandQty(prepBatches.wastedPortions),
+                },
+                {
+                  label: t(lang, "menuPrepWasteValue"),
+                  value: `UGX ${prepBatches.wasteValueUgx.toLocaleString()}`,
+                },
+              ].map((tile) => (
+                <article key={tile.label} className="rounded-xl bg-muted/60 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                    {tile.label}
+                  </p>
+                  <p className="mt-0.5 text-lg font-black text-foreground">{tile.value}</p>
+                </article>
+              ))}
+            </div>
+            <p className="mt-3 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+              {t(lang, "hospitalityPrepBatchReportCurrentStock")}
+            </p>
+            <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[
+                {
+                  label: t(lang, "menuPrepRemaining"),
+                  value: formatIngredientDemandQty(prepBatches.remainingPortions),
+                },
+                {
+                  label: t(lang, "menuPrepRemainingValue"),
+                  value: `UGX ${prepBatches.remainingValueUgx.toLocaleString()}`,
+                },
+              ].map((tile) => (
+                <article key={tile.label} className="rounded-xl bg-muted/60 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                    {tile.label}
+                  </p>
+                  <p className="mt-0.5 text-lg font-black text-foreground">{tile.value}</p>
+                </article>
+              ))}
+            </div>
+            <ul className="mt-3 space-y-2">
+              {prepBatches.rows.map((row) => (
+                <li
+                  key={row.batchId}
+                  className="rounded-xl border border-border/70 bg-muted/30 px-3 py-2 text-xs"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-sm font-bold text-foreground">{row.productName}</p>
+                    <p className="shrink-0 text-muted-foreground">
+                      {row.preparedAt.slice(0, 10)} · {row.status}
+                    </p>
+                  </div>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {t(lang, "hospitalityPrepBatchReportPortions")}:{" "}
+                    {formatIngredientDemandQty(row.portionsPrepared)}
+                    {row.expectedPortions != null && row.actualPortions != null
+                      ? ` · ${t(lang, "hospitalityPrepBatchReportExpected")}: ${formatIngredientDemandQty(
+                          row.expectedPortions,
+                        )} · ${t(lang, "hospitalityPrepBatchReportActual")}: ${formatIngredientDemandQty(
+                          row.actualPortions,
+                        )} · ${t(lang, "hospitalityPrepBatchReportYieldVariance")}: ${
+                          (row.yieldVariancePortions ?? 0) > 0 ? "+" : ""
+                        }${formatIngredientDemandQty(row.yieldVariancePortions ?? 0)}`
+                      : ""}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {t(lang, "hospitalityPrepBatchReportCostPerPlate")}: UGX{" "}
+                    {row.costPerPlateUgx.toLocaleString()} · {t(lang, "menuPrepBatchCost")}: UGX{" "}
+                    {row.totalBatchCostUgx.toLocaleString()}
+                    {row.legacyCost ? ` · ${t(lang, "menuPrepLegacyBatch")}` : ""}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {t(lang, "hospitalityPrepBatchReportWasted")}:{" "}
+                    {formatIngredientDemandQty(row.wastedPortions)} ·{" "}
+                    {t(lang, "menuPrepWasteValue")}: UGX {row.wasteValueUgx.toLocaleString()} ·{" "}
+                    {t(lang, "menuPrepRemaining")}: {formatIngredientDemandQty(row.remainingPortions)} ·{" "}
+                    {t(lang, "menuPrepRemainingValue")}: UGX {row.remainingValueUgx.toLocaleString()}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {prepBatches.rows.length > 0 && prepYieldUnknownCount > 0 ? (
+          <p className="mt-2 text-xs font-semibold text-amber-800">
+            {tTemplate(lang, "hospitalityPrepBatchReportYieldUnknown", {
+              count: String(prepYieldUnknownCount),
+            })}
+          </p>
+        ) : null}
+        {prepBatches.rows.length > 0 && prepBatches.legacyBatchCount > 0 ? (
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">
+            {tTemplate(lang, "hospitalityPrepBatchReportLegacy", {
+              count: String(prepBatches.legacyBatchCount),
+            })}
+          </p>
+        ) : null}
+        {prepBatches.undatedBatchCount > 0 ? (
+          <p className="mt-1 text-xs font-semibold text-amber-800">
+            {tTemplate(lang, "hospitalityPrepBatchReportUndated", {
+              count: String(prepBatches.undatedBatchCount),
+            })}
+          </p>
+        ) : null}
+        {prepBatches.outsideRangeBatchCount > 0 ? (
+          <p className="mt-1 text-xs font-semibold text-muted-foreground">
+            {tTemplate(lang, "hospitalityPrepBatchReportOutsideRange", {
+              count: String(prepBatches.outsideRangeBatchCount),
+            })}
+          </p>
         ) : null}
       </div>
       <div className="rounded-2xl border border-waka-200 bg-card p-3">
@@ -742,7 +891,7 @@ export function HospitalityReportsSection({
         <button type="button" className="rounded-xl bg-waka-700 px-3 py-2 text-xs font-black text-white" onClick={() => void downloadHospitalityWaiterPdf(lang, hospitalityReports)}>
           {t(lang, "hospitalityExportWaiterPdf")}
         </button>
-        <button type="button" className="rounded-xl border border-waka-300 bg-card px-3 py-2 text-xs font-black text-waka-900" onClick={() => void downloadHospitalityKitchenPdf(lang, hospitalityReports)}>
+        <button type="button" className="rounded-xl border border-waka-300 bg-card px-3 py-2 text-xs font-black text-waka-900" onClick={() => void downloadHospitalityKitchenPdf(lang, hospitalityReports, periodLabel)}>
           {t(lang, "hospitalityExportKitchenPdf")}
         </button>
         <button type="button" className="rounded-xl border border-waka-300 bg-card px-3 py-2 text-xs font-black text-waka-900" onClick={() => void downloadHospitalityTablePdf(lang, hospitalityReports)}>

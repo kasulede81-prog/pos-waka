@@ -3530,6 +3530,26 @@ const en: Dict = {
   hospitalityReportsNoMenuSales: "No completed menu sales in this period.",
   hospitalityReportsNoLowMargin: "No low-margin sold items with a usable margin.",
   hospitalityReportsNoIngredientGaps: "No ingredient cost gaps.",
+  hospitalityPrepBatchReportTitle: "Prep batch production",
+  hospitalityPrepBatchReportHint:
+    "Batches prepared in the selected period and persisted in this device's product records. Exhausted batches stay in history; batches removed by a reset/restore, or not yet synced to this device, cannot be reconstructed.",
+  hospitalityPrepBatchReportEmpty: "No prep batches recorded in this period.",
+  hospitalityPrepBatchReportBatches: "Batches",
+  hospitalityPrepBatchReportPortions: "Portions prepared",
+  hospitalityPrepBatchReportExpected: "Expected",
+  hospitalityPrepBatchReportActual: "Actual",
+  hospitalityPrepBatchReportYieldVariance: "Yield variance",
+  hospitalityPrepBatchReportCostPerPlate: "Cost / plate",
+  hospitalityPrepBatchReportWasted: "Wasted",
+  hospitalityPrepBatchReportCurrentStock: "Current remaining stock",
+  hospitalityPrepBatchReportYieldUnknown:
+    "{count} batch(es) have no recorded actual yield; variance is not shown.",
+  hospitalityPrepBatchReportLegacy:
+    "{count} legacy batch(es) use their recorded ingredient-only cost.",
+  hospitalityPrepBatchReportUndated:
+    "{count} batch(es) have no readable prepared date and are excluded.",
+  hospitalityPrepBatchReportOutsideRange:
+    "{count} persisted batch(es) fall outside this period.",
   hospitalityIngredientDemandTitle: "Ingredient demand (estimated recipe-based)",
   hospitalityIngredientDemandHint:
     "Recipe-based demand from completed menu sales. This is not stock usage or an inventory movement. Quantities respect recipe yield and waste; UGX is shown only when the current ingredient cost has trustworthy provenance.",
@@ -16610,6 +16630,26 @@ const lgBase: Dict = {
   hospitalityReportsNoMenuSales: "Tewali kutunda menu kukakasiddwa mu kiseera kino.",
   hospitalityReportsNoLowMargin: "Tewali bintu byatundiddwa na magini matono agakozesebwa.",
   hospitalityReportsNoIngredientGaps: "Tewali bibula ku miwendo gy'ebikozesebwa.",
+  hospitalityPrepBatchReportTitle: "Okukola ebibinja by'okufumba",
+  hospitalityPrepBatchReportHint:
+    "Ebibinja ebyategekeddwa mu kiseera ekilondeddwa era ebiterekiddwa mu ndaga z'ebintu ku kifaananyi kino. Ebibinja ebimaze okukozesebwa bisigala mu byafaayo; ebyaggyibwa mu reset/restore oba ebitannasindikibwa ku kifaananyi kino tebisobola kudda.",
+  hospitalityPrepBatchReportEmpty: "Tewali bibinja by'okufumba mu kiseera kino.",
+  hospitalityPrepBatchReportBatches: "Ebibinja",
+  hospitalityPrepBatchReportPortions: "Ebika ebyategekeddwa",
+  hospitalityPrepBatchReportExpected: "Ekyasuubirwa",
+  hospitalityPrepBatchReportActual: "Ekyamala",
+  hospitalityPrepBatchReportYieldVariance: "Enjawulo y'ebivaamu",
+  hospitalityPrepBatchReportCostPerPlate: "Omuwendo / kkala",
+  hospitalityPrepBatchReportWasted: "Ebyonooneddwa",
+  hospitalityPrepBatchReportCurrentStock: "Sitoka esigadde kati",
+  hospitalityPrepBatchReportYieldUnknown:
+    "Ebibinja {count} tebirina muwendo gwa mavuno ogwakakasiddwa; enjawulo teragiddwa.",
+  hospitalityPrepBatchReportLegacy:
+    "Ebibinja {count} eby'emulembe bikozesa omuwendo gw'ebikozesebwa gwe baateeka.",
+  hospitalityPrepBatchReportUndated:
+    "Ebibinja {count} tebirina olunaku lw'okutegeka olusomeka era biggiddwa ebweru.",
+  hospitalityPrepBatchReportOutsideRange:
+    "Ebibinja {count} ebiterekiddwa biri ebweru w'ekiseera kino.",
   hospitalityReportsTopDishes: "Ebyokulya ebisinga",
   hospitalityReportsTopModifiers: "Ebyongerwa ebisinga",
   hospitalityIngredientDemandTitle: "Obwetaavu bw'ebikozesebwa (kigerekeranyizibwa okuva ku nteekateeka)",

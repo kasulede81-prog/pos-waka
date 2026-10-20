@@ -1,6 +1,9 @@
 import type {
   HospitalityFloorState,
   Language,
+  PrepBatchCostBasis,
+  PrepBatchStatus,
+  PrepBatchYieldBasis,
   Product,
   Recipe,
   Sale,
@@ -269,6 +272,73 @@ export type HospitalityTableServiceReport = {
   outsideRangeCount: number;
 };
 
+/**
+ * One persisted prep batch in the selected production period. Production figures
+ * (portions prepared, yield, cost, waste) are historical; remaining portions/value
+ * are the CURRENT stock left on that batch and are never added into production totals.
+ */
+export type HospitalityPrepBatchReportRow = {
+  batchId: string;
+  productId: string;
+  productName: string;
+  preparedAt: string;
+  status: PrepBatchStatus;
+  yieldBasis: PrepBatchYieldBasis | null;
+  costBasis: PrepBatchCostBasis | null;
+  /** Recorded produced count (actual when known, otherwise the entered/expected count). */
+  portionsPrepared: number;
+  expectedPortions: number | null;
+  actualPortions: number | null;
+  /** actual − expected, ONLY when both are recorded; null means no evidence, not zero variance. */
+  yieldVariancePortions: number | null;
+  /** Frozen ingredient-only cost per plate recorded on the batch. */
+  ingredientCostPerPlateUgx: number;
+  /** Frozen full batch cost per plate (legacy batches: ingredient-only cost). */
+  costPerPlateUgx: number;
+  ingredientCostUgx: number;
+  additionalCostUgx: number;
+  totalBatchCostUgx: number;
+  wastedPortions: number;
+  wasteValueUgx: number;
+  /** Current remaining stock, not historical production. */
+  remainingPortions: number;
+  /** Current remaining value at the same frozen cost basis. */
+  remainingValueUgx: number;
+  /** True when the batch has no explicit total cost (legacy ingredient-only record). */
+  legacyCost: boolean;
+};
+
+/**
+ * Read-only aggregate of prep batches PERSISTED in the product records.
+ * The app never prunes exhausted/wasted/cancelled batches, but product history can
+ * still be absent after a shop reset/restore or on a device that never received a
+ * batch from another device. The report therefore never claims complete history.
+ */
+export type HospitalityPrepBatchReport = {
+  rows: HospitalityPrepBatchReportRow[];
+  batchCount: number;
+  portionsPrepared: number;
+  /** Batches where BOTH expected and actual portions are recorded. */
+  yieldMeasuredBatchCount: number;
+  /** Sums over the measured batches only; never an inferred yield for the rest. */
+  expectedPortions: number;
+  actualPortions: number;
+  yieldVariancePortions: number;
+  totalBatchCostUgx: number;
+  wastedPortions: number;
+  wasteValueUgx: number;
+  /** Current remaining stock; never a production total. */
+  remainingPortions: number;
+  remainingValueUgx: number;
+  legacyBatchCount: number;
+  /** Persisted batches with no readable preparedAt; excluded from the date range. */
+  undatedBatchCount: number;
+  /** Persisted batches whose preparedAt falls outside the selected range. */
+  outsideRangeBatchCount: number;
+  /** Explicit scope so no caller can present this as complete history. */
+  historyScope: "persisted_batches_only";
+};
+
 export function formatHospitalityDurationMinutes(minutes: number): string {
   if (!Number.isFinite(minutes)) return "—";
   const total = Math.max(0, Math.round(minutes));
@@ -304,6 +374,7 @@ export type HospitalityReportSummary = {
   tables: TableRevenueRow[];
   peakHours: PeakHourRow[];
   menu: HospitalityMenuReport;
+  prepBatches: HospitalityPrepBatchReport;
   cancellations: HospitalityCancelledMenuReport;
   tableService: HospitalityTableServiceReport;
 };
@@ -611,6 +682,122 @@ function computeHospitalityMenuReport(
   };
 }
 
+function finiteNonNegative(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : null;
+}
+
+function roundBatchQty(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+/**
+ * Aggregate persisted prep batches prepared inside the report range.
+ * Nothing is inferred: a yield variance needs BOTH expected and actual portions;
+ * missing waste stays zero; current remaining stock is kept separate from the
+ * historical production totals. Batches are never pruned by the app, but only
+ * batches present in the device's product records can be reported.
+ */
+function computePrepBatchReport(
+  products: Product[],
+  range: HospitalityReportRange,
+): HospitalityPrepBatchReport {
+  const rows: HospitalityPrepBatchReportRow[] = [];
+  let undatedBatchCount = 0;
+  let outsideRangeBatchCount = 0;
+
+  for (const product of products) {
+    for (const batch of product.menu?.prepBatches ?? []) {
+      const preparedAt = typeof batch.preparedAt === "string" ? batch.preparedAt : "";
+      const preparedMs = preparedAt ? new Date(preparedAt).getTime() : Number.NaN;
+      if (!Number.isFinite(preparedMs)) {
+        undatedBatchCount += 1;
+        continue;
+      }
+      if (!inRange(preparedAt, range)) {
+        outsideRangeBatchCount += 1;
+        continue;
+      }
+
+      const portionsPrepared = finiteNonNegative(batch.portionsPrepared) ?? 0;
+      const expectedPortions = finiteNonNegative(batch.expectedPortions);
+      const actualPortions = finiteNonNegative(batch.actualPortions);
+      const ingredientCostPerPlateUgx = finiteNonNegative(batch.unitCostUgx) ?? 0;
+      const costPerPlateUgx =
+        finiteNonNegative(batch.batchCostPerPlateUgx) ?? ingredientCostPerPlateUgx;
+      const recordedTotalCost = finiteNonNegative(batch.totalCostUgx);
+      const legacyCost = recordedTotalCost == null;
+      const totalBatchCostUgx =
+        recordedTotalCost ?? Math.round(ingredientCostPerPlateUgx * portionsPrepared);
+      const recordedIngredientCost = finiteNonNegative(batch.ingredientCostUgx);
+      const recordedAdditionalCost = finiteNonNegative(batch.additionalCostUgx);
+      const ingredientCostUgx =
+        recordedIngredientCost ?? Math.max(0, totalBatchCostUgx - (recordedAdditionalCost ?? 0));
+      const additionalCostUgx =
+        recordedAdditionalCost ?? Math.max(0, totalBatchCostUgx - ingredientCostUgx);
+      const wastedPortions = finiteNonNegative(batch.wastedPortions) ?? 0;
+      const remainingPortions = finiteNonNegative(batch.remainingPortions) ?? 0;
+      const wasteValueUgx =
+        finiteNonNegative(batch.wasteCostUgx) ?? Math.round(wastedPortions * costPerPlateUgx);
+
+      rows.push({
+        batchId: batch.id,
+        productId: product.id,
+        productName: product.name,
+        preparedAt,
+        status: batch.status,
+        yieldBasis: batch.yieldBasis ?? null,
+        costBasis: batch.costBasis ?? null,
+        portionsPrepared: roundBatchQty(portionsPrepared),
+        expectedPortions,
+        actualPortions,
+        yieldVariancePortions:
+          expectedPortions != null && actualPortions != null
+            ? roundBatchQty(actualPortions - expectedPortions)
+            : null,
+        ingredientCostPerPlateUgx,
+        costPerPlateUgx,
+        ingredientCostUgx: Math.round(ingredientCostUgx),
+        additionalCostUgx: Math.round(additionalCostUgx),
+        totalBatchCostUgx: Math.round(totalBatchCostUgx),
+        wastedPortions: roundBatchQty(wastedPortions),
+        wasteValueUgx: Math.round(wasteValueUgx),
+        remainingPortions: roundBatchQty(remainingPortions),
+        remainingValueUgx: Math.round(remainingPortions * costPerPlateUgx),
+        legacyCost,
+      });
+    }
+  }
+
+  rows.sort(
+    (a, b) => a.preparedAt.localeCompare(b.preparedAt) || a.productName.localeCompare(b.productName),
+  );
+
+  const measured = rows.filter((row) => row.yieldVariancePortions != null);
+  const sum = (get: (row: HospitalityPrepBatchReportRow) => number) =>
+    rows.reduce((total, row) => total + get(row), 0);
+
+  return {
+    rows,
+    batchCount: rows.length,
+    portionsPrepared: roundBatchQty(sum((row) => row.portionsPrepared)),
+    yieldMeasuredBatchCount: measured.length,
+    expectedPortions: roundBatchQty(measured.reduce((total, row) => total + (row.expectedPortions ?? 0), 0)),
+    actualPortions: roundBatchQty(measured.reduce((total, row) => total + (row.actualPortions ?? 0), 0)),
+    yieldVariancePortions: roundBatchQty(
+      measured.reduce((total, row) => total + (row.yieldVariancePortions ?? 0), 0),
+    ),
+    totalBatchCostUgx: sum((row) => row.totalBatchCostUgx),
+    wastedPortions: roundBatchQty(sum((row) => row.wastedPortions)),
+    wasteValueUgx: sum((row) => row.wasteValueUgx),
+    remainingPortions: roundBatchQty(sum((row) => row.remainingPortions)),
+    remainingValueUgx: sum((row) => row.remainingValueUgx),
+    legacyBatchCount: rows.filter((row) => row.legacyCost).length,
+    undatedBatchCount,
+    outsideRangeBatchCount,
+    historyScope: "persisted_batches_only",
+  };
+}
+
 function inRange(iso: string, range: HospitalityReportRange): boolean {
   const key = dateKeyKampala(new Date(iso));
   return key >= range.fromKey && key <= range.toKey;
@@ -912,6 +1099,7 @@ export function computeHospitalityReports(
     tables,
     peakHours,
     menu: computeHospitalityMenuReport(scoped, products),
+    prepBatches: computePrepBatchReport(products, range),
     cancellations: computeCancelledMenuReport(
       sales,
       options?.voidRecords ?? [],
