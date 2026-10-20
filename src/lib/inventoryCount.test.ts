@@ -136,12 +136,33 @@ describe("inventoryCount — approval flow", () => {
     expect(canTransitionInventoryCountStatus("draft", "applied")).toBe(false);
   });
 
-  it("role permissions match sprint matrix", () => {
+  it("lets counters submit, approvers approve, and keeps apply owner-only", () => {
+    // Counter stage: anyone who may count may hand the count off for review.
+    expect(canInventoryCount("cashier", "count")).toBe(true);
+    expect(canInventoryCount("cashier", "submit")).toBe(true);
+    expect(canInventoryCount("stock_keeper", "count")).toBe(true);
+    expect(canInventoryCount("stock_keeper", "submit")).toBe(true);
+
+    // Approval still needs inventory-write + back-office access.
+    expect(canInventoryCount("manager", "submit")).toBe(true);
+    expect(canInventoryCount("manager", "approve")).toBe(true);
+    expect(canInventoryCount("supervisor", "approve")).toBe(true);
+    expect(canInventoryCount("cashier", "approve")).toBe(false);
+    expect(canInventoryCount("stock_keeper", "approve")).toBe(false);
+
+    // Applying to stock remains a separate, owner-gated stage.
     expect(canInventoryCount("owner", "apply")).toBe(true);
     expect(canInventoryCount("manager", "apply")).toBe(false);
-    expect(canInventoryCount("manager", "approve")).toBe(true);
-    expect(canInventoryCount("cashier", "submit")).toBe(false);
-    expect(canInventoryCount("cashier", "count")).toBe(true);
+    expect(canInventoryCount("supervisor", "apply")).toBe(false);
+    expect(canInventoryCount("stock_keeper", "apply")).toBe(false);
+    expect(canInventoryCount("cashier", "apply")).toBe(false);
+
+    // Waiters may view but never count or mutate.
+    expect(canInventoryCount("waiter", "view")).toBe(true);
+    expect(canInventoryCount("waiter", "count")).toBe(false);
+    expect(canInventoryCount("waiter", "submit")).toBe(false);
+    expect(canInventoryCount("waiter", "approve")).toBe(false);
+    expect(canInventoryCount("waiter", "apply")).toBe(false);
   });
 });
 

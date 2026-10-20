@@ -79,9 +79,10 @@ path. It records what already works, what was broken, and what remains.
 5. **Recipe units** — recipe lines accept only ingredient base units; buying
    packs/crates cannot be selected directly.
 6. **Menu sections** — fixed default list; no add/rename/deactivate editor.
-7. **Count roles** — stock keeper/cashier can count but cannot submit/apply;
-   manager can approve but not apply. This is the existing role matrix, not a
-   Hospitality-specific fork.
+7. **Count roles** — counters can now submit for approval (`stock.count`);
+   approval stays `stock.adjust` + back-office, and applying to stock stays
+   owner-only (`settings.shop`) with an explicit hand-off in the UI. Letting
+   managers apply is an open policy decision, not a Hospitality-specific fork.
 
 ## Pending sale
 

@@ -42,11 +42,18 @@ export function canInventoryCount(
     case "count":
       return countPerm(role, actorPermissions, "stock.count");
     case "submit":
+      // Submitting is the counter's hand-off for review, not a stock mutation.
+      // A cashier/stock keeper who counted must be able to finish their stage;
+      // approval still requires stock.adjust + back-office access.
+      return countPerm(role, actorPermissions, "stock.count");
     case "approve":
       return countPerm(role, actorPermissions, "stock.adjust") &&
         countPerm(role, actorPermissions, "back_office.access");
     case "apply":
     case "cancel":
+      // Applying/cancelling changes or closes the stock record. This stays
+      // owner-gated (settings.shop) so approval and application remain separate
+      // stages performed by different roles.
       return countPerm(role, actorPermissions, "settings.shop");
     default:
       return false;

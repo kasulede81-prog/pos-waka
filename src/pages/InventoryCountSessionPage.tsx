@@ -10,7 +10,7 @@ import {
   canInventoryCount,
   sessionHasStockDrift,
 } from "../lib/inventoryCount";
-import { countProgressStage, filterInventoryCountLines } from "../lib/countWorkspace";
+import { countProgressStage, filterInventoryCountLines, inventoryCountHandoffStage } from "../lib/countWorkspace";
 import { InventoryCountShell } from "../components/inventory/count/InventoryCountShell";
 import { CountHeader } from "../components/inventory/count/CountHeader";
 import { CountProgress } from "../components/inventory/count/CountProgress";
@@ -74,7 +74,7 @@ export function InventoryCountSessionPage({ lang }: Props) {
     autoStartedRef.current = true;
     const r = startSession(sessionId);
     if (!r.ok) autoStartedRef.current = false;
-  }, [sessionId, session, actor.role, startSession]);
+  }, [sessionId, session, actor.role, actor.permissions, startSession]);
 
   if (!sessionId || !session) {
     return (
@@ -102,6 +102,14 @@ export function InventoryCountSessionPage({ lang }: Props) {
   const showReview =
     session.status === "submitted" || session.status === "approved" || session.status === "applied";
   const isComplete = session.status === "applied";
+  const handoff = inventoryCountHandoffStage({
+    status: session.status,
+    canSubmit,
+    canApprove,
+    canApply,
+  });
+  const handoffKey = handoff ? `inventoryCountHandoff_${handoff}` : null;
+  const handoffIsWaiting = handoff?.startsWith("awaiting_") ?? false;
 
   const shopName = preferences.shopDisplayName?.trim() || "Shop";
   const operatorName = session.appliedByName ?? session.approvedByName ?? session.startedByName ?? actor.displayName ?? actor.userId;
@@ -181,6 +189,18 @@ export function InventoryCountSessionPage({ lang }: Props) {
       >
         <CountProgress lang={lang} stage={progressStage} />
         <CountHeader lang={lang} session={session} />
+
+        {handoff && handoff !== "complete" && handoffKey ? (
+          <p
+            className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${
+              handoffIsWaiting
+                ? "border-amber-200 bg-amber-50 text-amber-950"
+                : "border-border/60 bg-muted/30 text-muted-foreground"
+            }`}
+          >
+            {t(lang, handoffKey)}
+          </p>
+        ) : null}
 
         {session.notes ? (
           <p className="rounded-2xl border border-border/60 bg-muted/30 px-4 py-3 text-sm font-semibold text-muted-foreground">

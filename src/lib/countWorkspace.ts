@@ -3,6 +3,40 @@ import { productMatchesSellSearch } from "./productCategories";
 
 export type CountProgressStage = "choose" | "count" | "review" | "apply" | "complete";
 
+export type InventoryCountHandoffStage =
+  | "submit"
+  | "awaiting_submit"
+  | "approve"
+  | "awaiting_approval"
+  | "apply"
+  | "awaiting_apply"
+  | "complete";
+
+/**
+ * What the current actor can do next, or who must take over. This keeps the
+ * cross-role hand-off explicit: the counter submits, an approver reviews, and
+ * the owner applies to stock.
+ */
+export function inventoryCountHandoffStage(input: {
+  status: InventoryCountSessionStatus;
+  canSubmit: boolean;
+  canApprove: boolean;
+  canApply: boolean;
+}): InventoryCountHandoffStage | null {
+  switch (input.status) {
+    case "counting":
+      return input.canSubmit ? "submit" : "awaiting_submit";
+    case "submitted":
+      return input.canApprove ? "approve" : "awaiting_approval";
+    case "approved":
+      return input.canApply ? "apply" : "awaiting_apply";
+    case "applied":
+      return "complete";
+    default:
+      return null;
+  }
+}
+
 const STAGE_ORDER: CountProgressStage[] = ["choose", "count", "review", "apply", "complete"];
 
 export function countProgressStage(status: InventoryCountSessionStatus): CountProgressStage {

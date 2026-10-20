@@ -1295,6 +1295,14 @@ export const swOverrides: Record<string, string> = {
   menuSectionNameRequired: "Weka jina la sehemu.",
   menuSectionNameDuplicate: "Sehemu yenye jina hili ipo tayari.",
   menuSectionNotFound: "Sehemu hii haipo tena.",
+  inventoryCountHandoff_submit: "Uhesabu umehifadhiwa — wasilisha kwa idhini ukimaliza.",
+  inventoryCountHandoff_awaiting_submit: "Meneja au mmiliki lazima awasilishe hesabu hii.",
+  inventoryCountHandoff_approve: "Imewasilishwa — kagua na uidhinishe.",
+  inventoryCountHandoff_awaiting_approval:
+    "Imewasilishwa — meneja au mmiliki lazima akague na kuidhinisha.",
+  inventoryCountHandoff_apply: "Imeidhinishwa — iko tayari kutumika kwenye hisa.",
+  inventoryCountHandoff_awaiting_apply:
+    "Imeidhinishwa — mmiliki lazima atumie hesabu hii kwenye hisa.",
   hospitalityPrepBatchesSub:
     "Chagua chakula kilichowekwa kwa maandalizi ya kundi. Viungo hukatwa, gharama za kundi hufungwa, na kundi hurekodiwa pamoja na kumbukumbu ya ukaguzi.",
   hospitalityPrepSelectDish: "Chakula",

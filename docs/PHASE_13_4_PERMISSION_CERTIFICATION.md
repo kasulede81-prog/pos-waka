@@ -82,8 +82,9 @@ Role-name switches replaced with permission mapping:
 
 - view → `stock.view` \| `stock.count` \| waiter label exception
 - create/count → `stock.count`
-- submit/approve → `stock.adjust` + `back_office.access`
-- apply/cancel → `settings.shop`
+- submit → `stock.count` (the counter's hand-off for review)
+- approve → `stock.adjust` + `back_office.access`
+- apply/cancel → `settings.shop` (owner-gated final stock write)
 
 ---
 
