@@ -281,6 +281,12 @@ describe("hospitalityExport", () => {
     expect(text).toContain("legacy");
     expect(text).toContain("have no readable prepared date");
     expect(text).toContain("fall outside this period");
+    // Recipe/ingredient basis and full batch cost stay distinguishable.
+    expect(text).toContain("Recipe ingredient cost / plate (frozen estimate): UGX 2,780");
+    expect(text).toContain("Additional costs (whole batch): UGX 17,000");
+    expect(text).toContain("Full batch cost (ingredients + extras): UGX 72,600");
+    expect(text).toContain("Full batch cost / plate (sale COGS): UGX 4,033");
+    expect(text).toContain("sale COGS and stock value use it");
   });
 
   it("does not show expected yield alone when actual yield is unrecorded", () => {

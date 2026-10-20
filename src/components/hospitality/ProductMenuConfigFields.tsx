@@ -157,7 +157,8 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
     .filter((cost) => cost.amountUgx > 0);
   const prepAdditionalCostUgx = prepAdditionalCostValues.reduce((sum, cost) => sum + cost.amountUgx, 0);
   const prepTotalCostUgx = prepIngredientCostUgx + prepAdditionalCostUgx;
-  const prepSaleCogsPerPlateUgx = Math.max(
+  // Recipe ingredient cost per plate (recipe yield basis), NOT the batch cost.
+  const prepRecipeCostPerPlateUgx = Math.max(
     0,
     Math.round(computeMenuItemFoodCostUgx({ ...product, menu }, allProducts)),
   );
@@ -712,8 +713,8 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                       <span className="font-black">{formatUgx(prepTotalCostUgx)}</span>
                     </p>
                     <p className="flex items-center justify-between">
-                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepCostPerPlate")}</span>
-                      <span className="font-black">{formatUgx(prepSaleCogsPerPlateUgx)}</span>
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepRecipeCostPerPlate")}</span>
+                      <span className="font-black">{formatUgx(prepRecipeCostPerPlateUgx)}</span>
                     </p>
                     <p className="flex items-center justify-between">
                       <span className="font-bold text-muted-foreground">{t(lang, "menuPrepSaleCogsPerPlate")}</span>
@@ -736,6 +737,9 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                     <p className="mt-1 text-[11px] font-bold text-muted-foreground">
                       {t(lang, prepActualQtyValue ? "menuPrepYieldActual" : "menuPrepYieldEstimated")} ·{" "}
                       {t(lang, prepActualIngredientCostValue != null ? "menuPrepIngredientCostActual" : "menuPrepIngredientCostEstimate")}
+                    </p>
+                    <p className="mt-1 text-[11px] font-medium text-muted-foreground">
+                      {t(lang, "menuPrepBatchCostBasisNote")}
                     </p>
                   </div>
 
@@ -809,6 +813,11 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                               {t(lang, "menuPrepSaleCogsPerPlate")}:{" "}
                               {formatUgx(batch.batchCostPerPlateUgx ?? batch.unitCostUgx)}
                             </p>
+                            {batch.batchCostPerPlateUgx == null ? (
+                              <p className="font-bold text-amber-700">
+                                {t(lang, "menuPrepLegacyBatch")}
+                              </p>
+                            ) : null}
                             <p>
                               {t(lang, "menuPrepRemaining")}: {batch.remainingPortions}
                               {" · "}
@@ -849,7 +858,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                             </span>
                             <span>
                               {t(lang, "menuPrepCostPerPlate")}: {formatUgx(batch.unitCostUgx)} ·{" "}
-                              {t(lang, "menuPrepBatchCost")}:{" "}
+                              {t(lang, "menuPrepLegacyBatch")}:{" "}
                               {formatUgx(batch.unitCostUgx * batch.portionsPrepared)}
                             </span>
                           </div>
@@ -925,6 +934,9 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                       );
                     })}
                   </ul>
+                  <p className="mt-1 text-[10px] font-medium text-muted-foreground">
+                    {t(lang, "menuPrepBatchCostBasisNote")}
+                  </p>
                 </div>
               )}
             </div>

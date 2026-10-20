@@ -58,6 +58,7 @@ export function buildHospitalityPrepBatchExportBlock(
         "menuPrepBatchCost",
       )}: UGX ${batches.totalBatchCostUgx.toLocaleString()}`,
     );
+    lines.push(t(lang, "menuPrepBatchCostBasisNote"));
     if (batches.yieldMeasuredBatchCount > 0) {
       lines.push(
         `${t(lang, "hospitalityPrepBatchReportYieldVariance")}: ${
@@ -110,12 +111,21 @@ export function buildHospitalityPrepBatchExportBlock(
       }
       lines.push(`    ${yieldParts.join(" · ")}`);
       lines.push(
-        `    ${t(lang, "hospitalityPrepBatchReportCostPerPlate")}: UGX ${row.costPerPlateUgx.toLocaleString()} · ${t(
+        `    ${t(lang, "menuPrepCostPerPlate")}: UGX ${row.ingredientCostPerPlateUgx.toLocaleString()} · ${t(
           lang,
-          "menuPrepBatchCost",
-        )}: UGX ${row.totalBatchCostUgx.toLocaleString()}${
+          "hospitalityPrepBatchReportCostPerPlate",
+        )}: UGX ${row.costPerPlateUgx.toLocaleString()}${
           row.legacyCost ? ` · ${t(lang, "menuPrepLegacyBatch")}` : ""
         }`,
+      );
+      lines.push(
+        `    ${t(lang, "menuPrepIngredientCostTotal")}: UGX ${row.ingredientCostUgx.toLocaleString()} · ${t(
+          lang,
+          "menuPrepAdditionalCostTotal",
+        )}: UGX ${row.additionalCostUgx.toLocaleString()} · ${t(
+          lang,
+          "menuPrepBatchCost",
+        )}: UGX ${row.totalBatchCostUgx.toLocaleString()}`,
       );
       lines.push(
         `    ${t(lang, "hospitalityPrepBatchReportWasted")}: ${formatIngredientDemandQty(

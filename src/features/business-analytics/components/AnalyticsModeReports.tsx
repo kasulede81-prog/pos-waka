@@ -487,10 +487,19 @@ export function HospitalityReportsSection({
                       : ""}
                   </p>
                   <p className="mt-0.5 text-muted-foreground">
+                    {t(lang, "menuPrepCostPerPlate")}: UGX{" "}
+                    {row.ingredientCostPerPlateUgx.toLocaleString()} ·{" "}
                     {t(lang, "hospitalityPrepBatchReportCostPerPlate")}: UGX{" "}
-                    {row.costPerPlateUgx.toLocaleString()} · {t(lang, "menuPrepBatchCost")}: UGX{" "}
-                    {row.totalBatchCostUgx.toLocaleString()}
+                    {row.costPerPlateUgx.toLocaleString()}
                     {row.legacyCost ? ` · ${t(lang, "menuPrepLegacyBatch")}` : ""}
+                  </p>
+                  <p className="mt-0.5 text-muted-foreground">
+                    {t(lang, "menuPrepIngredientCostTotal")}: UGX{" "}
+                    {row.ingredientCostUgx.toLocaleString()} ·{" "}
+                    {t(lang, "menuPrepAdditionalCostTotal")}: UGX{" "}
+                    {row.additionalCostUgx.toLocaleString()} ·{" "}
+                    {t(lang, "menuPrepBatchCost")}: UGX{" "}
+                    {row.totalBatchCostUgx.toLocaleString()}
                   </p>
                   <p className="mt-0.5 text-muted-foreground">
                     {t(lang, "hospitalityPrepBatchReportWasted")}:{" "}
@@ -502,6 +511,9 @@ export function HospitalityReportsSection({
                 </li>
               ))}
             </ul>
+            <p className="mt-2 text-[10px] font-medium text-muted-foreground">
+              {t(lang, "menuPrepBatchCostBasisNote")}
+            </p>
           </>
         )}
         {prepBatches.rows.length > 0 && prepYieldUnknownCount > 0 ? (

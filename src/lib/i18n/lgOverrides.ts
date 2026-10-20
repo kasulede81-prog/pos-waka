@@ -362,4 +362,71 @@ export const lgOverrides: Record<string, string> = {
     "Obwananyini buno bwaggyibwamu. Muwa obwananyini obuggya nga wala okuza akaadi y'okwagala.",
   loyaltyWalletMemberSuspended:
     "Omuguzi guno ayimiriziddwa. Akaadi ke ky'okwagala tekikozesebwa okutuusa olwekyo olwo obwananyini bwazimulizzibwa.",
+
+  // Prepared-dish costs: recipe/ingredient basis vs full batch cost.
+  menuPrepMode: "Enkola y'okutegeka",
+  menuPrepMadeToOrder: "Efumbibwa nga oda etuuse",
+  menuPrepBatchPrepared: "Etegekeddwa mu kibinja",
+  menuPrepAvailable: "Ebika ebyategekeddwa ebiriwo",
+  menuPrepPrepare: "Tegeka",
+  menuPrepPortions: "Ebika",
+  menuPrepConfirm: "Kakasa okutegeka",
+  menuPrepRequired: "Kyetaagisa",
+  menuPrepShortage: "Obubula",
+  menuPrepBatchesTitle: "Ebibinja ebyategekeddwa",
+  menuPrepWaste: "Okusaasaanya",
+  menuPrepCancel: "Sazaamu ekibinja",
+  menuPrepReason: "Ensonga",
+  menuPrepConfirmWaste: "Kakasa okusaasaanya",
+  menuPrepUnitCost: "Omuwendo ku kkala",
+  menuPrepTotalCost: "Omuwendo gwonna",
+  menuPrepRemaining: "Ebisingadde",
+  menuPrepStatus: "Embeera",
+  menuPrepDate: "Kyategekeddwa",
+  menuPrepExpectedPortions: "Ebika ebisuubirwa (ebivaamu mu nteekateeka)",
+  menuPrepActualPortions: "Ebika ebyakolebwa ddala (si kyetaagisa)",
+  menuPrepActualYieldHint: "Bireke nga tebiriimu singa ebivaamu ddala tebimanyiddwa.",
+  menuPrepYieldEstimated: "Ebivaamu: bigerekeranyizibwa okuva ku nteekateeka",
+  menuPrepYieldActual: "Ebivaamu: bya ddala",
+  menuPrepIngredientCostEstimate: "Omuwendo gw'ebikozesebwa: kigerekeranyizibwa ku nteekateeka",
+  menuPrepIngredientCostActual: "Omuwendo gw'ebikozesebwa: gwa ddala",
+  menuPrepActualIngredientCost: "Omuwendo gw'ebikozesebwa ogwa ddala (si kyetaagisa)",
+  menuPrepAdditionalCosts: "Ebiwendo ebirala by'ekibinja",
+  menuPrepAdditionalCostHint:
+    "Amakala/gaasi, omulimu, obukuumi — toongeramu bikozesebwa nate.",
+  menuPrepCostCharcoal: "Amakala / gaasi",
+  menuPrepCostLabour: "Omulimu",
+  menuPrepCostPackaging: "Obukuumi",
+  menuPrepAddCost: "Yongera omuwendo",
+  menuPrepRemoveCost: "Ggyawo",
+  menuPrepBatchCost: "Omuwendo gwonna ogw'ekibinja (ebikozesebwa + ebirala)",
+  menuPrepIngredientCostTotal: "Omuwendo gw'ebikozesebwa (ekibinja kyonna)",
+  menuPrepAdditionalCostTotal: "Ebiwendo ebirala (ekibinja kyonna)",
+  menuPrepSaleCogsPerPlate:
+    "Omuwendo gwonna ogw'ekibinja / kkala (full batch cost) — omusingi gwa COGS y'okutunda",
+  menuPrepCostPerPlate:
+    "Omuwendo gw'ebikozesebwa by'enteekateeka (ingredient) / kkala — kigerekeranyizibwa era kikutte ku kutegeka",
+  menuPrepRecipeCostPerPlate:
+    "Omuwendo gw'ebikozesebwa by'enteekateeka / kkala (ebivaamu mu nteekateeka)",
+  menuPrepBatchCostBasisNote:
+    "Omuwendo gw'ebikozesebwa by'enteekateeka / kkala gukozesa ebivaamu mu nteekateeka. Omuwendo gwonna ogw'ekibinja / kkala gongeramu omuwendo gw'ebikozesebwa by'ekibinja n'ebiwendo ebirala ebiteekeddwa, era gugabanya ku bika ebyakolebwa ddala; COGS y'okutunda n'omuwendo gwa sitoka bikozesa guno.",
+  menuPrepSellingPrice: "Omuwendo gw'okutunda ku kkala",
+  menuPrepProjectionTitle:
+    "Singa ebika {count} byonna bituundiddwa — kigerekeranyizibwa bwokka",
+  menuPrepProjectionNote:
+    "Kigerekeranyizibwa bwokka — kikozesa omuwendo gwonna ogw'ekibinja, si ensimbi ezitundiddwa oba amagoba ga accounting.",
+  menuPrepProjectedRevenue: "Ensimbi ezisuubirwa",
+  menuPrepProjectedProfit: "Amagoba ga gross agasuubirwa",
+  menuPrepRemainingValue: "Omuwendo gwa sitoka esigadde ku muwendo gwonna ogw'ekibinja",
+  menuPrepWasteValue: "Omuwendo gw'ebyonooneddwa ku muwendo gwonna ogw'ekibinja",
+  menuPrepMissingIngredient:
+    "Ekikozesebwa ky'enteekateeka tekikyaliiwo. Longosa enteekateeka nga tonnategeka kibinja kino.",
+  menuPrepInvalidCost: "Teeka omuwendo gw'ekibinja ogutuufu.",
+  menuPrepLegacyBatch:
+    "Ekiterekebwa ekikadde (legacy) — omuwendo gw'ebikozesebwa gwokka",
+  prepModeRequiresBatch: "Sooka oterece ekintu kino nga 'Etegekeddwa mu kibinja'.",
+  prepRequiresRecipe: "Yongera enteekateeka nga tonnategeka bibinja.",
+  unbatchedStock: "Sitoka etegekeddwa awatali kibinja — longosa sitoka nga tonnatunda.",
+  insufficientPreparedStock: "Ebika ebyategekeddwa tebimala.",
+  prepAvailableShort: "ebiriwo",
 };
