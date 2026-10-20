@@ -5494,7 +5494,7 @@ export const usePosStore = create<PosState>((set, get) => {
       const unitCostUgx = preparedPlan
         ? preparedPlan.unitCostUgx
         : recipe
-          ? computeMenuItemFoodCostUgx(p, products, moneyLine.variantId)
+          ? computeMenuItemFoodCostUgx(p, products, moneyLine.variantId, moneyLine.selectedModifiers)
           : slotCosts.unitCostUgx;
       const cogsUgx = lineCostUgx(unitCostUgx, moneyLine.quantity);
       products[idx] = {

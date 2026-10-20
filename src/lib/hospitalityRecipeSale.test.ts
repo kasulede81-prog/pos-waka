@@ -19,6 +19,7 @@ const PILAU_ID = "pilau-1";
 const BUN_ID = "bun-1";
 const CHICKEN_ID = "chicken-1";
 const RICE_ID = "rice-1";
+const CHEESE_ID = "cheese-1";
 
 function baseProduct(partial: Partial<Product> & Pick<Product, "id" | "name">): Product {
   return {
@@ -69,6 +70,15 @@ const rice = baseProduct({
   name: "Rice",
   costPricePerUnitUgx: 4_000,
   stockOnHand: 50,
+  baseUnit: "kg",
+  menu: { productKind: "ingredient" },
+});
+
+const cheese = baseProduct({
+  id: CHEESE_ID,
+  name: "Cheese",
+  costPricePerUnitUgx: 4_000,
+  stockOnHand: 10,
   baseUnit: "kg",
   menu: { productKind: "ingredient" },
 });
@@ -272,6 +282,90 @@ describe("hospitality recipe sale invariants", () => {
     expect(line.cogsUgx).toBe(3_640);
   });
 
+  it("F2: modifier-option ingredients are deducted per parent item, priced into COGS, and reversed on void", () => {
+    // The shared recipe engine consumes an option's ingredientQtyBase per parent item, exactly like
+    // a recipe line, and the provenance frozen on the sale line must include it so a reversal gives
+    // the same ingredient back rather than crediting a finished dish that never had stock.
+    const burgerWithCheese = makeBurger({
+      menu: {
+        productKind: "finished_menu",
+        recipe: {
+          lines: [
+            { ingredientProductId: BUN_ID, quantityBase: 1, unitLabel: "pc" },
+            { ingredientProductId: CHICKEN_ID, quantityBase: 0.15, unitLabel: "kg" },
+          ],
+        },
+        modifierGroups: [
+          {
+            id: "extras",
+            label: "Extras",
+            required: false,
+            selectionMode: "multiple",
+            options: [
+              {
+                id: "cheese",
+                label: "Extra cheese",
+                priceDeltaUgx: 0,
+                ingredientProductId: CHEESE_ID,
+                ingredientQtyBase: 0.05,
+              },
+            ],
+          },
+        ],
+        variants: [],
+      },
+    });
+    const line = {
+      ...qtyLine(burgerWithCheese, 2, "l1"),
+      selectedModifiers: [
+        {
+          groupId: "extras",
+          groupLabel: "Extras",
+          optionId: "cheese",
+          optionLabel: "Extra cheese",
+          priceDeltaUgx: 0,
+        },
+      ],
+    };
+    seed([{ ...bun }, { ...chicken }, { ...cheese }, burgerWithCheese], [line]);
+    const res = usePosStore.getState().finalizeDraftSale({ debtUgx: 0, paymentMethod: "cash" });
+    expect(res.ok).toBe(true);
+
+    expect(product(BUN_ID).stockOnHand).toBe(98);
+    expect(product(CHICKEN_ID).stockOnHand).toBeCloseTo(9.7, 6);
+    expect(product(CHEESE_ID).stockOnHand).toBeCloseTo(9.9, 6); // 2 × 0.05 kg
+    expect(product(BURGER_ID).stockOnHand).toBe(0); // no finished-dish deduction
+
+    const saleLine = onlySale().lines[0]!;
+    expect(saleLine.ingredientConsumption).toEqual(
+      expect.arrayContaining([
+        { productId: BUN_ID, quantity: 2 },
+        { productId: CHICKEN_ID, quantity: 0.3 },
+        { productId: CHEESE_ID, quantity: 0.1 },
+      ]),
+    );
+    // per plate = 1 × 500 + 0.15 × 8,000 + 0.05 × 4,000 = 1,900
+    expect(saleLine.unitCostUgx).toBe(1_900);
+    expect(saleLine.cogsUgx).toBe(3_800);
+
+    // The local ledger records the same modifier ingredient movement the deduction applied.
+    const saleId = onlySale().id;
+    const moves = usePosStore.getState().stockMovements.filter((m) => m.refId === saleId);
+    expect(moves).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ productId: CHEESE_ID, kind: "adjust_use", deltaBaseUnits: -0.1 }),
+      ]),
+    );
+
+    // A void gives every ingredient back, including the modifier option, and never credits the dish.
+    const voided = usePosStore.getState().voidSaleLine({ saleId, lineIndex: 0, reason: "wrong_item" });
+    expect(voided.ok).toBe(true);
+    expect(product(CHEESE_ID).stockOnHand).toBe(10);
+    expect(product(BUN_ID).stockOnHand).toBe(100);
+    expect(product(CHICKEN_ID).stockOnHand).toBeCloseTo(10, 6);
+    expect(product(BURGER_ID).stockOnHand).toBe(0);
+  });
+
   it("K: line COGS is frozen at sale time — later ingredient cost change does not rewrite history", () => {
     seed([{ ...bun }, { ...chicken }, makeBurger()], [qtyLine(makeBurger(), 1, "l1")]);
     const res = usePosStore.getState().finalizeDraftSale({ debtUgx: 0, paymentMethod: "cash" });
@@ -340,5 +434,31 @@ describe("hospitality recipe sale invariants", () => {
     expect(product(CHICKEN_ID).stockOnHand).toBeCloseTo(9.7, 6);
 
     expectLedgerConsistent({ [DRINK_ID]: 24, [BUN_ID]: 100, [CHICKEN_ID]: 10, [BURGER_ID]: 0 });
+  });
+
+  it("O: re-submitting a completed sale is an idempotent ACK — no second ingredient deduction", () => {
+    seed([{ ...bun }, { ...chicken }, makeBurger()], [qtyLine(makeBurger(), 2, "l1")]);
+    expect(usePosStore.getState().finalizeDraftSale({ debtUgx: 0, paymentMethod: "cash" }).ok).toBe(true);
+    const saleId = onlySale().id;
+    const stockAfter = {
+      [BUN_ID]: product(BUN_ID).stockOnHand,
+      [CHICKEN_ID]: product(CHICKEN_ID).stockOnHand,
+      [BURGER_ID]: product(BURGER_ID).stockOnHand,
+    };
+    const movementsAfter = usePosStore.getState().stockMovements.length;
+
+    // A stale queue entry still points at this sale as if it were the active cart.
+    usePosStore.setState({
+      activePendingSaleId: saleId,
+      draftLines: [qtyLine(makeBurger(), 2, "l2")],
+    });
+    const replay = usePosStore.getState().finalizeDraftSale({ debtUgx: 0, paymentMethod: "cash" });
+
+    expect(replay).toMatchObject({ ok: true, idempotent: true, saleId });
+    expect(usePosStore.getState().sales).toHaveLength(1);
+    expect(product(BUN_ID).stockOnHand).toBe(stockAfter[BUN_ID]);
+    expect(product(CHICKEN_ID).stockOnHand).toBe(stockAfter[CHICKEN_ID]);
+    expect(product(BURGER_ID).stockOnHand).toBe(stockAfter[BURGER_ID]);
+    expect(usePosStore.getState().stockMovements).toHaveLength(movementsAfter);
   });
 });

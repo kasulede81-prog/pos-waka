@@ -109,10 +109,42 @@ export function computeRecipeFoodCostUgx(recipe: Recipe, products: Product[], se
   return Math.round(total);
 }
 
-export function computeMenuItemFoodCostUgx(product: Product, products: Product[], variantId?: string | null): number {
+/**
+ * Ingredient cost of the modifier options selected on one parent item. The same options are
+ * consumed by `aggregateRecipeRequirements`, so their cost must be part of a sale line's COGS —
+ * otherwise a dish with paid extras records a food cost the shelf never avoided.
+ */
+export function computeModifierIngredientCostUgx(
+  product: Product,
+  products: Product[],
+  modifiers?: SaleLineModifier[] | null,
+): number {
+  if (!modifiers?.length) return 0;
+  const menu = productMenuConfig(product);
+  if (!menu) return 0;
+  let total = 0;
+  for (const mod of modifiers) {
+    const group = menu.modifierGroups?.find((g) => g.id === mod.groupId);
+    const opt = group?.options.find((o) => o.id === mod.optionId);
+    const qtyBase = opt?.ingredientQtyBase;
+    if (!opt?.ingredientProductId || qtyBase == null || qtyBase <= 0) continue;
+    const ing = products.find((p) => p.id === opt.ingredientProductId);
+    if (!ing) continue;
+    total += qtyBase * ing.costPricePerUnitUgx;
+  }
+  return Math.round(total);
+}
+
+export function computeMenuItemFoodCostUgx(
+  product: Product,
+  products: Product[],
+  variantId?: string | null,
+  modifiers?: SaleLineModifier[] | null,
+): number {
   const recipe = effectiveRecipe(product, variantId);
-  if (recipe) return computeRecipeFoodCostUgx(recipe, products, 1);
-  return Math.round(product.costPricePerUnitUgx);
+  const modifierCost = computeModifierIngredientCostUgx(product, products, modifiers);
+  if (recipe) return computeRecipeFoodCostUgx(recipe, products, 1) + modifierCost;
+  return Math.round(product.costPricePerUnitUgx) + modifierCost;
 }
 
 export function computeMenuItemMargin(
