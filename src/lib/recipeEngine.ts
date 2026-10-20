@@ -297,10 +297,17 @@ export function saleLineConsumesIngredientsAtSale(product: Product): boolean {
 
 /**
  * FIFO consumption plan for selling `portions` prepared portions.
+ *
+ * Each portion is valued at the batch's frozen full cost per plate
+ * (`batchCostPerPlateUgx` — ingredients + additional preparation costs,
+ * divided by the actual plates produced). Batches prepared before explicit
+ * batch costing have no such field and keep their frozen ingredient-only
+ * `unitCostUgx`, so legacy history is valued exactly as before.
+ *
  * Returns the full (re-ordered, updated) batch list with remainingPortions
- * decremented oldest-first, the weighted historical unit cost, and the exact
- * per-batch allocation (frozen onto the SaleLine as provenance), or an error
- * when prepared stock is insufficient.
+ * decremented oldest-first, the weighted historical unit cost, the exact FIFO
+ * cost for `portions` (so sale COGS is not distorted by per-unit rounding),
+ * and the exact per-batch allocation (frozen onto the SaleLine as provenance).
  */
 export function planPrepBatchConsumption(
   product: Product,
@@ -311,6 +318,7 @@ export function planPrepBatchConsumption(
       ok: true;
       batches: PrepBatch[];
       unitCostUgx: number;
+      costUgx: number;
       allocation: Array<{ batchId: string; portions: number }>;
     }
   | { ok: false; errorKey: "insufficientPreparedStock" } {
@@ -324,7 +332,7 @@ export function planPrepBatchConsumption(
   for (const batch of activePrepBatches(product)) {
     if (remaining <= 0.0001) break;
     const take = Math.min(batch.remainingPortions, remaining);
-    cost += take * batch.unitCostUgx;
+    cost += take * (batch.batchCostPerPlateUgx ?? batch.unitCostUgx);
     remaining -= take;
     allocation.push({ batchId: batch.id, portions: Math.round(take * 10000) / 10000 });
     const idx = all.findIndex((b) => b.id === batch.id);
@@ -338,7 +346,13 @@ export function planPrepBatchConsumption(
       version: (all[idx]!.version ?? 1) + 1,
     };
   }
-  return { ok: true, batches: all, unitCostUgx: Math.round(cost / portions), allocation };
+  return {
+    ok: true,
+    batches: all,
+    unitCostUgx: Math.round(cost / portions),
+    costUgx: Math.round(cost),
+    allocation,
+  };
 }
 
 /**

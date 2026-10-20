@@ -18,6 +18,7 @@ import { usePosStore } from "../store/usePosStore";
 import { openTestShift } from "../test/shiftTestSetup";
 import { mergeProductFromCloudPull, verifyInventoryIntegrity } from "./inventoryIntegrity";
 import { computePrepBatchProjection } from "./recipeEngine";
+import { computeTodayProfitBreakdown } from "./homeProfit";
 import { t } from "./i18n";
 import { normalizeProductMenu } from "./menuModifiers";
 import * as syncEngine from "../offline/syncEngine";
@@ -510,9 +511,9 @@ describe("hospitality prep batches", () => {
     expect(b.ingredientCostUgx).toBe(55_600);
     expect(b.additionalCostUgx).toBe(17_000);
     expect(b.totalCostUgx).toBe(72_600);
-    // Sale COGS keeps the existing recipe-basis cost; the actual-yield full
-    // batch cost is management information.
-    expect(b.unitCostUgx).toBe(2_780); // existing sale COGS basis, unchanged
+    // The batch keeps its ingredient-only historical record, and freezes the
+    // actual-yield full cost that sale consumption uses.
+    expect(b.unitCostUgx).toBe(2_780); // frozen ingredient-only record
     expect(b.batchCostPerPlateUgx).toBe(4_033); // 72,600 / 18, rounded
     expect(b.costBasis).toBe("recipe_estimate");
     expect(b.additionalCosts).toHaveLength(3);
@@ -523,7 +524,7 @@ describe("hospitality prep batches", () => {
     expect(projection.projectedProfitUgx).toBe(197_400);
   });
 
-  it("keeps sale COGS ingredient-only while the full batch cost stays management information", () => {
+  it("uses the full batch cost per actual plate in sale COGS and the shared Profit report", () => {
     expect(
       usePosStore.getState().prepareMenuBatch({
         productId: DISH_ID,
@@ -540,12 +541,289 @@ describe("hospitality prep batches", () => {
     seed(usePosStore.getState().products, []);
     usePosStore.setState({ draftLines: [qtyLine(dish(), 1, "l1")] });
     expect(finalize().ok).toBe(true);
-    const line = usePosStore.getState().sales[0]!.lines[0]!;
-    expect(line.unitCostUgx).toBe(2_780);
-    expect(line.cogsUgx).toBe(2_780);
-    expect(line.estimatedProfitUgx).toBe(12_220);
-    // The extra cost did not leak into the sale snapshot or global profit basis.
+    const sale = usePosStore.getState().sales[0]!;
+    const line = sale.lines[0]!;
+    expect(line.unitCostUgx).toBe(4_033); // 72,600 / 18 actual plates
+    expect(line.cogsUgx).toBe(4_033);
+    expect(line.estimatedProfitUgx).toBe(10_967);
+
+    // The shared Profit report reads the same frozen sale-line snapshot.
+    const productById = new Map(usePosStore.getState().products.map((p) => [p.id, p]));
+    const profit = computeTodayProfitBreakdown([sale], productById);
+    expect(profit.salesUgx).toBe(15_000);
+    expect(profit.costUgx).toBe(4_033);
+    expect(profit.profitUgx).toBe(10_967);
+    expect(profit.costIncomplete).toBe(false);
+    // The batch record itself is never rewritten by the sale.
+    expect(batch("batch-cogs").unitCostUgx).toBe(2_780);
     expect(batch("batch-cogs").batchCostPerPlateUgx).toBe(4_033);
+
+    // Later batch/product edits cannot rewrite the frozen sale-line snapshot
+    // that the shared Profit report reads.
+    usePosStore.setState({
+      products: usePosStore.getState().products.map((p) =>
+        p.id === DISH_ID
+          ? {
+              ...p,
+              menu: {
+                ...p.menu,
+                prepBatches: (p.menu?.prepBatches ?? []).map((b) =>
+                  b.id === "batch-cogs" ? { ...b, unitCostUgx: 88_888, batchCostPerPlateUgx: 99_999 } : b,
+                ),
+              },
+            }
+          : p,
+      ),
+    });
+    expect(sale.lines[0]!.unitCostUgx).toBe(4_033);
+    expect(sale.lines[0]!.cogsUgx).toBe(4_033);
+    const profitAfterEdit = computeTodayProfitBreakdown(
+      [sale],
+      new Map(usePosStore.getState().products.map((p) => [p.id, p])),
+    );
+    expect(profitAfterEdit.costUgx).toBe(4_033);
+    expect(profitAfterEdit.profitUgx).toBe(10_967);
+  });
+
+  it("values each FIFO batch at its own full cost and freezes the exact sale COGS", () => {
+    // Batch A: 10 plates → 20,000 actual ingredients + 1,000 gas = 2,100/plate.
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 10,
+        expectedPortions: 10,
+        actualPortions: 10,
+        actualIngredientCostUgx: 20_000,
+        additionalCosts: [{ id: "gas-a", label: "Gas", amountUgx: 1_000 }],
+        batchId: "batch-a",
+      }).ok,
+    ).toBe(true);
+    // Batch B: an 20-plate pot yielding 18 plates → 40,000 + 17,000 = 3,167/plate.
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        actualIngredientCostUgx: 40_000,
+        additionalCosts: [{ id: "charcoal-b", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-b",
+      }).ok,
+    ).toBe(true);
+
+    seed(usePosStore.getState().products, []);
+    usePosStore.setState({ draftLines: [qtyLine(dish(), 12, "l1")] });
+    expect(finalize().ok).toBe(true);
+
+    const sale = usePosStore.getState().sales[0]!;
+    const line = sale.lines[0]!;
+    // 10 × 2,100 + 2 × 3,167 = 27,334. The weighted unit is 2,278, but the
+    // frozen COGS is the exact FIFO cost (unit × qty would lose 2 UGX).
+    expect(line.unitCostUgx).toBe(2_278);
+    expect(line.cogsUgx).toBe(27_334);
+    expect(line.estimatedProfitUgx).toBe(180_000 - 27_334);
+    expect(line.prepAllocation).toEqual([
+      { batchId: "batch-a", portions: 10 },
+      { batchId: "batch-b", portions: 2 },
+    ]);
+    expect(batch("batch-a").remainingPortions).toBe(0);
+    expect(batch("batch-b").remainingPortions).toBe(16);
+
+    // The raw ingredients were consumed at preparation, never again at sale.
+    expect(product(CHICKEN_ID).stockOnHand).toBe(2.5);
+    expect(product(POTATOES_ID).stockOnHand).toBe(11);
+    expect(product(OIL_ID).stockOnHand).toBeCloseTo(4.1, 6);
+
+    const productById = new Map(usePosStore.getState().products.map((p) => [p.id, p]));
+    const profit = computeTodayProfitBreakdown([sale], productById);
+    expect(profit.costUgx).toBe(27_334);
+    expect(profit.profitUgx).toBe(152_666);
+  });
+
+  it("adds modifier ingredient cost only to the line that consumes it at sale", () => {
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        additionalCosts: [{ id: "charcoal", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-modifiers",
+      }).ok,
+    ).toBe(true);
+
+    const cheese: Product = baseProduct({
+      id: "cheese-1",
+      name: "Cheese",
+      costPricePerUnitUgx: 4_000,
+      stockOnHand: 5,
+      baseUnit: "kg",
+      menu: { productKind: "ingredient" },
+    });
+    const burger: Product = baseProduct({
+      id: "burger-1",
+      name: "Burger",
+      sellingPricePerUnitUgx: 20_000,
+      costPricePerUnitUgx: 0,
+      stockOnHand: 0,
+      baseUnit: "pcs",
+      menu: {
+        productKind: "finished_menu",
+        prepMode: "made_to_order",
+        recipe: { yieldQty: 1, lines: [{ ingredientProductId: CHICKEN_ID, quantityBase: 0.1, unitLabel: "kg" }] },
+        modifierGroups: [
+          {
+            id: "extras",
+            label: "Extras",
+            required: false,
+            selectionMode: "multiple",
+            options: [
+              {
+                id: "cheese",
+                label: "Extra cheese",
+                priceDeltaUgx: 0,
+                ingredientProductId: "cheese-1",
+                ingredientQtyBase: 0.05,
+              },
+            ],
+          },
+        ],
+        variants: [],
+      },
+    });
+
+    seed([...usePosStore.getState().products, cheese, burger], []);
+    usePosStore.setState({
+      draftLines: [
+        qtyLine(dish(), 1, "l-batch"),
+        {
+          ...qtyLine(burger, 2, "l-burger"),
+          selectedModifiers: [
+            { groupId: "extras", groupLabel: "Extras", optionId: "cheese", optionLabel: "Extra cheese", priceDeltaUgx: 0 },
+          ],
+        },
+      ],
+    });
+    expect(finalize().ok).toBe(true);
+
+    const sale = usePosStore.getState().sales[0]!;
+    const batchLine = sale.lines.find((l) => l.productId === DISH_ID)!;
+    const burgerLine = sale.lines.find((l) => l.productId === "burger-1")!;
+    // Batch portion: full batch cost only; the batch already contains the recipe.
+    expect(batchLine.unitCostUgx).toBe(4_033);
+    expect(batchLine.cogsUgx).toBe(4_033);
+    // Made-to-order line: base recipe + the modifier ingredient consumed at sale.
+    expect(burgerLine.cogsUgx).toBe(2_000); // 2 × (0.1 × 8,000 + 0.05 × 4,000)
+    expect(sale.estimatedProfitUgx).toBe(55_000 - (4_033 + 2_000));
+
+    expect(product("cheese-1").stockOnHand).toBeCloseTo(4.9, 6);
+    expect(product(CHICKEN_ID).stockOnHand).toBeCloseTo(4.8, 6); // 5 left from prep − 0.2
+    expect(product(DISH_ID).stockOnHand).toBe(17);
+  });
+
+  it("a replayed completion consumes no batch portions and does not rewrite sale COGS", () => {
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        additionalCosts: [{ id: "charcoal", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-replay",
+      }).ok,
+    ).toBe(true);
+    seed(usePosStore.getState().products, []);
+    usePosStore.setState({ draftLines: [qtyLine(dish(), 2, "l1")] });
+    expect(finalize().ok).toBe(true);
+    const sale = usePosStore.getState().sales[0]!;
+    const before = {
+      cogs: sale.lines[0]!.cogsUgx,
+      unitCost: sale.lines[0]!.unitCostUgx,
+      remaining: batch("batch-replay").remainingPortions,
+      dishStock: dish().stockOnHand,
+      movements: usePosStore.getState().stockMovements.length,
+    };
+
+    // A stale queue entry still points at the completed sale as its target.
+    usePosStore.setState({ activePendingSaleId: sale.id, draftLines: [qtyLine(dish(), 2, "l2")] });
+    const replay = finalize();
+
+    expect(replay).toMatchObject({ ok: true, idempotent: true, saleId: sale.id });
+    expect(usePosStore.getState().sales).toHaveLength(1);
+    expect(usePosStore.getState().sales[0]!.lines[0]!.cogsUgx).toBe(before.cogs);
+    expect(usePosStore.getState().sales[0]!.lines[0]!.unitCostUgx).toBe(before.unitCost);
+    expect(batch("batch-replay").remainingPortions).toBe(before.remaining);
+    expect(dish().stockOnHand).toBe(before.dishStock);
+    expect(usePosStore.getState().stockMovements).toHaveLength(before.movements);
+  });
+
+  it("returns and voids reverse portions at the frozen batch cost, never raw ingredients", () => {
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 10,
+        expectedPortions: 10,
+        actualPortions: 10,
+        actualIngredientCostUgx: 20_000,
+        additionalCosts: [{ id: "gas-a", label: "Gas", amountUgx: 1_000 }],
+        batchId: "batch-a",
+      }).ok,
+    ).toBe(true);
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        actualIngredientCostUgx: 40_000,
+        additionalCosts: [{ id: "charcoal-b", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-b",
+      }).ok,
+    ).toBe(true);
+    seed(usePosStore.getState().products, []);
+    usePosStore.setState({ draftLines: [qtyLine(dish(), 12, "l1")] });
+    expect(finalize().ok).toBe(true);
+
+    const sale = usePosStore.getState().sales[0]!;
+    const line = sale.lines[0]!;
+    expect(line.cogsUgx).toBe(27_334);
+    const raw = {
+      chicken: product(CHICKEN_ID).stockOnHand,
+      potatoes: product(POTATOES_ID).stockOnHand,
+      oil: product(OIL_ID).stockOnHand,
+    };
+
+    // Return 3 portions: the last-consumed batch B gives 2 back, then batch A 1.
+    const ret = usePosStore.getState().returnProduct({
+      saleId: sale.id,
+      productId: DISH_ID,
+      quantity: 3,
+      refundAmountUgx: 45_000,
+      reason: "wrong_item",
+      note: "n",
+    });
+    expect(ret.ok).toBe(true);
+    const returnRec = usePosStore.getState().returnRecords[0]!;
+    expect(returnRec.cogsUgx).toBe(6_834); // round(27,334 × 3 / 12)
+    expect(batch("batch-a").remainingPortions).toBe(1);
+    expect(batch("batch-b").remainingPortions).toBe(18);
+    expect(dish().stockOnHand).toBe(19);
+    expect(product(CHICKEN_ID).stockOnHand).toBe(raw.chicken);
+    expect(product(POTATOES_ID).stockOnHand).toBe(raw.potatoes);
+    expect(product(OIL_ID).stockOnHand).toBe(raw.oil);
+    // The historical sale-line cost is untouched by the return.
+    expect(usePosStore.getState().sales[0]!.lines[0]!.cogsUgx).toBe(27_334);
+
+    // Void the remaining 9: batch A takes its 1 already-returned portion back
+    // first, then the remaining 9.
+    expect(usePosStore.getState().voidSaleLine({ saleId: sale.id, lineIndex: 0, reason: "wrong_item" }).ok).toBe(true);
+    expect(batch("batch-a").remainingPortions).toBe(10);
+    expect(batch("batch-b").remainingPortions).toBe(18);
+    expect(dish().stockOnHand).toBe(28);
+    expect(product(CHICKEN_ID).stockOnHand).toBe(raw.chicken);
+    expect(product(POTATOES_ID).stockOnHand).toBe(raw.potatoes);
+    expect(product(OIL_ID).stockOnHand).toBe(raw.oil);
+    expect(usePosStore.getState().sales[0]!.lines[0]!.cogsUgx).toBe(27_334);
   });
 
   it("keeps yield estimated when actual plates are unknown", () => {

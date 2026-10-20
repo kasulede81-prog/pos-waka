@@ -749,7 +749,11 @@ export type PrepBatch = {
   preparedAt: string;
   portionsPrepared: number;
   remainingPortions: number;
-  /** Historical ingredient COGS per portion at preparation time — never rewritten. */
+  /**
+   * Historical ingredient COGS per portion at preparation time — never rewritten.
+   * Legacy batches use this for sale COGS; explicitly costed batches use
+   * `batchCostPerPlateUgx` instead, and keep this as their ingredient-only record.
+   */
   unitCostUgx: number;
   /**
    * Plates the recipe batch was expected to produce. This is the ingredient
@@ -772,10 +776,11 @@ export type PrepBatch = {
   /** Frozen total batch cost: ingredientCostUgx + additionalCostUgx. */
   totalCostUgx?: number;
   /**
-   * Full batch cost per plate (ingredients + additional costs), for Hospitality
-   * management projections and waste/remaining valuation. This is deliberately
-   * separate from `unitCostUgx`, which remains the ingredient COGS used by the
-   * existing sale financial snapshot and global Profit page.
+   * Full batch cost per plate: (ingredient cost + additional preparation costs)
+   * divided by the plates actually produced. This is the sale-time COGS basis
+   * frozen on each SaleLine that consumes the batch, and is also used for
+   * Hospitality projections and waste/remaining valuation. Absent on legacy
+   * batches, which fall back to the ingredient-only `unitCostUgx`.
    */
   batchCostPerPlateUgx?: number;
   /** Selling price per plate frozen at preparation time, used for projection. */

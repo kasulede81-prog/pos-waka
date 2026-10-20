@@ -5469,6 +5469,7 @@ export const usePosStore = create<PosState>((set, get) => {
       let preparedPlan: {
         batches: PrepBatch[];
         unitCostUgx: number;
+        costUgx: number;
         allocation: Array<{ batchId: string; portions: number }>;
       } | null = null;
       if (!deductFinished && productPrepMode(p) === "batch_prepared") {
@@ -5496,7 +5497,15 @@ export const usePosStore = create<PosState>((set, get) => {
         : recipe
           ? computeMenuItemFoodCostUgx(p, products, moneyLine.variantId, moneyLine.selectedModifiers)
           : slotCosts.unitCostUgx;
-      const cogsUgx = lineCostUgx(unitCostUgx, moneyLine.quantity);
+      // Prepared portions use the exact FIFO cost of the batches consumed (full
+      // batch cost at actual yield), not unitCost × quantity: rounding the
+      // weighted unit first would leave a few UGX of COGS unaccounted for
+      // whenever a sale spans batches with different costs. The batch cost
+      // already contains the recipe ingredients consumed at preparation, so no
+      // ingredient cost is added again here. Batch modifiers are not consumed
+      // by the current sale path; made-to-order modifier ingredients are priced
+      // by computeMenuItemFoodCostUgx on their own line.
+      const cogsUgx = preparedPlan ? preparedPlan.costUgx : lineCostUgx(unitCostUgx, moneyLine.quantity);
       products[idx] = {
         ...p,
         stockOnHand: deductFinished ? Math.max(0, next) : p.stockOnHand,
@@ -7339,9 +7348,9 @@ export const usePosStore = create<PosState>((set, get) => {
         ? Math.round(Number(actualIngredientCostUgx))
         : requirementsFoodCostUgx(requirements, state.products);
       totalCostUgx = ingredientCostUgx + additionalCostUgx;
-      // Existing sale COGS semantics stay untouched: the sale snapshot keeps the
-      // recipe-basis per-portion cost. The actual-yield, all-costs figure is
-      // stored separately as Hospitality management information.
+      // Keep the frozen ingredient-only record on the batch (legacy consumers
+      // and audits still read it), and freeze the actual-yield, all-costs figure
+      // which sale consumption uses for COGS and global Profit.
       unitCostUgx = prepBatchUnitCostUgx(p, state.products);
       batchCostPerPlateUgx = Math.max(0, Math.round(totalCostUgx / preparedQty));
       expectedPortionsField = expectedQty;
