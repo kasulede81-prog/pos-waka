@@ -394,6 +394,8 @@ export function createHardwarePrintStoreActions(deps: Deps) {
         tableLabel?: string | null;
         waiterLabel?: string | null;
         guestCount?: number | null;
+        /** Original seller for a historical copy; defaults to the current actor. */
+        cashierLabel?: string | null;
         voidReceipt?: boolean;
         reprint?: boolean;
         receiptKind?: RestaurantReceiptKind;
@@ -420,7 +422,7 @@ export function createHardwarePrintStoreActions(deps: Deps) {
         tableLabel: context?.tableLabel ?? sale.referenceLabel ?? null,
         waiterLabel: context?.waiterLabel ?? null,
         guestCount: context?.guestCount ?? null,
-        cashierLabel: actor?.displayName ?? null,
+        cashierLabel: context?.cashierLabel ?? actor?.displayName ?? null,
         printedBy: actor?.displayName ?? null,
         template: hw.receiptTemplate,
         voidReceipt: context?.voidReceipt ?? receiptKind === "void",

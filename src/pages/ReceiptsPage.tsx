@@ -30,6 +30,11 @@ import { pdfExportFeedback, receiptPrintFeedback } from "../lib/printFeedback";
 import { useToast } from "../context/ToastProvider";
 import { downloadSaleReceiptPdf, printSaleReceipt } from "../lib/receiptDocuments";
 import { buildSaleReceiptContext } from "../lib/receiptContextHelpers";
+import {
+  buildHospitalityReprintContext,
+  isHospitalityBillSale,
+} from "../lib/hospitalityReceiptReprint";
+import { downloadRestaurantReceiptPdf } from "../lib/restaurantReceiptPdf";
 import { useSubscription } from "../context/SubscriptionContext";
 import { resolveEffectivePlanTier } from "../lib/subscriptionEntitlements";
 import { ReturnReceiptActionsModal, buildReturnReceiptContext } from "../components/documents/ReturnReceiptActionsModal";
@@ -150,6 +155,7 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const voidSaleLine = usePosStore((s) => s.voidSaleLine);
   const returnProduct = usePosStore((s) => s.returnProduct);
+  const printRestaurantReceiptForSale = usePosStore((s) => s.printRestaurantReceiptForSale);
   const [showCancelled, setShowCancelled] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [voidTarget, setVoidTarget] = useState<{ sale: Sale; lineIndex: number; line: SaleLine } | null>(null);
@@ -235,7 +241,50 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
     });
   };
 
+  const receiptNumberFor = (sale: Sale): string =>
+    isPreCompletionVoidedSale(sale)
+      ? voidedSaleHistoryNumber(sale)
+      : buildReceiptNumberForSale(sale, sales);
+
+  const hospitalityReprintContextFor = (sale: Sale) =>
+    buildHospitalityReprintContext({
+      sale,
+      products,
+      prefs: preferences,
+      lang,
+      floor: preferences.hospitalityFloor,
+      cashierLabel: soldByLabel(sale),
+      printedBy: actor.displayName,
+    });
+
   const printSale = (sale: Sale) => {
+    // Hospitality table/named bills were settled with the restaurant receipt.
+    // Reprint the same recorded bill instead of the retail receipt builder.
+    if (isHospitalityBillSale(sale)) {
+      const ctx = hospitalityReprintContextFor(sale);
+      void printRestaurantReceiptForSale(sale.id, {
+        tableLabel: ctx.tableLabel,
+        waiterLabel: ctx.waiterLabel,
+        guestCount: ctx.guestCount,
+        cashierLabel: ctx.cashierLabel,
+        reprint: true,
+        receiptKind: ctx.receiptKind,
+        voidReceipt: ctx.voidReceipt,
+      }).then((result) => {
+        const rawMode = "mode" in result ? result.mode : undefined;
+        const mode = rawMode ?? "none";
+        const feedback = receiptPrintFeedback(lang, {
+          ok: result.ok,
+          mode: mode === "escpos" || mode === "native" ? "thermal" : mode,
+          error: "error" in result ? result.error : undefined,
+        });
+        if (!feedback.message) return;
+        if (feedback.kind === "error") toast.error(feedback.message);
+        else toast.success(feedback.message);
+      });
+      return;
+    }
+
     const ctx = receiptCtxFor(sale);
     void printSaleReceipt(ctx).then((result) => {
       if (result.ok) logReceiptReprintAudit(sale, ctx.receiptNumber);
@@ -247,6 +296,17 @@ export function ReceiptsPage({ lang }: { lang: Language }) {
   };
 
   const receiptPdfSale = (sale: Sale) => {
+    if (isHospitalityBillSale(sale)) {
+      const ctx = hospitalityReprintContextFor(sale);
+      const paper = preferences.receiptPaperSize ?? "80mm";
+      void downloadRestaurantReceiptPdf(ctx, paper).then((ok) => {
+        if (ok) logReceiptPdfExportAudit(sale, receiptNumberFor(sale));
+        const feedback = pdfExportFeedback(lang, ok);
+        if (feedback.message) toast.error(feedback.message);
+      });
+      return;
+    }
+
     const ctx = receiptCtxFor(sale);
     void downloadSaleReceiptPdf(ctx).then((ok) => {
       if (ok) logReceiptPdfExportAudit(sale, ctx.receiptNumber);

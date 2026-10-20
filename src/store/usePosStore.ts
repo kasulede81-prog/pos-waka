@@ -1193,6 +1193,8 @@ export type PosState = {
       tableLabel?: string | null;
       waiterLabel?: string | null;
       guestCount?: number | null;
+      /** Original seller for a historical copy; defaults to the current actor. */
+      cashierLabel?: string | null;
       voidReceipt?: boolean;
       reprint?: boolean;
       receiptKind?: import("../lib/restaurantReceiptPrint").RestaurantReceiptKind;
