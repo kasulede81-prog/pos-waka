@@ -1,4 +1,4 @@
-import { actorHasEffectivePermission, actorHasPermission } from "../lib/actorAuthorization";
+import { actorHasPermission } from "../lib/actorAuthorization";
 import {
   canPersistInventoryArchivePreferences,
   canPersistInventoryProductTagsPreferences,
@@ -25,6 +25,8 @@ import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { SimpleAddProductWizard, type SimpleAddWizardPrefill, type SimpleAddWizardStep } from "../components/stock/SimpleAddProductWizard";
 import { HospitalityAddItemSheet } from "../components/hospitality/HospitalityAddItemSheet";
+import { HospitalityPrepBatchSheet } from "../components/hospitality/HospitalityPrepBatchSheet";
+import { resolveHospitalityPrepAccess } from "../lib/hospitalityPrepAccess";
 import { productPrepMode } from "../lib/recipeEngine";
 import { AiProductAssistSheet } from "../components/stock/AiProductAssistSheet";
 import { BulkInventoryAiModal } from "../components/stock/BulkInventoryAiModal";
@@ -158,7 +160,10 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const canSell = actorHasPermission(actor, "pos.sell");
   const canRestock = actorHasPermission(actor, "purchases.record");
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
-  const canOpenMenuBuilder = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
+  const {
+    canPrepareBatches,
+    canConfigureMenu: canOpenMenuBuilder,
+  } = resolveHospitalityPrepAccess(actor, snapshot, authMode);
 
   const { products, suppliers, stockMovements, preferences, hydrated } = usePosStore(
     useShallow((s) => ({
@@ -203,6 +208,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   const [quickOpen, setQuickOpen] = useState(false);
   const [hospitalityAddOpen, setHospitalityAddOpen] = useState(false);
+  const [prepBatchesOpen, setPrepBatchesOpen] = useState(false);
   const [hospitalityAddCategory, setHospitalityAddCategory] = useState<string | undefined>();
   const [starterOpen, setStarterOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -1189,13 +1195,26 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
         </Link>
       ) : null}
 
-      {hospitalityMode && canOpenMenuBuilder ? (
-        <Link
-          to="/settings/menu"
-          className="flex items-center justify-center gap-2 rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-xs font-black text-waka-950"
-        >
-          {t(lang, "menuBuilderOpen")}
-        </Link>
+      {hospitalityMode && (canPrepareBatches || canOpenMenuBuilder) ? (
+        <div className="flex flex-wrap gap-2">
+          {canPrepareBatches ? (
+            <button
+              type="button"
+              onClick={() => setPrepBatchesOpen(true)}
+              className="flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-xs font-black text-waka-950"
+            >
+              {t(lang, "hospitalityPrepBatchesOpen")}
+            </button>
+          ) : null}
+          {canOpenMenuBuilder ? (
+            <Link
+              to="/settings/menu"
+              className="flex min-h-[40px] flex-1 items-center justify-center gap-2 rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-xs font-black text-waka-950"
+            >
+              {t(lang, "menuBuilderOpen")}
+            </Link>
+          ) : null}
+        </div>
       ) : null}
 
       {freeProductLimitReached ? (
@@ -1651,6 +1670,14 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             setHospitalityAddOpen(false);
             toast.success(t(lang, "hospitalityAddSaved"));
           }}
+        />
+      ) : null}
+
+      {hospitalityMode ? (
+        <HospitalityPrepBatchSheet
+          lang={lang}
+          open={prepBatchesOpen}
+          onClose={() => setPrepBatchesOpen(false)}
         />
       ) : null}
 

@@ -2143,7 +2143,14 @@ const en: Dict = {
   hospitalityAddSaved: "Inventory item saved.",
   hospitalityAddInvalid: "Enter the name and required prices.",
   hospitalityPrepBatchStockOnly:
-    "Prepared-dish stock is created by prep batches. Use Menu Builder to prepare, waste or cancel a batch.",
+    "Prepared-dish stock is created by recorded prep batches. Use Prepare batches in Inventory or Menu Builder to prepare, waste or cancel a batch.",
+  hospitalityPrepBatchesOpen: "Prepare batches",
+  hospitalityPrepBatchesTitle: "Prepare menu batches",
+  hospitalityPrepBatchesSub:
+    "Choose a dish configured for batch preparation. Ingredients are deducted, batch costs are frozen, and the batch is recorded with an audit entry.",
+  hospitalityPrepSelectDish: "Dish",
+  hospitalityPrepNoDishes:
+    "No dishes are set up for batch preparation yet. An owner can enable Batch Prepared in Menu Builder first.",
   hospitalityDashTitle: "Service today",
   hospitalityDashSub: "Tables, tabs, kitchen, and open bills at a glance.",
   hospitalityDashOpenTables: "Open tables",
@@ -10966,7 +10973,14 @@ const lgBase: Dict = {
   hospitalityAddSaved: "Ekintu ku sitoka kiterekiddwa.",
   hospitalityAddInvalid: "Yingiza erinnya n'emiwendo egyaetaagisa.",
   hospitalityPrepBatchStockOnly:
-    "Sitoka y'emmere etegekeddwa eteekebwa ku bibinja by'okutegeka. Kozesa Menu Builder okutegeka, okusaasaanya oba okusazaamu ekibinja.",
+    "Sitoka y'emmere etegekeddwa eteekebwa ku bibinja ebiwandiikiddwa. Kozesa 'Tegeka ebibinja' mu Sitoka oba Menu Builder okutegeka, okusaasaanya oba okusazaamu ekibinja.",
+  hospitalityPrepBatchesOpen: "Tegeka ebibinja",
+  hospitalityPrepBatchesTitle: "Tegeka ebibinja by'emmere",
+  hospitalityPrepBatchesSub:
+    "Londa emmere etegekeddwa mu kibinja. Ebikozesebwa bikendeezebwa, obuwendo bw'ekibinja buterekebwa era ekibinja kiwandiikibwa mu biwandiiko by'okukebera.",
+  hospitalityPrepSelectDish: "Emmere",
+  hospitalityPrepNoDishes:
+    "Tewali mmere etegekeddwa mu bibinja. Nannyini dduuka ayinza okukkiriza 'Etegekeddwa mu bibinja' mu Menu Builder.",
   menuBuilderNoIngredients:
     "Kakasa nti ekintu kimu kiri mu Sitoka nga Ekikozesebwa nga tonnayongera misittale gya nteekateeka.",
   hospitalityDashTitle: "Service leero",

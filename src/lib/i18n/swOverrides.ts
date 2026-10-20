@@ -1268,7 +1268,14 @@ export const swOverrides: Record<string, string> = {
   hospitalityReportsPageTitle: "Ripoti za ukarimu",
   hospitalityPage_openBillsEmpty: "Hakuna bili zilizo wazi sasa.",
   hospitalityPrepBatchStockOnly:
-    "Hisa ya chakula kilichoandaliwa huundwa na makundi ya maandalizi. Tumia Menyu ya Kupanga ili kuandaa, kuharibu au kughairi kundi.",
+    "Hisa ya chakula kilichoandaliwa huundwa na makundi ya maandalizi yaliyorekodiwa. Tumia 'Andaa makundi' kwenye Hisa au Menyu ya Kupanga ili kuandaa, kuharibu au kughairi kundi.",
+  hospitalityPrepBatchesOpen: "Andaa makundi",
+  hospitalityPrepBatchesTitle: "Andaa makundi ya menyu",
+  hospitalityPrepBatchesSub:
+    "Chagua chakula kilichowekwa kwa maandalizi ya kundi. Viungo hukatwa, gharama za kundi hufungwa, na kundi hurekodiwa pamoja na kumbukumbu ya ukaguzi.",
+  hospitalityPrepSelectDish: "Chakula",
+  hospitalityPrepNoDishes:
+    "Hakuna chakula kilichowekwa kwa maandalizi ya kundi bado. Mmiliki anaweza kuwasha 'Inaandaliwa kwa makundi' kwenye Menyu ya Kupanga kwanza.",
   menuBuilderNoIngredients:
     "Weka angalau bidhaa moja kama Kiungo kwenye Hisa kabla ya kuongeza mistari ya mapishi.",
 };

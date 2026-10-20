@@ -48,6 +48,11 @@ const KEYS = [
   "menuCostProfit",
   "menuCostMargin",
   // Prepared-dish cost basis (recipe ingredient vs full batch cost)
+  "hospitalityPrepBatchesOpen",
+  "hospitalityPrepBatchesTitle",
+  "hospitalityPrepBatchesSub",
+  "hospitalityPrepSelectDish",
+  "hospitalityPrepNoDishes",
   "menuPrepMode",
   "menuPrepMadeToOrder",
   "menuPrepBatchPrepared",
