@@ -24,6 +24,24 @@ export const DEFAULT_MENU_SECTIONS = [
   { id: "specials", label: "Specials", sortOrder: 8 },
 ] as const;
 
+/**
+ * Editor seed for a product. A Kiosk Duka product with no menu is NOT a declared
+ * dish; seed it as retail so opening/saving Menu Builder cannot silently turn a
+ * drink or ingredient into an uncosted finished_menu item.
+ */
+export function initialMenuConfigForProduct(
+  product: Pick<Product, "menu">,
+): ProductMenuConfig {
+  return (
+    product.menu ?? {
+      productKind: "retail",
+      modifierGroups: [],
+      variants: [],
+      recipe: { lines: [] },
+    }
+  );
+}
+
 export function normalizeProductMenu(menu?: ProductMenuConfig | null): ProductMenuConfig | null {
   if (!menu) return null;
   const groups = (menu.modifierGroups ?? [])

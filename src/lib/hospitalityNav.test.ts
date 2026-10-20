@@ -3,6 +3,7 @@ import {
   canOpenBusinessTools,
   HOSPITALITY_BUSINESS_TOOLS_ROUTE,
   HOSPITALITY_NAV_CATALOG,
+  hospitalityFloorActions,
   hospitalityNavItemActive,
   isHospitalityOperationalRoute,
   visibleHospitalityNavItems,
@@ -72,5 +73,28 @@ describe("hospitalityNav", () => {
       barOnly: false,
     });
     expect(kitchenOnly.some((item) => item.path === HOSPITALITY_BUSINESS_TOOLS_ROUTE)).toBe(false);
+  });
+
+  it("floor action destinations follow the same permissions as their routes", () => {
+    expect(hospitalityFloorActions(() => true)).toEqual({
+      sell: true,
+      documents: true,
+      stats: true,
+      tools: true,
+    });
+
+    const waiter = hospitalityFloorActions(
+      (perm) => perm === "pos.sell" || perm === "receipts.view" || perm === "pending_sales.manage",
+    );
+    expect(waiter).toMatchObject({ sell: true, documents: true, stats: false, tools: true });
+
+    // Bar: floor/order/pending sales only. No POS sell, owner dashboard or launcher tile.
+    const bar = hospitalityFloorActions(
+      (perm) => perm === "hospitality.floor" || perm === "hospitality.order" || perm === "pending_sales.manage",
+    );
+    expect(bar).toEqual({ sell: false, documents: true, stats: false, tools: false });
+
+    const kitchen = hospitalityFloorActions((perm) => perm === "hospitality.kitchen");
+    expect(kitchen).toEqual({ sell: false, documents: false, stats: false, tools: false });
   });
 });

@@ -35,9 +35,9 @@ import {
   visibleFloorTables,
 } from "../lib/hospitalityFrontOfHouse";
 import {
-  canOpenBusinessTools,
   HOSPITALITY_BUSINESS_TOOLS_ROUTE,
   HOSPITALITY_HOME_ROUTE,
+  hospitalityFloorActions,
 } from "../lib/hospitalityNav";
 import { FLOOR_GRID_CLASS, selectFloorPlanSlice } from "../lib/floorDisplayPrefs";
 import { HospitalityOpsStatusStrip } from "../components/hospitality/HospitalityOpsStatusStrip";
@@ -142,6 +142,7 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
   const canKitchen = actorHasPermission(actor, "hospitality.kitchen");
   const barOnly = usePosStore((s) => hospitalityBarOnlyFromPrefs(s.preferences));
   const canOrder = actorHasPermission(actor, "hospitality.order");
+  const floorActions = hospitalityFloorActions((perm) => actorHasPermission(actor, perm));
   const namedTabs = floor ? activeNamedTabs(floor) : [];
 
   if (!hospitality) {
@@ -390,7 +391,9 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         onDocuments={() => navigate("/pending-sales")}
         onStats={() => navigate("/owner")}
         onTools={() => navigate(HOSPITALITY_BUSINESS_TOOLS_ROUTE)}
-        showTools={canOpenBusinessTools((perm) => actorHasPermission(actor, perm))}
+        showDocuments={floorActions.documents}
+        showStats={floorActions.stats}
+        showTools={floorActions.tools}
       />
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card px-3 py-2">
@@ -422,13 +425,15 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
                 {t(lang, barOnly ? "hospitalityStation_bar" : "floorKitchenLink")}
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() => navigate("/pos")}
-              className="min-h-9 rounded border border-border px-3 text-xs font-bold"
-            >
-              {t(lang, "floorTakeaway")}
-            </button>
+            {floorActions.sell ? (
+              <button
+                type="button"
+                onClick={() => navigate("/pos")}
+                className="min-h-9 rounded border border-border px-3 text-xs font-bold"
+              >
+                {t(lang, "floorTakeaway")}
+              </button>
+            ) : null}
             {canOrder ? (
               <button
                 type="button"

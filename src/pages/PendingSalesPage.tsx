@@ -73,18 +73,24 @@ export function PendingSalesPage({ lang }: { lang: Language }) {
   };
 
   const canCancel = actorHasPermission(actor, "pending_sales.manage");
+  const hospitality = isHospitalityMode(
+    preferences.businessType,
+    preferences.hospitalityModeEnabled,
+  );
 
   return (
     <div className="space-y-4 pb-8">
       <PageBackBar lang={lang} fallbackTo="/" label={t(lang, "navHome")} />
       <div>
-        <h1 className="text-2xl font-black text-foreground">{t(lang, "pendingSalesTitle")}</h1>
+        <h1 className="text-2xl font-black text-foreground">
+          {t(lang, hospitality ? "hospitalityTerm_openBill" : "pendingSalesTitle")}
+        </h1>
         <p className="mt-1 text-sm font-medium text-muted-foreground">{t(lang, "pendingSalesSub")}</p>
       </div>
 
       {rows.length === 0 ? (
         <p className="rounded-2xl border border-border bg-card px-4 py-10 text-center text-sm font-bold text-muted-foreground">
-          {t(lang, "pendingSalesEmpty")}
+          {t(lang, hospitality ? "hospitalityPage_openBillsEmpty" : "pendingSalesEmpty")}
         </p>
       ) : (
         <ul className="space-y-2">

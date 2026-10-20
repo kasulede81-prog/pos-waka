@@ -21,6 +21,8 @@ type Props = {
   onDocuments: () => void;
   onStats: () => void;
   onTools: () => void;
+  showDocuments?: boolean;
+  showStats?: boolean;
   showTools?: boolean;
 };
 
@@ -33,6 +35,8 @@ export function FloorPlanBottomBar({
   onDocuments,
   onStats,
   onTools,
+  showDocuments = false,
+  showStats = false,
   showTools = false,
 }: Props) {
   const btn = (tab: Tab, onClick: () => void, label: string, Icon: typeof LayoutGrid) => (
@@ -57,8 +61,8 @@ export function FloorPlanBottomBar({
         {btn("home", onHome, t(lang, "navHome"), LayoutDashboard)}
         {btn("floor", onFloor, t(lang, "floorNavSituation"), LayoutGrid)}
         {btn("reservations", onReservations, t(lang, "floorNavReserve"), Calendar)}
-        {btn("documents", onDocuments, t(lang, "floorNavDocuments"), ClipboardList)}
-        {btn("stats", onStats, t(lang, "floorNavStats"), BarChart3)}
+        {showDocuments ? btn("documents", onDocuments, t(lang, "floorNavDocuments"), ClipboardList) : null}
+        {showStats ? btn("stats", onStats, t(lang, "floorNavStats"), BarChart3) : null}
         {showTools ? btn("tools", onTools, t(lang, "hospitalityBusinessToolsNav"), Briefcase) : null}
       </div>
     </div>

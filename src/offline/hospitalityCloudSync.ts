@@ -21,23 +21,31 @@ import { mergeKitchenTicketMonotonic, normalizeKitchenTicket } from "../lib/kitc
 import { resolveShopCtx } from "./cloudSync";
 import { enqueueSync } from "./syncEngine";
 
-const HOSPITALITY_PULL_KEY = "waka.hospitality.lastPull";
+const HOSPITALITY_PULL_KEY_PREFIX = "waka.hospitality.lastPull";
+
+/**
+ * Pull cursors are per shop. A device-global cursor let shop B reuse shop A's
+ * timestamp after an account/shop switch and silently skip older floor rows.
+ */
+export function hospitalityPullCursorKey(shopId: string): string {
+  return `${HOSPITALITY_PULL_KEY_PREFIX}:${shopId}`;
+}
 
 function isUuid(id: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
 }
 
-function readLastPullAt(): string | null {
+function readLastPullAt(shopId: string): string | null {
   try {
-    return localStorage.getItem(HOSPITALITY_PULL_KEY);
+    return localStorage.getItem(hospitalityPullCursorKey(shopId));
   } catch {
     return null;
   }
 }
 
-function writeLastPullAt(iso: string): void {
+function writeLastPullAt(shopId: string, iso: string): void {
   try {
-    localStorage.setItem(HOSPITALITY_PULL_KEY, iso);
+    localStorage.setItem(hospitalityPullCursorKey(shopId), iso);
   } catch {
     /* ignore */
   }
@@ -470,7 +478,9 @@ export async function pullHospitalityStateFromCloud(forceFull = false): Promise<
   const ctx = await resolveShopCtx();
   if (!ctx) return false;
 
-  const since = forceFull ? "1970-01-01T00:00:00.000Z" : readLastPullAt() ?? "1970-01-01T00:00:00.000Z";
+  const since = forceFull
+    ? "1970-01-01T00:00:00.000Z"
+    : readLastPullAt(ctx.shopId) ?? "1970-01-01T00:00:00.000Z";
   const { data, error } = await supabase.rpc("shop_pull_hospitality_state", {
     p_shop_id: ctx.shopId,
     p_since: since,
@@ -502,7 +512,7 @@ export async function pullHospitalityStateFromCloud(forceFull = false): Promise<
     });
   }
 
-  writeLastPullAt(String(result.server_at ?? new Date().toISOString()));
+  writeLastPullAt(ctx.shopId, String(result.server_at ?? new Date().toISOString()));
 
   const { refreshOpenPendingSalesFromCloud } = await import("./cloudSync");
   await refreshOpenPendingSalesFromCloud(ctx);

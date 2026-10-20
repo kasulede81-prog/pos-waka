@@ -1225,4 +1225,50 @@ export const swOverrides: Record<string, string> = {
   hospitalityBusinessToolsSub: "Uza, hisa, madeni, fedha, ripoti na mipangilio ya duka hili.",
   hospitalityBusinessToolsHint:
     "Hizi ni zana za Kiosk Duka zinazoshirikiwa. Vitu hufuata jukumu lako na mipangilio ya Menyu ya Nyumbani; Back Office na Mipangilio zinabaki na PIN na ulinzi wa njia zao. Akaunti za jikoni pekee hazipati ukurasa huu.",
+  hospitalityAddItemTitle: "Ongeza bidhaa kwenye hisa",
+  hospitalityAddItemSub:
+    "Viungo, vinywaji na vyakula vilivyoandaliwa hutumia hisa na gharama za Kiosk Duka.",
+  hospitalityAddKindIngredient: "Kiungo",
+  hospitalityAddKindIngredientHint:
+    "Hutumika kwenye mapishi na maandalizi ya makundi; hakiuzwi peke yake.",
+  hospitalityAddKindRetail: "Kinywaji au bidhaa ya kuuza",
+  hospitalityAddKindRetailHint: "Huuawa moja kwa moja kutoka kwenye hisa.",
+  hospitalityAddKindDish: "Chakula kilichoandaliwa",
+  hospitalityAddKindDishHint: "Huuawa kwa sahani; mapishi yake hutoa viungo.",
+  hospitalityAddName: "Jina la bidhaa",
+  hospitalityAddNamePh: "Mfano: Kuku, Soda, Kuku wa sahani",
+  hospitalityAddMenuSection: "Sehemu ya menyu",
+  hospitalityAddUnit: "Kipimo cha hisa",
+  hospitalityAddBuyingUnit: "Kipimo cha kununua (si lazima)",
+  hospitalityAddConversion: "Vipimo vya hisa kwa kipimo cha kununua",
+  hospitalityAddPackPrice: "Bei ya kununua kwa kipimo cha kununua",
+  hospitalityAddCostPerUnit: "Gharama kwa kipimo cha hisa",
+  hospitalityAddComputedCost: "Gharama iliyohesabiwa kwa kipimo cha hisa",
+  hospitalityAddOpeningStock: "Hisa ya kuanzia",
+  hospitalityAddStockHint:
+    "Salio la kuanzia tu. Manunuzi ya baadaye yarekodiwe kwa Restock/Receive ili daftari la hisa likamilike.",
+  hospitalityAddLowStock: "Tahadhari ya hisa ndogo",
+  hospitalityAddPrepMode: "Inaandaliwa vipi?",
+  hospitalityAddMadeToOrder: "Inapikwa oda inapofika",
+  hospitalityAddBatchPrepared: "Inaandaliwa kwa makundi",
+  hospitalityAddYield: "Sahani kwa kundi",
+  hospitalityAddRecipe: "Mapishi ya kundi moja",
+  hospitalityAddAddIngredient: "Ongeza kiungo",
+  hospitalityAddNoIngredients:
+    "Ongeza kiungo kwanza, kisha tengeneza mapishi ya chakula.",
+  hospitalityAddRecipeRequired:
+    "Ongeza angalau kiungo kimoja na mavuno ya kundi.",
+  hospitalityAddDishCostNote:
+    "Gharama ya chakula huhesabiwa kutoka mapishi. Gharama nyingine za kundi hurekodiwa unapoandaa kundi.",
+  hospitalityAddDishStockNote:
+    "Hisa ya chakula kilichoandaliwa huanza 0 na huundwa na makundi ya maandalizi yaliyorekodiwa.",
+  hospitalityAddSave: "Hifadhi bidhaa",
+  hospitalityAddSaved: "Bidhaa ya hisa imehifadhiwa.",
+  hospitalityAddInvalid: "Weka jina na bei zinazohitajika.",
+  hospitalityReportsPageTitle: "Ripoti za ukarimu",
+  hospitalityPage_openBillsEmpty: "Hakuna bili zilizo wazi sasa.",
+  hospitalityPrepBatchStockOnly:
+    "Hisa ya chakula kilichoandaliwa huundwa na makundi ya maandalizi. Tumia Menyu ya Kupanga ili kuandaa, kuharibu au kughairi kundi.",
+  menuBuilderNoIngredients:
+    "Weka angalau bidhaa moja kama Kiungo kwenye Hisa kabla ya kuongeza mistari ya mapishi.",
 };

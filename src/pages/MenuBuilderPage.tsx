@@ -230,16 +230,28 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
 
         <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
           {selected ? (
-            <ProductMenuConfigFields
-              key={selected.id}
-              lang={lang}
-              product={selected}
-              ingredientProducts={ingredientProducts.length ? ingredientProducts : products}
-              onSave={(menu) => {
-                updateProduct(selected.id, { menu });
-                setSelectedId(selected.id);
-              }}
-            />
+            <>
+              {ingredientProducts.length === 0 ? (
+                <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-950">
+                  {t(lang, "menuBuilderNoIngredients")}
+                </p>
+              ) : null}
+              <ProductMenuConfigFields
+                key={selected.id}
+                lang={lang}
+                product={selected}
+                ingredientProducts={ingredientProducts}
+                comboProducts={products.filter((p) => !p.menu?.hideFromMenu)}
+                onSave={(menu) => {
+                  const result = updateProduct(selected.id, { menu });
+                  if (!result.ok) {
+                    toast.error(t(lang, result.errorKey ?? "invalid"));
+                    return;
+                  }
+                  setSelectedId(selected.id);
+                }}
+              />
+            </>
           ) : (
             <p className="text-sm font-medium text-muted-foreground">{t(lang, "menuSelectProduct")}</p>
           )}

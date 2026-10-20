@@ -45,6 +45,28 @@ export function canOpenBusinessTools(hasPerm: (perm: Permission) => boolean): bo
   return BUSINESS_TOOLS_PERMISSIONS.some((perm) => hasPerm(perm));
 }
 
+export type HospitalityFloorActions = {
+  sell: boolean;
+  documents: boolean;
+  stats: boolean;
+  tools: boolean;
+};
+
+/**
+ * Destinations offered by the floor action/bottom bars. Each must match the
+ * destination's own route guard so waiters/bar/kitchen never get a dead end.
+ */
+export function hospitalityFloorActions(
+  hasPerm: (perm: Permission) => boolean,
+): HospitalityFloorActions {
+  return {
+    sell: hasPerm("pos.sell"),
+    documents: hasPerm("pending_sales.manage"),
+    stats: hasPerm("owner.dashboard"),
+    tools: canOpenBusinessTools(hasPerm),
+  };
+}
+
 /** Operational hospitality screens — one tap on mobile, permanent group on desktop. */
 export const HOSPITALITY_OPERATIONAL_PATHS = [
   HOSPITALITY_HOME_ROUTE,

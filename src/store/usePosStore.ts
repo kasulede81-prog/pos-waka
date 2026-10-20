@@ -1313,6 +1313,10 @@ export type PosState = {
     pharmacyMaster?: import("../types").PharmacyMedicineMaster | null;
     openingBatch?: import("../types").PharmacyBatchReceiveInput | null;
     primaryBarcode?: string | null;
+    /** Hospitality setup: product kind / recipe / prep mode created with the item. */
+    menu?: import("../types").ProductMenuConfig | null;
+    /** Ingredients are not sold at the POS, so their selling price may be 0. */
+    allowZeroSellingPrice?: boolean;
   }) => { ok: boolean; errorKey?: string };
   bulkQuickAddProducts: (
     rows: Array<{
@@ -1859,6 +1863,10 @@ type QuickAddProductDraftInput = {
   pharmacyMaster?: import("../types").PharmacyMedicineMaster | null;
   openingBatch?: import("../types").PharmacyBatchReceiveInput | null;
   primaryBarcode?: string | null;
+  /** Hospitality setup: product kind / recipe / prep mode created with the item. */
+  menu?: import("../types").ProductMenuConfig | null;
+  /** Ingredients are not sold at the POS, so their selling price may be 0. */
+  allowZeroSellingPrice?: boolean;
 };
 
 /** Pure prepare for quick-add — no Zustand mutation (Phase 36.1). */
@@ -1876,7 +1884,11 @@ function buildQuickAddProductDraft(
   const buyingUnit = input.buyingUnit !== undefined ? input.buyingUnit : guess.buyingUnit;
   const conversionRate = input.conversionRate !== undefined ? input.conversionRate : guess.conversionRate;
   const price = Math.max(0, Math.floor(input.priceUgx));
-  if (price <= 0) return { ok: false, errorKey: "invalid" };
+  // Preserve retail's existing price rule. Hospitality ingredients are stock/recipe
+  // inputs, not POS items, so their selling price may be 0.
+  const zeroPriceAllowed =
+    input.allowZeroSellingPrice === true && input.menu?.productKind === "ingredient";
+  if (price <= 0 && !zeroPriceAllowed) return { ok: false, errorKey: "invalid" };
   const stock = Math.max(0, Number(input.stockQty) || 0);
   const pharmacyRequiresBuy = pharmacyQuickAddRequiresBuyPrice(prefs.businessType, prefs.pharmacyModeEnabled);
   if (pharmacyRequiresBuy && stock <= 0) return { ok: false, errorKey: "pharmacyOpeningStockRequired" };
@@ -1963,6 +1975,7 @@ function buildQuickAddProductDraft(
         ? guess.quickPresetsMoneyUgx
         : qp.quickPresetsMoneyUgx,
     quickPresetsQty: presetQty?.length ? presetQty : sameShape ? guess.quickPresetsQty : qp.quickPresetsQty,
+    ...(input.menu ? { menu: normalizeProductMenu(input.menu) } : {}),
     updatedAt: now,
     version: 1,
   };

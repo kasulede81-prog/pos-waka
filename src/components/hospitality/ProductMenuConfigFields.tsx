@@ -17,7 +17,7 @@ import {
   isHospitalityMenuItem,
   isHospitalityRecipeDish,
 } from "../../lib/hospitalityMenuCosting";
-import { DEFAULT_MENU_SECTIONS } from "../../lib/menuModifiers";
+import { DEFAULT_MENU_SECTIONS, initialMenuConfigForProduct } from "../../lib/menuModifiers";
 import {
   computeMenuItemFoodCostUgx,
   computePrepBatchProjection,
@@ -33,7 +33,10 @@ import { WakaSwitch } from "../enterprise/WakaSwitch";
 type Props = {
   lang: Language;
   product: Product;
+  /** Products usable as recipe ingredients (ingredient / semi-finished). */
   ingredientProducts: Product[];
+  /** Products usable in combo slots (dishes, drinks, retail). */
+  comboProducts: Product[];
   onSave: (menu: ProductMenuConfig) => void;
 };
 
@@ -57,9 +60,9 @@ const positiveIntOrNull = (value: string): number | null => {
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
 };
 
-export function ProductMenuConfigFields({ lang, product, ingredientProducts, onSave }: Props) {
-  const [menu, setMenu] = useState<ProductMenuConfig>(
-    product.menu ?? { productKind: "finished_menu", modifierGroups: [], variants: [], recipe: { lines: [] } },
+export function ProductMenuConfigFields({ lang, product, ingredientProducts, comboProducts, onSave }: Props) {
+  const [menu, setMenu] = useState<ProductMenuConfig>(() =>
+    initialMenuConfigForProduct(product),
   );
   // Phase 5 — preparation workflow state (batch truth always read from the store product).
   const [prepOpen, setPrepOpen] = useState(false);
@@ -437,7 +440,12 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
       <section className="rounded-2xl border border-border p-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-black text-foreground">{t(lang, "menuRecipeTitle")}</p>
-          <button type="button" onClick={() => addRecipeLine()} className="text-xs font-black text-waka-700">
+          <button
+            type="button"
+            onClick={() => addRecipeLine()}
+            disabled={ingredientProducts.length === 0}
+            className="text-xs font-black text-waka-700 disabled:opacity-40"
+          >
             + {t(lang, "menuAddIngredient")}
           </button>
         </div>
@@ -1060,7 +1068,7 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
               }}
             >
               <option value="">{t(lang, "menuComboPickProduct")}</option>
-              {ingredientProducts.map((p) => (
+              {comboProducts.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>

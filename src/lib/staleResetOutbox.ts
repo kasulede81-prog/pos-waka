@@ -33,6 +33,7 @@ export const STALE_RESET_GUARDED_KINDS = new Set<SyncOperation["kind"]>([
   "pending_sales",
   "pending_stock_updates",
   "pending_prep_batches",
+  "pending_hospitality",
   "stock_move",
   "customer",
 ]);

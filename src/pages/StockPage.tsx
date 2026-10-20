@@ -1,4 +1,4 @@
-import { actorHasPermission } from "../lib/actorAuthorization";
+import { actorHasEffectivePermission, actorHasPermission } from "../lib/actorAuthorization";
 import {
   canPersistInventoryArchivePreferences,
   canPersistInventoryProductTagsPreferences,
@@ -24,6 +24,8 @@ import { StockProductEditModal } from "../components/stock/StockProductEditModal
 import { ProductLockedModal } from "../components/ProductLockedModal";
 import { isProductPlanLocked, lockedProductIds } from "../lib/productPlanLock";
 import { SimpleAddProductWizard, type SimpleAddWizardPrefill, type SimpleAddWizardStep } from "../components/stock/SimpleAddProductWizard";
+import { HospitalityAddItemSheet } from "../components/hospitality/HospitalityAddItemSheet";
+import { productPrepMode } from "../lib/recipeEngine";
 import { AiProductAssistSheet } from "../components/stock/AiProductAssistSheet";
 import { BulkInventoryAiModal } from "../components/stock/BulkInventoryAiModal";
 import { ProductCsvImportSheet } from "../components/stock/ProductCsvImportSheet";
@@ -156,6 +158,7 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const canSell = actorHasPermission(actor, "pos.sell");
   const canRestock = actorHasPermission(actor, "purchases.record");
   const canArrangeShelves = actorHasPermission(actor, "shelves.customize");
+  const canOpenMenuBuilder = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
 
   const { products, suppliers, stockMovements, preferences, hydrated } = usePosStore(
     useShallow((s) => ({
@@ -199,6 +202,8 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const aiInventoryAssistantEnabled = canAdd && inventoryAiGate.enabled;
 
   const [quickOpen, setQuickOpen] = useState(false);
+  const [hospitalityAddOpen, setHospitalityAddOpen] = useState(false);
+  const [hospitalityAddCategory, setHospitalityAddCategory] = useState<string | undefined>();
   const [starterOpen, setStarterOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [aiAssistOpen, setAiAssistOpen] = useState(false);
@@ -298,7 +303,14 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       const openAdd = searchParams.get("add") === "1" && canAdd && !freeProductLimitReached;
       const importRequested = searchParams.get("import") === "csv";
       if (openAdd) {
-        if (workspace.selectedShelf) {
+        if (hospitalityMode) {
+          const shelfName =
+            workspace.selectedShelf === UNCATEGORIZED_SENTINEL
+              ? undefined
+              : workspace.selectedShelf ?? undefined;
+          setHospitalityAddCategory(shelfName || undefined);
+          setHospitalityAddOpen(true);
+        } else if (workspace.selectedShelf) {
           const shelfName = workspace.selectedShelf === UNCATEGORIZED_SENTINEL ? "" : workspace.selectedShelf;
           setWizardPrefill({
             name: "",
@@ -311,11 +323,12 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
             piecesPerPack: "",
           });
           setWizardInitialStep("name");
+          setBulkOpen(true);
         } else {
           setWizardPrefill(undefined);
           setWizardInitialStep(undefined);
+          setBulkOpen(true);
         }
-        setBulkOpen(true);
       }
       if (importRequested && canAdd && !freeProductLimitReached) {
         setCsvImportOpen(true);
@@ -343,21 +356,26 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
       setSelectedShelf(shelf);
       if (searchParams.get("add") === "1" && canAdd && !freeProductLimitReached) {
         const shelfName = shelf === UNCATEGORIZED_SENTINEL ? "" : shelf;
-        setWizardPrefill({
-          name: "",
-          shelf: shelfName,
-          sellUnit: "piece",
-          sellUnitCustom: "",
-          hasPack: false,
-          packKind: "crate",
-          packCustom: "",
-          piecesPerPack: "",
-        });
-        setWizardInitialStep("name");
-        setBulkOpen(true);
+        if (hospitalityMode) {
+          setHospitalityAddCategory(shelfName || undefined);
+          setHospitalityAddOpen(true);
+        } else {
+          setWizardPrefill({
+            name: "",
+            shelf: shelfName,
+            sellUnit: "piece",
+            sellUnitCustom: "",
+            hasPack: false,
+            packKind: "crate",
+            packCustom: "",
+            piecesPerPack: "",
+          });
+          setWizardInitialStep("name");
+          setBulkOpen(true);
+        }
       }
     }
-  }, [searchParams, workspaceEmbed, canAdd, freeProductLimitReached, setSearchParams]);
+  }, [searchParams, workspaceEmbed, canAdd, freeProductLimitReached, hospitalityMode, setSearchParams]);
 
   useEffect(() => {
     const productId = searchParams.get("productId");
@@ -646,6 +664,11 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
 
   const openAddProductSheet = () => {
     if (freeProductLimitReached) return;
+    if (hospitalityMode) {
+      setHospitalityAddCategory(undefined);
+      setHospitalityAddOpen(true);
+      return;
+    }
     setWizardPrefill(undefined);
     setWizardInitialStep(undefined);
     setBulkOpen(true);
@@ -654,6 +677,11 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const openAddProductForShelf = (shelfKey: string) => {
     if (freeProductLimitReached) return;
     const shelfName = shelfKey === UNCATEGORIZED_SENTINEL ? "" : shelfKey;
+    if (hospitalityMode) {
+      setHospitalityAddCategory(shelfName || undefined);
+      setHospitalityAddOpen(true);
+      return;
+    }
     setWizardPrefill({
       name: "",
       shelf: shelfName,
@@ -936,7 +964,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
     setRemoveReason("");
   };
 
+  const isPrepBatchManaged = (p: Product) => productPrepMode(p) === "batch_prepared";
+
   const openProductRestock = (p: Product) => {
+    if (isPrepBatchManaged(p)) {
+      toast.warning(t(lang, "hospitalityPrepBatchStockOnly"));
+      return;
+    }
     if (shouldTrackBatchesForProduct(preferences.businessType, preferences.pharmacyModeEnabled, p)) {
       setReceiveProduct(p);
       return;
@@ -947,6 +981,13 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
   const handleRowAction = (p: Product, action: string) => {
     if (isProductPlanLocked(p.id, lockedIds)) {
       setProductLockedOpen(true);
+      return;
+    }
+    if (
+      isPrepBatchManaged(p) &&
+      ["add10", "add1", "sold1", "damaged1", "home1", "restock"].includes(action)
+    ) {
+      toast.warning(t(lang, "hospitalityPrepBatchStockOnly"));
       return;
     }
     switch (action) {
@@ -1145,6 +1186,15 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           className="flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-950"
         >
           {t(lang, "stockCountNav")}
+        </Link>
+      ) : null}
+
+      {hospitalityMode && canOpenMenuBuilder ? (
+        <Link
+          to="/settings/menu"
+          className="flex items-center justify-center gap-2 rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-xs font-black text-waka-950"
+        >
+          {t(lang, "menuBuilderOpen")}
         </Link>
       ) : null}
 
@@ -1589,6 +1639,20 @@ export function StockPage({ lang, workspaceEmbed }: { lang: Language; workspaceE
           editingProduct={editingProduct}
         />
       )}
+
+      {hospitalityMode && hospitalityAddOpen ? (
+        <HospitalityAddItemSheet
+          lang={lang}
+          open
+          onClose={() => setHospitalityAddOpen(false)}
+          initialCategory={hospitalityAddCategory}
+          canOpenMenuBuilder={canOpenMenuBuilder}
+          onSaved={() => {
+            setHospitalityAddOpen(false);
+            toast.success(t(lang, "hospitalityAddSaved"));
+          }}
+        />
+      ) : null}
 
       {aiInventoryAssistantEnabled ? (
         <BulkInventoryAiModal
