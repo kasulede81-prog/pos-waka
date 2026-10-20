@@ -109,6 +109,23 @@ const KEYS = [
   "voidReason_returned_item",
   "voidReason_wrong_quantity",
   "voidReason_other",
+  // Table service duration and turnover
+  "hospitalityTableServiceTitle",
+  "hospitalityTableServiceHint",
+  "hospitalityTableServiceCompleted",
+  "hospitalityTableServiceAvgDuration",
+  "hospitalityTableServiceOpenNow",
+  "hospitalityTableServiceMissingEnd",
+  "hospitalityTableServiceByTable",
+  "hospitalityTableServiceOpenTables",
+  "hospitalityTableServiceNoCompleted",
+  "hospitalityTableServiceNoOpen",
+  "hospitalityTableServiceStatusOpen",
+  "hospitalityTableServiceStatusPaymentPending",
+  "hospitalityTableServiceGuests",
+  "hospitalityTableServiceCycles",
+  "hospitalityTableServiceOpenNote",
+  "hospitalityTableServiceExcludedNote",
 ] as const;
 
 function placeholders(value: string): string[] {

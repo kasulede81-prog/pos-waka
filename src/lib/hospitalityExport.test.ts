@@ -4,6 +4,7 @@ import {
   buildHospitalityKitchenPdfBlob,
   buildHospitalityMenuPdfBlob,
   buildHospitalityTableRevenuePdfBlob,
+  buildHospitalityTableServiceExportBlock,
   buildHospitalityWaiterPdfBlob,
 } from "./hospitalityDocumentExports";
 import type { HospitalityReportSummary } from "./hospitalityReports";
@@ -112,6 +113,39 @@ const sample: HospitalityReportSummary = {
       ],
     },
   },
+  tableService: {
+    completedCount: 2,
+    completedDurationMinutes: 135,
+    averageCompletedDurationMinutes: 67.5,
+    completedByTable: [
+      {
+        tableLabel: "Table 1",
+        completedCount: 1,
+        totalDurationMinutes: 90,
+        averageDurationMinutes: 90,
+      },
+      {
+        tableLabel: "Table 2",
+        completedCount: 1,
+        totalDurationMinutes: 45,
+        averageDurationMinutes: 45,
+      },
+    ],
+    openCount: 1,
+    openTables: [
+      {
+        sessionId: "s3",
+        tableLabel: "Table 3",
+        status: "open",
+        openedAt: "2026-06-04T17:00:00.000Z",
+        elapsedMinutes: 60,
+        guestCount: 4,
+      },
+    ],
+    missingEndEvidenceCount: 0,
+    invalidIntervalCount: 0,
+    outsideRangeCount: 0,
+  },
   cancellations: {
     rows: [
       {
@@ -180,6 +214,19 @@ describe("hospitalityExport", () => {
   it("builds menu PDF with period and margin labels", () => {
     const blob = buildHospitalityMenuPdfBlob("en", sample, "October 2026");
     expect(blob.size).toBeGreaterThan(300);
+  });
+
+  it("exports the table service block from the report summary", () => {
+    const block = buildHospitalityTableServiceExportBlock("en", sample);
+    expect(block.title).toBe("Table service duration & turnover");
+    expect(block.hint).toContain("Completed cycles require both openedAt and closedAt");
+    const text = block.lines.join("\n");
+    expect(text).toContain("Completed cycles: 2");
+    expect(text).toContain("Average duration: 1h 8m");
+    expect(text).toContain("Table 1");
+    expect(text).toContain("Open now: 1");
+    expect(text).toContain("Table 3");
+    expect(text).toContain("Current elapsed time — not completed turnover.");
   });
 
   it("exports the cancellation block from the report summary", () => {

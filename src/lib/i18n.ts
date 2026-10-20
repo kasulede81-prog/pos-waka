@@ -3562,6 +3562,25 @@ const en: Dict = {
   hospitalityCancelledTicketLabel: "Ticket #{number}",
   hospitalityCancelledSummaryCount: "{count} item(s)",
   hospitalityCancelledSnapshotCoverage: "{count} with sale-time cost",
+  hospitalityTableServiceTitle: "Table service duration & turnover",
+  hospitalityTableServiceHint:
+    "Completed cycles require both openedAt and closedAt on the shared table session and are counted by close time in the selected range. Open tables show current elapsed time only and are not completed turnover. Reservations and sessions without a usable end time are excluded.",
+  hospitalityTableServiceCompleted: "Completed cycles",
+  hospitalityTableServiceAvgDuration: "Average duration",
+  hospitalityTableServiceOpenNow: "Open now",
+  hospitalityTableServiceMissingEnd: "Missing end time",
+  hospitalityTableServiceByTable: "Completed by table",
+  hospitalityTableServiceOpenTables: "Open tables (current elapsed time)",
+  hospitalityTableServiceNoCompleted:
+    "No completed table service cycles with both start and end times in this period.",
+  hospitalityTableServiceNoOpen: "No open tables now.",
+  hospitalityTableServiceStatusOpen: "Open",
+  hospitalityTableServiceStatusPaymentPending: "Payment pending",
+  hospitalityTableServiceGuests: "{count} guests",
+  hospitalityTableServiceCycles: "{count} cycles",
+  hospitalityTableServiceOpenNote: "Current elapsed time — not completed turnover.",
+  hospitalityTableServiceExcludedNote:
+    "{missing} closed session(s) without an end time and {invalid} with an invalid interval were excluded.",
   customerDisplayTitle: "Your order",
   customerDisplayTable: "Table",
   customerDisplayTotal: "Total",
@@ -16630,6 +16649,25 @@ const lgBase: Dict = {
   hospitalityCancelledTicketLabel: "Tikiti #{number}",
   hospitalityCancelledSummaryCount: "ebintu {count}",
   hospitalityCancelledSnapshotCoverage: "{count} birina snapshot ya cost",
+  hospitalityTableServiceTitle: "Obudde bwa service ku mmeeza n'enkyukakyuka",
+  hospitalityTableServiceHint:
+    "Enkyukakyuka ezikakasiddwa zetaaga openedAt ne closedAt ku session ya mmeeza ey'omu shared era zibalibwa ku closedAt mu kiseera ekilondeddwa. Emmeeza eziggule ziraga obudde obuliwo kaakano bwokka, si nkyukakyuka zikakasiddwa. Reservations ne sessions ezitali na closedAt tezikubibwamu.",
+  hospitalityTableServiceCompleted: "Emirundi egikakasiddwa",
+  hospitalityTableServiceAvgDuration: "Obudde obukikira",
+  hospitalityTableServiceOpenNow: "Eziggule kaakano",
+  hospitalityTableServiceMissingEnd: "Obudde bw'okuggala tebuli",
+  hospitalityTableServiceByTable: "Emmeeza ezikakasiddwa",
+  hospitalityTableServiceOpenTables: "Emmeeza eziggule (obudde obuliwo)",
+  hospitalityTableServiceNoCompleted:
+    "Tewali mirundi gya service ku mmeeza egikakasiddwa n'obudde bw'okutandika n'okuggala mu kiseera kino.",
+  hospitalityTableServiceNoOpen: "Tewali mmeeza ziggule kaakano.",
+  hospitalityTableServiceStatusOpen: "Eggule",
+  hospitalityTableServiceStatusPaymentPending: "Okusasula kulindiddwa",
+  hospitalityTableServiceGuests: "abagenyi {count}",
+  hospitalityTableServiceCycles: "emirundi {count}",
+  hospitalityTableServiceOpenNote: "Obudde obuliwo kaakano — si nkyukakyuka zikakasiddwa.",
+  hospitalityTableServiceExcludedNote:
+    "Sessions {missing} ezitali na budde bw'okuggala ne {invalid} ezitali na budde butuufu ziggiddwa ebweru.",
 };
 
 /** Luganda = base dictionary + Phase 2 Batch 4 overrides (mirrors the sw layering). */

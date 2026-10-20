@@ -23,6 +23,7 @@ import {
 import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
 import {
   formatHospitalityCancellationTime,
+  formatHospitalityDurationMinutes,
   formatIngredientDemandQty,
   hospitalityCancellationReasonLabel,
   hospitalityCancellationSourceLabel,
@@ -222,6 +223,7 @@ export function HospitalityReportsSection({
   const hasDemandGaps =
     demand.missingIngredients.length > 0 || demand.noRecipeDishes.length > 0;
   const cancellations = hospitalityReports.cancellations;
+  const tableService = hospitalityReports.tableService;
 
   return (
     <section className="space-y-4 rounded-2xl border border-waka-200 bg-waka-50/40 p-4 shadow-sm">
@@ -613,6 +615,126 @@ export function HospitalityReportsSection({
           </ul>
         </div>
       ) : null}
+      <div className="rounded-2xl border border-border bg-card p-3">
+        <p className="text-xs font-black uppercase text-muted-foreground">
+          {t(lang, "hospitalityTableServiceTitle")}
+        </p>
+        <p className="mt-1 text-xs font-medium text-muted-foreground">
+          {t(lang, "hospitalityTableServiceHint")}
+        </p>
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            {
+              label: t(lang, "hospitalityTableServiceCompleted"),
+              value: String(tableService.completedCount),
+              className: "text-foreground",
+            },
+            {
+              label: t(lang, "hospitalityTableServiceAvgDuration"),
+              value:
+                tableService.averageCompletedDurationMinutes != null
+                  ? formatHospitalityDurationMinutes(tableService.averageCompletedDurationMinutes)
+                  : "—",
+              className: "text-foreground",
+            },
+            {
+              label: t(lang, "hospitalityTableServiceOpenNow"),
+              value: String(tableService.openCount),
+              className: "text-amber-800",
+            },
+            {
+              label: t(lang, "hospitalityTableServiceMissingEnd"),
+              value: String(tableService.missingEndEvidenceCount),
+              className:
+                tableService.missingEndEvidenceCount > 0
+                  ? "text-rose-700"
+                  : "text-muted-foreground",
+            },
+          ].map((tile) => (
+            <article key={tile.label} className="rounded-xl bg-muted/60 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                {tile.label}
+              </p>
+              <p className={`mt-0.5 text-lg font-black ${tile.className}`}>{tile.value}</p>
+            </article>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-2xl border border-border bg-card p-3">
+            <p className="text-xs font-black uppercase text-muted-foreground">
+              {t(lang, "hospitalityTableServiceByTable")}
+            </p>
+            {tableService.completedByTable.length === 0 ? (
+              <p className="mt-2 text-sm font-semibold text-muted-foreground">
+                {t(lang, "hospitalityTableServiceNoCompleted")}
+              </p>
+            ) : (
+              <ul className="mt-2 space-y-1">
+                {tableService.completedByTable.map((row) => (
+                  <li
+                    key={row.tableLabel}
+                    className="flex justify-between text-sm font-semibold text-foreground"
+                  >
+                    <span className="min-w-0 truncate">{row.tableLabel}</span>
+                    <span className="shrink-0 text-right text-xs text-muted-foreground">
+                      {tTemplate(lang, "hospitalityTableServiceCycles", {
+                        count: String(row.completedCount),
+                      })}{" "}
+                      · {t(lang, "hospitalityTableServiceAvgDuration")}:{" "}
+                      {formatHospitalityDurationMinutes(row.averageDurationMinutes)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="rounded-2xl border border-border bg-card p-3">
+            <p className="text-xs font-black uppercase text-muted-foreground">
+              {t(lang, "hospitalityTableServiceOpenTables")}
+            </p>
+            {tableService.openTables.length === 0 ? (
+              <p className="mt-2 text-sm font-semibold text-muted-foreground">
+                {t(lang, "hospitalityTableServiceNoOpen")}
+              </p>
+            ) : (
+              <>
+                <ul className="mt-2 space-y-1">
+                  {tableService.openTables.map((row) => (
+                    <li
+                      key={row.sessionId}
+                      className="flex justify-between text-sm font-semibold text-foreground"
+                    >
+                      <span className="min-w-0 truncate">
+                        {row.tableLabel} ·{" "}
+                        {row.status === "payment_pending"
+                          ? t(lang, "hospitalityTableServiceStatusPaymentPending")
+                          : t(lang, "hospitalityTableServiceStatusOpen")}
+                      </span>
+                      <span className="shrink-0 text-right text-xs text-muted-foreground">
+                        {formatHospitalityDurationMinutes(row.elapsedMinutes)} ·{" "}
+                        {tTemplate(lang, "hospitalityTableServiceGuests", {
+                          count: String(row.guestCount),
+                        })}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[11px] font-medium text-muted-foreground">
+                  {t(lang, "hospitalityTableServiceOpenNote")}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+        {tableService.missingEndEvidenceCount > 0 || tableService.invalidIntervalCount > 0 ? (
+          <p className="mt-2 text-xs font-semibold text-rose-700">
+            {tTemplate(lang, "hospitalityTableServiceExcludedNote", {
+              missing: String(tableService.missingEndEvidenceCount),
+              invalid: String(tableService.invalidIntervalCount),
+            })}
+          </p>
+        ) : null}
+      </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="rounded-xl border border-waka-300 bg-card px-3 py-2 text-xs font-black text-waka-900" onClick={() => void downloadHospitalityMenuPdf(lang, hospitalityReports, periodLabel)}>
           {t(lang, "hospitalityExportMenuPdf")}

@@ -1048,4 +1048,23 @@ export const swOverrides: Record<string, string> = {
   voidReason_returned_item: "Bidhaa ilirejeshwa",
   voidReason_wrong_quantity: "Idadi isiyo sahihi",
   voidReason_other: "Nyingine",
+  hospitalityTableServiceTitle: "Muda wa huduma ya meza na mzunguko",
+  hospitalityTableServiceHint:
+    "Mizunguko iliyokamilika inahitaji openedAt na closedAt kwenye kikao cha meza kilichoshirikiwa, na huhesabiwa kwa muda wa kufunga katika kipindi kilichochaguliwa. Meza zilizo wazi zinaonyesha muda wa sasa tu, si mzunguko uliokamilika. Reservations na vikao visivyo na closedAt havijumuishwi.",
+  hospitalityTableServiceCompleted: "Mizunguko iliyokamilika",
+  hospitalityTableServiceAvgDuration: "Wastani wa muda",
+  hospitalityTableServiceOpenNow: "Wazi sasa",
+  hospitalityTableServiceMissingEnd: "Muda wa kufunga haupo",
+  hospitalityTableServiceByTable: "Iliyokamilika kwa meza",
+  hospitalityTableServiceOpenTables: "Meza zilizo wazi (muda wa sasa)",
+  hospitalityTableServiceNoCompleted:
+    "Hakuna mizunguko ya huduma ya meza iliyokamilika yenye muda wa kuanza na kufunga katika kipindi hiki.",
+  hospitalityTableServiceNoOpen: "Hakuna meza zilizo wazi sasa.",
+  hospitalityTableServiceStatusOpen: "Wazi",
+  hospitalityTableServiceStatusPaymentPending: "Inasubiri malipo",
+  hospitalityTableServiceGuests: "wagent {count}",
+  hospitalityTableServiceCycles: "mizunguko {count}",
+  hospitalityTableServiceOpenNote: "Muda wa sasa — si mzunguko uliokamilika.",
+  hospitalityTableServiceExcludedNote:
+    "Vikao {missing} visivyo na muda wa kufunga na {invalid} vyenye muda usio sahihi vilitengwa.",
 };

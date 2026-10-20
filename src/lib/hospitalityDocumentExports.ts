@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import type { Language } from "../types";
 import {
   formatHospitalityCancellationTime,
+  formatHospitalityDurationMinutes,
   formatIngredientDemandQty,
   hospitalityCancellationReasonLabel,
   hospitalityCancellationSourceLabel,
@@ -50,7 +51,92 @@ export function buildHospitalityTableRevenuePdfBlob(lang: Language, report: Summ
   for (const row of report.tables) {
     pdfLine(layout, doc, `${row.label} — ${row.billCount} · UGX ${row.revenueUgx.toLocaleString()}`, { size: 10 });
   }
+
+  const serviceBlock = buildHospitalityTableServiceExportBlock(lang, report);
+  pdfGap(layout, 6);
+  pdfLine(layout, doc, serviceBlock.title, { bold: true, size: 11 });
+  pdfLine(layout, doc, serviceBlock.hint, { size: 8 });
+  for (const line of serviceBlock.lines) {
+    pdfLine(layout, doc, line, { size: 8 });
+  }
+
   return doc.output("blob");
+}
+
+export type HospitalityTableServiceExportBlock = {
+  title: string;
+  hint: string;
+  lines: string[];
+};
+
+/**
+ * Format the already-computed table service report for export. Completed
+ * turnover requires the shared session's openedAt and closedAt; open-table
+ * elapsed time is reported separately and is never counted as turnover.
+ */
+export function buildHospitalityTableServiceExportBlock(
+  lang: Language,
+  report: Summary,
+): HospitalityTableServiceExportBlock {
+  const service = report.tableService;
+  const lines: string[] = [];
+
+  if (service.completedCount === 0) {
+    lines.push(t(lang, "hospitalityTableServiceNoCompleted"));
+  } else {
+    lines.push(
+      `${t(lang, "hospitalityTableServiceCompleted")}: ${service.completedCount} · ${t(
+        lang,
+        "hospitalityTableServiceAvgDuration",
+      )}: ${formatHospitalityDurationMinutes(service.averageCompletedDurationMinutes ?? 0)}`,
+    );
+    lines.push(t(lang, "hospitalityTableServiceByTable"));
+    for (const row of service.completedByTable) {
+      lines.push(
+        `  ${row.tableLabel} — ${tTemplate(lang, "hospitalityTableServiceCycles", {
+          count: String(row.completedCount),
+        })} — ${t(lang, "hospitalityTableServiceAvgDuration")}: ${formatHospitalityDurationMinutes(
+          row.averageDurationMinutes,
+        )}`,
+      );
+    }
+  }
+
+  lines.push(`${t(lang, "hospitalityTableServiceOpenNow")}: ${service.openCount}`);
+  if (service.openCount === 0) {
+    lines.push(t(lang, "hospitalityTableServiceNoOpen"));
+  } else {
+    lines.push(t(lang, "hospitalityTableServiceOpenTables"));
+    for (const row of service.openTables) {
+      const status =
+        row.status === "payment_pending"
+          ? t(lang, "hospitalityTableServiceStatusPaymentPending")
+          : t(lang, "hospitalityTableServiceStatusOpen");
+      lines.push(
+        `  ${row.tableLabel} — ${status} — ${formatHospitalityDurationMinutes(
+          row.elapsedMinutes,
+        )} — ${tTemplate(lang, "hospitalityTableServiceGuests", {
+          count: String(row.guestCount),
+        })}`,
+      );
+    }
+    lines.push(`  ${t(lang, "hospitalityTableServiceOpenNote")}`);
+  }
+
+  if (service.missingEndEvidenceCount > 0 || service.invalidIntervalCount > 0) {
+    lines.push(
+      tTemplate(lang, "hospitalityTableServiceExcludedNote", {
+        missing: String(service.missingEndEvidenceCount),
+        invalid: String(service.invalidIntervalCount),
+      }),
+    );
+  }
+
+  return {
+    title: t(lang, "hospitalityTableServiceTitle"),
+    hint: t(lang, "hospitalityTableServiceHint"),
+    lines,
+  };
 }
 
 export type HospitalityCancellationExportBlock = {

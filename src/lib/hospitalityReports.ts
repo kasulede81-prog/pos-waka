@@ -5,6 +5,7 @@ import type {
   Recipe,
   Sale,
   StaffAccount,
+  TableSession,
   VoidRecord,
 } from "../types";
 import { t } from "./i18n";
@@ -236,6 +237,46 @@ export type HospitalityCancelledMenuReport = {
   saleTimeCostRowCount: number;
 };
 
+export type HospitalityTableTurnoverRow = {
+  tableLabel: string;
+  completedCount: number;
+  totalDurationMinutes: number;
+  averageDurationMinutes: number;
+};
+
+export type HospitalityOpenTableDuration = {
+  sessionId: string;
+  tableLabel: string;
+  status: "open" | "payment_pending";
+  openedAt: string;
+  elapsedMinutes: number;
+  guestCount: number;
+};
+
+export type HospitalityTableServiceReport = {
+  completedCount: number;
+  completedDurationMinutes: number;
+  averageCompletedDurationMinutes: number | null;
+  completedByTable: HospitalityTableTurnoverRow[];
+  openCount: number;
+  /** Current elapsed time for open tables; never completed turnover. */
+  openTables: HospitalityOpenTableDuration[];
+  /** Closed sessions with no usable closedAt. */
+  missingEndEvidenceCount: number;
+  /** Closed sessions where closedAt is invalid or precedes openedAt. */
+  invalidIntervalCount: number;
+  /** Closed sessions with valid timestamps but a close time outside the selected range. */
+  outsideRangeCount: number;
+};
+
+export function formatHospitalityDurationMinutes(minutes: number): string {
+  if (!Number.isFinite(minutes)) return "—";
+  const total = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(total / 60);
+  const remainder = total % 60;
+  return hours > 0 ? `${hours}h ${remainder}m` : `${remainder}m`;
+}
+
 /**
  * Read-only menu performance and cost coverage for the reporting period.
  * It is derived from completed sales plus the shared product/recipe model —
@@ -264,6 +305,7 @@ export type HospitalityReportSummary = {
   peakHours: PeakHourRow[];
   menu: HospitalityMenuReport;
   cancellations: HospitalityCancelledMenuReport;
+  tableService: HospitalityTableServiceReport;
 };
 
 function menuCostStatus(state: ReturnType<typeof hospitalityMenuCostState>): HospitalityMenuCostStatus {
@@ -683,6 +725,108 @@ function computeCancelledMenuReport(
   };
 }
 
+function roundMinutes(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+function tableLabelFor(session: TableSession, floor: HospitalityFloorState | null): string {
+  if (session.sessionKind === "named_tab") return session.tabLabel?.trim() || "Tab";
+  const table = floor?.tables.find((row) => row.id === session.tableId);
+  return table?.label?.trim() || session.tabLabel?.trim() || "Table";
+}
+
+function computeTableServiceReport(
+  floor: HospitalityFloorState | null,
+  range: HospitalityReportRange,
+  now: Date,
+): HospitalityTableServiceReport {
+  const sessions = floor?.sessions ?? [];
+  const tableAgg = new Map<
+    string,
+    { tableLabel: string; completedCount: number; totalDurationMinutes: number }
+  >();
+  const openTables: HospitalityOpenTableDuration[] = [];
+  const nowMs = now.getTime();
+  let completedCount = 0;
+  let totalDurationMinutes = 0;
+  let missingEndEvidenceCount = 0;
+  let invalidIntervalCount = 0;
+  let outsideRangeCount = 0;
+
+  for (const session of sessions) {
+    const openedMs = Date.parse(session.openedAt);
+
+    if (session.status === "open" || session.status === "payment_pending") {
+      if (Number.isFinite(openedMs) && nowMs >= openedMs) {
+        openTables.push({
+          sessionId: session.id,
+          tableLabel: tableLabelFor(session, floor),
+          status: session.status,
+          openedAt: session.openedAt,
+          elapsedMinutes: roundMinutes((nowMs - openedMs) / 60_000),
+          guestCount: session.guestCount ?? 0,
+        });
+      }
+      continue;
+    }
+
+    if (session.status !== "closed") continue;
+
+    if (!session.closedAt) {
+      missingEndEvidenceCount += 1;
+      continue;
+    }
+    const closedMs = Date.parse(session.closedAt);
+    if (!Number.isFinite(openedMs) || !Number.isFinite(closedMs) || closedMs < openedMs) {
+      invalidIntervalCount += 1;
+      continue;
+    }
+    if (!inRange(session.closedAt, range)) {
+      outsideRangeCount += 1;
+      continue;
+    }
+
+    const durationMinutes = (closedMs - openedMs) / 60_000;
+    completedCount += 1;
+    totalDurationMinutes += durationMinutes;
+    const tableLabel = tableLabelFor(session, floor);
+    const aggregate = tableAgg.get(tableLabel) ?? {
+      tableLabel,
+      completedCount: 0,
+      totalDurationMinutes: 0,
+    };
+    aggregate.completedCount += 1;
+    aggregate.totalDurationMinutes += durationMinutes;
+    tableAgg.set(tableLabel, aggregate);
+  }
+
+  const completedByTable = [...tableAgg.values()]
+    .map((row) => ({
+      tableLabel: row.tableLabel,
+      completedCount: row.completedCount,
+      totalDurationMinutes: roundMinutes(row.totalDurationMinutes),
+      averageDurationMinutes: roundMinutes(row.totalDurationMinutes / row.completedCount),
+    }))
+    .sort((a, b) => b.completedCount - a.completedCount || a.tableLabel.localeCompare(b.tableLabel));
+
+  openTables.sort(
+    (a, b) => b.elapsedMinutes - a.elapsedMinutes || a.tableLabel.localeCompare(b.tableLabel),
+  );
+
+  return {
+    completedCount,
+    completedDurationMinutes: roundMinutes(totalDurationMinutes),
+    averageCompletedDurationMinutes:
+      completedCount > 0 ? roundMinutes(totalDurationMinutes / completedCount) : null,
+    completedByTable,
+    openCount: openTables.length,
+    openTables,
+    missingEndEvidenceCount,
+    invalidIntervalCount,
+    outsideRangeCount,
+  };
+}
+
 export function computeHospitalityReports(
   sales: Sale[],
   products: Product[],
@@ -692,6 +836,8 @@ export function computeHospitalityReports(
     staffAccounts?: StaffAccount[] | null;
     voidRecords?: readonly VoidRecord[] | null;
     archivedVoidRecords?: readonly VoidRecord[] | null;
+    /** Deterministic "now" for current open-table elapsed time. */
+    now?: Date;
   },
 ): HospitalityReportSummary {
   const productById = new Map(products.map((p) => [p.id, p]));
@@ -773,6 +919,7 @@ export function computeHospitalityReports(
       floor,
       range,
     ),
+    tableService: computeTableServiceReport(floor, range, options?.now ?? new Date()),
   };
 }
 
