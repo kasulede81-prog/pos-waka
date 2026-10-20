@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type {
   Language,
+  MenuSectionDef,
   ModifierGroup,
   ModifierOption,
   Product,
@@ -15,7 +16,8 @@ import {
   isHospitalityMenuItem,
   isHospitalityRecipeDish,
 } from "../../lib/hospitalityMenuCosting";
-import { DEFAULT_MENU_SECTIONS, initialMenuConfigForProduct } from "../../lib/menuModifiers";
+import { initialMenuConfigForProduct } from "../../lib/menuModifiers";
+import { menuSectionOptions } from "../../lib/menuSections";
 import {
   formatRecipeQuantityInput,
   parseRecipeQuantityInput,
@@ -36,6 +38,8 @@ type Props = {
   ingredientProducts: Product[];
   /** Products usable in combo slots (dishes, drinks, retail). */
   comboProducts: Product[];
+  /** Effective configured sections (custom + defaults), including inactive ones. */
+  sections: MenuSectionDef[];
   onSave: (menu: ProductMenuConfig) => void;
 };
 
@@ -43,7 +47,7 @@ function newId(prefix: string) {
   return `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
-export function ProductMenuConfigFields({ lang, product, ingredientProducts, comboProducts, onSave }: Props) {
+export function ProductMenuConfigFields({ lang, product, ingredientProducts, comboProducts, sections, onSave }: Props) {
   const [menu, setMenu] = useState<ProductMenuConfig>(() =>
     initialMenuConfigForProduct(product),
   );
@@ -169,6 +173,9 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, com
           (id) => allProducts.find((p) => p.id === id)?.name ?? id,
         )
       : [];
+  // Include inactive and unknown (legacy) current values so editing an existing
+  // dish cannot silently clear or reinterpret its section reference.
+  const sectionOptions = menuSectionOptions(sections, menu.menuSection);
 
   return (
     <div className="space-y-4">
@@ -194,9 +201,14 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, com
           className="mt-1 min-h-[44px] w-full rounded-xl border border-border px-3 text-sm font-bold"
         >
           <option value="">{product.category}</option>
-          {DEFAULT_MENU_SECTIONS.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
+          {sectionOptions.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.label}
+              {option.isLegacy
+                ? ` (${t(lang, "menuSectionLegacy")})`
+                : option.isActive
+                  ? ""
+                  : ` (${t(lang, "menuSectionInactive")})`}
             </option>
           ))}
         </select>

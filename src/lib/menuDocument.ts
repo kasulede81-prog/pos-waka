@@ -5,14 +5,17 @@
  * menuReports.ts performance aggregates the page already displays. Pure presentation:
  * it reads products/sales-derived stats and creates no menu or inventory transaction.
  */
-import type { Language, Product, ShopPreferences } from "../types";
+import type { Language, MenuSectionDef, Product, ShopPreferences } from "../types";
 import { t } from "./i18n";
+import { DEFAULT_MENU_SECTIONS } from "./menuModifiers";
 import { formatUgx } from "./formatUgx";
 import type { DishSaleStat, ModifierPopularityStat } from "./menuReports";
 
 export type MenuDocumentInput = {
   lang: Language;
   preferences: ShopPreferences;
+  /** Effective configured sections (defaults + custom), including inactive ones. */
+  sections?: MenuSectionDef[];
   /** Dishes currently displayed (already filtered by the page's section filter). */
   menuProducts: Product[];
   /** Label of the active section filter, or the "all sections" label. */
@@ -30,7 +33,10 @@ export type MenuDocument = {
 
 export function buildMenuDocument(input: MenuDocumentInput): MenuDocument {
   const { lang } = input;
-  const sections = input.preferences.hospitalityMenuSections ?? [];
+  // Custom/renamed labels come from the effective list; without it the printed
+  // menu would fall back to raw IDs (e.g. "food") on shops using defaults.
+  const sections =
+    input.sections ?? input.preferences.hospitalityMenuSections ?? DEFAULT_MENU_SECTIONS;
   const sectionLabel = (key: string) => sections.find((s) => s.id === key)?.label ?? key;
 
   const bySection = new Map<string, Product[]>();
@@ -42,7 +48,16 @@ export function buildMenuDocument(input: MenuDocumentInput): MenuDocument {
   }
 
   const lines: string[] = [];
-  for (const [section, dishes] of bySection) {
+  const sectionOrder = (key: string) => {
+    const section = sections.find((candidate) => candidate.id === key);
+    return section ? section.sortOrder : Number.MAX_SAFE_INTEGER;
+  };
+  // Configured sections print in their sort order; legacy/uncategorised keys
+  // (unknown IDs or product categories) follow in a stable alphabetical order.
+  const grouped = [...bySection.entries()].sort(
+    ([a], [b]) => sectionOrder(a) - sectionOrder(b) || a.localeCompare(b),
+  );
+  for (const [section, dishes] of grouped) {
     lines.push(sectionLabel(section));
     for (const dish of dishes) {
       lines.push(`  ${dish.name}  —  ${formatUgx(dish.sellingPricePerUnitUgx)}`);

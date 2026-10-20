@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { actorHasPermission } from "../lib/actorAuthorization";
 import { Navigate, useSearchParams } from "react-router-dom";
-import type { Language } from "../types";
+import type { Language, MenuSectionDef } from "../types";
 import { t, tTemplate } from "../lib/i18n";
 import { useSessionActor } from "../context/SessionActorContext";
 import { usePosStore } from "../store/usePosStore";
@@ -12,10 +12,17 @@ import {
   isHospitalityMenuItem,
   isHospitalityRecipeDish,
 } from "../lib/hospitalityMenuCosting";
-import { DEFAULT_MENU_SECTIONS } from "../lib/menuModifiers";
 import { aggregateDishSales, aggregateModifierPopularity, lowMarginMenuItems } from "../lib/menuReports";
 import { computeMenuItemMargin } from "../lib/recipeEngine";
 import { ProductMenuConfigFields } from "../components/hospitality/ProductMenuConfigFields";
+import { MenuSectionsManager } from "../components/hospitality/MenuSectionsManager";
+import {
+  filterProductsForPrintedMenu,
+  legacyMenuSectionIds,
+  menuSectionLabel,
+  resolveMenuSections,
+  sortMenuSections,
+} from "../lib/menuSections";
 import { formatUgx } from "../lib/formatUgx";
 import { printTextListDocument } from "../lib/nativePrintFallback";
 import { buildListDocumentHtml } from "../lib/listDocumentPdf";
@@ -35,6 +42,15 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
   const toast = useToast();
+
+  const sections = useMemo(
+    () => sortMenuSections(resolveMenuSections(preferences)),
+    [preferences],
+  );
+  const legacySectionIds = useMemo(
+    () => legacyMenuSectionIds(products, sections),
+    [products, sections],
+  );
 
   // All hooks run before the guard returns below (Rules of Hooks): the permission /
   // business-type guards can flip between renders when an admin switches the shop mode.
@@ -89,18 +105,27 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
     return <Navigate to="/settings" replace />;
   }
 
+  const saveSections = (next: MenuSectionDef[]) => {
+    setPreferences({ hospitalityMenuSections: next });
+    toast.success(t(lang, "menuSectionsSaved"));
+  };
+
   /**
-   * Printable menu of the merchants' dishes as currently displayed (respects the section
-   * filter). Read-only presentation of existing product data — it creates no menu or
-   * inventory transaction.
+   * Printable menu of the merchants' dishes as currently displayed. Read-only
+   * presentation: it creates no menu or inventory transaction. Deactivated
+   * sections are omitted when printing all; an explicit filter still prints
+   * that section so the owner can review it before reactivating.
    */
   const printMenu = () => {
-    const sections = preferences.hospitalityMenuSections ?? DEFAULT_MENU_SECTIONS;
+    const printableProducts = filterProductsForPrintedMenu(menuProducts, sections, sectionFilter);
     const doc = buildMenuDocument({
       lang,
       preferences,
-      menuProducts,
-      activeSectionLabel: sections.find((s) => s.id === sectionFilter)?.label ?? t(lang, "menuAllSections"),
+      sections,
+      menuProducts: printableProducts,
+      activeSectionLabel: sectionFilter
+        ? menuSectionLabel(sections, sectionFilter, sectionFilter)
+        : t(lang, "menuAllSections"),
       topDishes,
       topModifiers,
       lowMargin,
@@ -161,29 +186,35 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
           >
             {t(lang, "menuAllSections")}
           </button>
-          {(preferences.hospitalityMenuSections ?? DEFAULT_MENU_SECTIONS).map((s) => (
+          {sections.map((s) => (
             <button
               key={s.id}
               type="button"
               onClick={() => setSectionFilter(s.id)}
-              className={`min-h-10 rounded-xl px-3 text-xs font-black ${sectionFilter === s.id ? "bg-waka-600 text-white" : "bg-muted"}`}
+              className={`min-h-10 rounded-xl px-3 text-xs font-black ${
+                sectionFilter === s.id ? "bg-waka-600 text-white" : "bg-muted"
+              } ${s.isActive === false ? "opacity-70" : ""}`}
             >
               {s.label}
+              {s.isActive === false ? ` · ${t(lang, "menuSectionInactive")}` : ""}
+            </button>
+          ))}
+          {legacySectionIds.map((id) => (
+            <button
+              key={`legacy-${id}`}
+              type="button"
+              onClick={() => setSectionFilter(id)}
+              className={`min-h-10 rounded-xl px-3 text-xs font-black ${
+                sectionFilter === id ? "bg-waka-600 text-white" : "bg-muted"
+              } opacity-70`}
+            >
+              {id} · {t(lang, "menuSectionLegacy")}
             </button>
           ))}
         </div>
-        <button
-          type="button"
-          className="mt-3 text-xs font-bold text-waka-700"
-          onClick={() =>
-            setPreferences({
-              hospitalityMenuSections: DEFAULT_MENU_SECTIONS.map((s) => ({ ...s, isActive: true })),
-            })
-          }
-        >
-          {t(lang, "menuResetSections")}
-        </button>
       </article>
+
+      <MenuSectionsManager lang={lang} sections={sections} onSave={saveSections} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <article className="rounded-2xl border border-border bg-card p-4 shadow-sm">
@@ -242,6 +273,7 @@ export function MenuBuilderPage({ lang }: { lang: Language }) {
                 product={selected}
                 ingredientProducts={ingredientProducts}
                 comboProducts={products.filter((p) => !p.menu?.hideFromMenu)}
+                sections={sections}
                 onSave={(menu) => {
                   const result = updateProduct(selected.id, { menu });
                   if (!result.ok) {

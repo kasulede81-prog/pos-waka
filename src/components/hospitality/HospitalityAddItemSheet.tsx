@@ -4,7 +4,11 @@ import { Plus, Trash2 } from "lucide-react";
 import type { Language, ProductMenuConfig, RecipeLine } from "../../types";
 import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
-import { DEFAULT_MENU_SECTIONS } from "../../lib/menuModifiers";
+import {
+  activeMenuSections,
+  menuSectionLabel,
+  resolveMenuSections,
+} from "../../lib/menuSections";
 import { unitCostFromPackTotal } from "../../lib/costPrecision";
 import {
   buildRecipeLineFromEntry,
@@ -62,6 +66,7 @@ export function HospitalityAddItemSheet({
   onSaved,
 }: Props) {
   const products = usePosStore((s) => s.products);
+  const preferences = usePosStore((s) => s.preferences);
   const quickAddProduct = usePosStore((s) => s.quickAddProduct);
 
   const [kind, setKind] = useState<ItemKind>("ingredient");
@@ -76,7 +81,7 @@ export function HospitalityAddItemSheet({
   const [openingStock, setOpeningStock] = useState("");
   const [lowStock, setLowStock] = useState("5");
   const [prepMode, setPrepMode] = useState<"made_to_order" | "batch_prepared">("made_to_order");
-  const [menuSection, setMenuSection] = useState("food");
+  const [menuSection, setMenuSection] = useState("");
   const [yieldQty, setYieldQty] = useState("4");
   const [recipeRows, setRecipeRows] = useState<RecipeDraft[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +100,17 @@ export function HospitalityAddItemSheet({
     () => new Map(ingredientProducts.map((p) => [p.id, p])),
     [ingredientProducts],
   );
+
+  const sections = useMemo(
+    () => resolveMenuSections(preferences),
+    [preferences],
+  );
+  const activeSections = useMemo(() => activeMenuSections(sections), [sections]);
+  // New dishes may only use active sections. If every section is inactive the
+  // dish is saved without a section and keeps selling normally.
+  const effectiveMenuSection = activeSections.some((section) => section.id === menuSection)
+    ? menuSection
+    : activeSections[0]?.id ?? "";
 
   const conversionN = Math.max(0, Number(conversionRate.replace(/[^\d.]/g, "")) || 0);
   const packPriceN = Math.floor(Number(packPrice.replace(/\D/g, "")) || 0);
@@ -196,7 +212,7 @@ export function HospitalityAddItemSheet({
       menu = {
         productKind: "finished_menu",
         prepMode,
-        menuSection,
+        menuSection: effectiveMenuSection || null,
         recipe: { lines, yieldQty: yieldN },
         prepBatches: [],
         modifierGroups: [],
@@ -208,8 +224,11 @@ export function HospitalityAddItemSheet({
       costPrice = 0;
     }
 
-    const sectionLabel =
-      DEFAULT_MENU_SECTIONS.find((section) => section.id === menuSection)?.label ?? "Food";
+    const sectionLabel = menuSectionLabel(
+      sections,
+      effectiveMenuSection,
+      t(lang, "generalCategory"),
+    );
     const result = quickAddProduct({
       name: trimmed,
       priceUgx: price,
@@ -293,12 +312,19 @@ export function HospitalityAddItemSheet({
               {kind === "dish" ? t(lang, "hospitalityAddMenuSection") : t(lang, "stockDetailCategory")}
             </span>
             {kind === "dish" ? (
-              <select value={menuSection} onChange={(e) => setMenuSection(e.target.value)} className={fieldClass}>
-                {DEFAULT_MENU_SECTIONS.map((section) => (
+              <select
+                value={effectiveMenuSection}
+                onChange={(e) => setMenuSection(e.target.value)}
+                className={fieldClass}
+              >
+                {activeSections.map((section) => (
                   <option key={section.id} value={section.id}>
                     {section.label}
                   </option>
                 ))}
+                {activeSections.length === 0 ? (
+                  <option value="">{t(lang, "menuSectionNone")}</option>
+                ) : null}
               </select>
             ) : (
               <input value={category} onChange={(e) => setCategory(e.target.value)} className={fieldClass} />
