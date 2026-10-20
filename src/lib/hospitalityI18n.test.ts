@@ -167,3 +167,23 @@ describe("recent Hospitality i18n coverage", () => {
     }
   });
 });
+
+describe("batch cost labels match the shared cost model", () => {
+  it("describes the full batch cost as the sale COGS basis in every language", () => {
+    for (const lang of ["en", "lg", "sw"] as const) {
+      const sale = t(lang, "menuPrepSaleCogsPerPlate").toLowerCase();
+      expect(sale, lang).toContain("full batch cost");
+      expect(sale, lang).not.toContain("recipe basis");
+      expect(sale, lang).not.toContain("management");
+    }
+  });
+
+  it("describes unitCostUgx as the frozen ingredient record, never sale COGS", () => {
+    for (const lang of ["en", "lg", "sw"] as const) {
+      const ingredient = t(lang, "menuPrepCostPerPlate").toLowerCase();
+      expect(ingredient, lang).toContain("ingredient");
+      expect(ingredient, lang).not.toContain("management");
+      expect(ingredient, lang).not.toContain("sale cogs");
+    }
+  });
+});

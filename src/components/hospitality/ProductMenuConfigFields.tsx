@@ -712,11 +712,11 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                       <span className="font-black">{formatUgx(prepTotalCostUgx)}</span>
                     </p>
                     <p className="flex items-center justify-between">
-                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepSaleCogsPerPlate")}</span>
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepCostPerPlate")}</span>
                       <span className="font-black">{formatUgx(prepSaleCogsPerPlateUgx)}</span>
                     </p>
                     <p className="flex items-center justify-between">
-                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepCostPerPlate")}</span>
+                      <span className="font-bold text-muted-foreground">{t(lang, "menuPrepSaleCogsPerPlate")}</span>
                       <span className="font-black">{formatUgx(prepBatchCostPerPlateUgx)}</span>
                     </p>
                     <p className="flex items-center justify-between">
@@ -804,9 +804,9 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                               {t(lang, "menuPrepBatchCost")}: {formatUgx(batch.totalCostUgx)}
                             </p>
                             <p>
-                              {t(lang, "menuPrepSaleCogsPerPlate")}: {formatUgx(batch.unitCostUgx)}
+                              {t(lang, "menuPrepCostPerPlate")}: {formatUgx(batch.unitCostUgx)}
                               {" · "}
-                              {t(lang, "menuPrepCostPerPlate")}:{" "}
+                              {t(lang, "menuPrepSaleCogsPerPlate")}:{" "}
                               {formatUgx(batch.batchCostPerPlateUgx ?? batch.unitCostUgx)}
                             </p>
                             <p>
@@ -848,7 +848,9 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, onS
                               {batch.portionsPrepared} · {t(lang, "menuPrepRemaining")} {batch.remainingPortions}
                             </span>
                             <span>
-                              {formatUgx(batch.unitCostUgx)} / {formatUgx(batch.unitCostUgx * batch.portionsPrepared)}
+                              {t(lang, "menuPrepCostPerPlate")}: {formatUgx(batch.unitCostUgx)} ·{" "}
+                              {t(lang, "menuPrepBatchCost")}:{" "}
+                              {formatUgx(batch.unitCostUgx * batch.portionsPrepared)}
                             </span>
                           </div>
                         )}
