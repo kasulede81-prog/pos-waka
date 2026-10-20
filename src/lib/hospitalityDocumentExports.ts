@@ -1,7 +1,10 @@
 import { jsPDF } from "jspdf";
 import type { Language } from "../types";
 import {
+  formatHospitalityCancellationTime,
   formatIngredientDemandQty,
+  hospitalityCancellationReasonLabel,
+  hospitalityCancellationSourceLabel,
   hospitalityMenuMarginLabel,
   type HospitalityReportSummary as Summary,
 } from "./hospitalityReports";
@@ -48,6 +51,99 @@ export function buildHospitalityTableRevenuePdfBlob(lang: Language, report: Summ
     pdfLine(layout, doc, `${row.label} — ${row.billCount} · UGX ${row.revenueUgx.toLocaleString()}`, { size: 10 });
   }
   return doc.output("blob");
+}
+
+export type HospitalityCancellationExportBlock = {
+  title: string;
+  hint: string;
+  valueNote: string;
+  lines: string[];
+};
+
+/**
+ * Format the already-computed cancellation report for export. It reads
+ * `report.cancellations` and never recalculates or invents cancellation events.
+ */
+export function buildHospitalityCancellationExportBlock(
+  lang: Language,
+  report: Summary,
+): HospitalityCancellationExportBlock {
+  const cancellations = report.cancellations;
+  const lines: string[] = [];
+
+  if (cancellations.rows.length === 0) {
+    lines.push(t(lang, "hospitalityCancelledItemsEmpty"));
+  } else {
+    lines.push(
+      `${t(lang, "hospitalityCancelledLineVoids")}: ${cancellations.lineVoidCount} · ${t(
+        lang,
+        "hospitalityCancelledWholeBillVoids",
+      )}: ${cancellations.wholeBillVoidCount} · ${t(
+        lang,
+        "hospitalityCancelledKitchenCancellations",
+      )}: ${cancellations.kitchenCancellationCount}`,
+    );
+    lines.push(
+      `${t(lang, "hospitalityCancelledRecordedValue")}: UGX ${cancellations.totalRecordedValueUgx.toLocaleString()} · ${t(
+        lang,
+        "hospitalityCancelledSaleTimeCost",
+      )}: UGX ${cancellations.totalSaleTimeCostUgx.toLocaleString()} (${tTemplate(
+        lang,
+        "hospitalityCancelledSnapshotCoverage",
+        { count: String(cancellations.saleTimeCostRowCount) },
+      )})`,
+    );
+
+    for (const row of cancellations.rows) {
+      lines.push(
+        `${row.productName} — ${formatIngredientDemandQty(row.quantity)} — ${hospitalityCancellationSourceLabel(
+          lang,
+          row.source,
+        )}`,
+      );
+      const details = [
+        formatHospitalityCancellationTime(row.occurredAt),
+        row.actorLabel,
+        hospitalityCancellationReasonLabel(lang, row),
+        row.contextLabel,
+        row.ticketNumber != null
+          ? tTemplate(lang, "hospitalityCancelledTicketLabel", {
+              number: String(row.ticketNumber),
+            })
+          : null,
+      ].filter((value): value is string => Boolean(value));
+      lines.push(`  ${details.join(" · ")}`);
+      if (row.recordedValueUgx != null) {
+        lines.push(
+          `  ${t(lang, "hospitalityCancelledRecordedValue")}: UGX ${row.recordedValueUgx.toLocaleString()}`,
+        );
+      }
+      if (row.saleTimeCostUgx != null) {
+        lines.push(
+          `  ${
+            row.saleTimeCostBasis === "partial"
+              ? t(lang, "hospitalityCancelledSaleTimeCostPartial")
+              : t(lang, "hospitalityCancelledSaleTimeCost")
+          }: UGX ${row.saleTimeCostUgx.toLocaleString()}`,
+        );
+      } else {
+        lines.push(
+          `  ${
+            row.source === "kitchen_ticket"
+              ? t(lang, "hospitalityCancelledNoSnapshot")
+              : t(lang, "hospitalityCancelledCostNotRecorded")
+          }`,
+        );
+      }
+    }
+  }
+
+  return {
+    title: t(lang, "hospitalityCancelledItemsTitle"),
+    hint: t(lang, "hospitalityCancelledItemsHint"),
+    valueNote: t(lang, "hospitalityCancelledValueNote"),
+    lines,
+  };
 }
 
 export function buildHospitalityMenuPdfBlob(
@@ -200,6 +296,15 @@ export function buildHospitalityMenuPdfBlob(
       }
     }
   }
+
+  const cancellationBlock = buildHospitalityCancellationExportBlock(lang, report);
+  pdfGap(layout, 6);
+  pdfLine(layout, doc, cancellationBlock.title, { bold: true, size: 11 });
+  pdfLine(layout, doc, cancellationBlock.hint, { size: 8 });
+  for (const line of cancellationBlock.lines) {
+    pdfLine(layout, doc, line, { size: 8 });
+  }
+  pdfLine(layout, doc, cancellationBlock.valueNote, { size: 7 });
 
   return doc.output("blob");
 }

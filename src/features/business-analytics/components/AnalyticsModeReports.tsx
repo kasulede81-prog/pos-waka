@@ -22,10 +22,11 @@ import {
 } from "../../../lib/hospitalityDocumentExports";
 import type { PharmacyExpiryReport } from "../../../lib/pharmacyReports";
 import {
+  formatHospitalityCancellationTime,
   formatIngredientDemandQty,
+  hospitalityCancellationReasonLabel,
+  hospitalityCancellationSourceLabel,
   hospitalityMenuMarginLabel,
-  type HospitalityCancellationSource,
-  type HospitalityCancelledMenuItem,
   type HospitalityMenuPerformanceRow,
   type HospitalityReportSummary,
 } from "../../../lib/hospitalityReports";
@@ -162,33 +163,6 @@ export function WholesaleReportsSection({
       </div>
     </section>
   );
-}
-
-const VOID_REASON_KEYS = new Set([
-  "wrong_item",
-  "customer_changed_mind",
-  "returned_item",
-  "wrong_quantity",
-  "other",
-]);
-
-function cancellationSourceLabel(lang: Language, source: HospitalityCancellationSource): string {
-  if (source === "whole_bill_void") return t(lang, "hospitalityCancelledSourceWholeBill");
-  if (source === "kitchen_ticket") return t(lang, "hospitalityCancelledSourceKitchen");
-  return t(lang, "hospitalityCancelledSourceLineVoid");
-}
-
-function cancellationReasonLabel(lang: Language, row: HospitalityCancelledMenuItem): string {
-  const base = row.reason
-    ? VOID_REASON_KEYS.has(row.reason)
-      ? t(lang, `voidReason_${row.reason}`)
-      : row.reason
-    : t(lang, "hospitalityCancelledReasonUnknown");
-  return row.note ? `${base} — ${row.note}` : base;
-}
-
-function cancellationDateLabel(iso: string): string {
-  return new Date(iso).toLocaleString();
 }
 
 function MenuPerformanceList({
@@ -540,8 +514,8 @@ export function HospitalityReportsSection({
                         {row.productName} · {formatIngredientDemandQty(row.quantity)}
                       </p>
                       <p className="mt-0.5 text-xs font-medium text-muted-foreground">
-                        {cancellationSourceLabel(lang, row.source)} ·{" "}
-                        {cancellationDateLabel(row.occurredAt)}
+                        {hospitalityCancellationSourceLabel(lang, row.source)} ·{" "}
+                        {formatHospitalityCancellationTime(row.occurredAt)}
                         {row.contextLabel ? ` · ${row.contextLabel}` : ""}
                         {row.ticketNumber != null
                           ? ` · ${tTemplate(lang, "hospitalityCancelledTicketLabel", {
@@ -551,7 +525,7 @@ export function HospitalityReportsSection({
                         {row.actorLabel ? ` · ${row.actorLabel}` : ""}
                       </p>
                       <p className="mt-0.5 text-xs font-semibold text-amber-950">
-                        {cancellationReasonLabel(lang, row)}
+                        {hospitalityCancellationReasonLabel(lang, row)}
                       </p>
                     </div>
                     <div className="shrink-0 text-right text-xs font-semibold text-muted-foreground">

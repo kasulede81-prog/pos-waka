@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildHospitalityCancellationExportBlock,
   buildHospitalityKitchenPdfBlob,
   buildHospitalityMenuPdfBlob,
   buildHospitalityTableRevenuePdfBlob,
@@ -112,14 +113,51 @@ const sample: HospitalityReportSummary = {
     },
   },
   cancellations: {
-    rows: [],
-    lineVoidCount: 0,
+    rows: [
+      {
+        id: "void:line",
+        source: "line_void",
+        productId: "p1",
+        productName: "Chicken plate",
+        quantity: 1,
+        occurredAt: "2026-06-02T13:00:00.000Z",
+        actorLabel: "Alice",
+        reason: "wrong_item",
+        note: "sent back",
+        saleId: "sale-1",
+        contextLabel: "Table 1",
+        ticketNumber: null,
+        recordedValueUgx: 10_000,
+        saleTimeCostUgx: 2_000,
+        saleTimeCostBasis: "complete",
+        costStatus: "snapshot",
+      },
+      {
+        id: "kitchen:1",
+        source: "kitchen_ticket",
+        productId: "p2",
+        productName: "Soda",
+        quantity: 2,
+        occurredAt: "2026-06-03T15:00:00.000Z",
+        actorLabel: "Chef",
+        reason: "Out of stock",
+        note: null,
+        saleId: "sale-2",
+        contextLabel: "Table 5",
+        ticketNumber: 7,
+        recordedValueUgx: null,
+        saleTimeCostUgx: null,
+        saleTimeCostBasis: null,
+        costStatus: "unavailable",
+      },
+    ],
+    lineVoidCount: 1,
     wholeBillVoidCount: 0,
-    kitchenCancellationCount: 0,
-    totalQuantity: 0,
-    totalRecordedValueUgx: 0,
-    totalSaleTimeCostUgx: 0,
-    saleTimeCostRowCount: 0,
+    kitchenCancellationCount: 1,
+    totalQuantity: 3,
+    totalRecordedValueUgx: 10_000,
+    totalSaleTimeCostUgx: 2_000,
+    saleTimeCostRowCount: 1,
   },
 };
 
@@ -142,5 +180,23 @@ describe("hospitalityExport", () => {
   it("builds menu PDF with period and margin labels", () => {
     const blob = buildHospitalityMenuPdfBlob("en", sample, "October 2026");
     expect(blob.size).toBeGreaterThan(300);
+  });
+
+  it("exports the cancellation block from the report summary", () => {
+    const block = buildHospitalityCancellationExportBlock("en", sample);
+    expect(block.title).toBe("Cancelled & voided menu items");
+    expect(block.hint).toContain("not kitchen waste");
+    expect(block.hint).toContain("does not mean food was prepared or wasted");
+    const text = block.lines.join("\n");
+    expect(text).toContain("Line void");
+    expect(text).toContain("Kitchen ticket cancellation");
+    expect(text).toContain("Chicken plate");
+    expect(text).toContain("Soda");
+    expect(text).toContain("Wrong item");
+    expect(text).toContain("Recorded void value: UGX 10,000");
+    expect(text).toContain("Sale-time cost snapshot: UGX 2,000");
+    expect(text).toContain("No sale-time cost snapshot");
+    expect(text).toContain("Table 5");
+    expect(block.valueNote).toContain("not a food-cost or waste value");
   });
 });

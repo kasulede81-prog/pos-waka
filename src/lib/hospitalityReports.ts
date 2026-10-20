@@ -119,6 +119,39 @@ export function formatIngredientDemandQty(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 3 });
 }
 
+const VOID_REASON_KEYS = new Set([
+  "wrong_item",
+  "customer_changed_mind",
+  "returned_item",
+  "wrong_quantity",
+  "other",
+]);
+
+export function hospitalityCancellationSourceLabel(
+  lang: Language,
+  source: HospitalityCancellationSource,
+): string {
+  if (source === "whole_bill_void") return t(lang, "hospitalityCancelledSourceWholeBill");
+  if (source === "kitchen_ticket") return t(lang, "hospitalityCancelledSourceKitchen");
+  return t(lang, "hospitalityCancelledSourceLineVoid");
+}
+
+export function hospitalityCancellationReasonLabel(
+  lang: Language,
+  row: HospitalityCancelledMenuItem,
+): string {
+  const base = row.reason
+    ? VOID_REASON_KEYS.has(row.reason)
+      ? t(lang, `voidReason_${row.reason}`)
+      : row.reason
+    : t(lang, "hospitalityCancelledReasonUnknown");
+  return row.note ? `${base} — ${row.note}` : base;
+}
+
+export function formatHospitalityCancellationTime(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
+
 export type HospitalityIngredientCostGap = {
   ingredientId: string;
   name: string;
