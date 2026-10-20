@@ -18,6 +18,7 @@ import { usePosStore } from "../store/usePosStore";
 import { openTestShift } from "../test/shiftTestSetup";
 import { mergeProductFromCloudPull, verifyInventoryIntegrity } from "./inventoryIntegrity";
 import { computePrepBatchProjection } from "./recipeEngine";
+import { inventoryLineValueAtCostUgx } from "./costPrecision";
 import { computeTodayProfitBreakdown } from "./homeProfit";
 import { t } from "./i18n";
 import { normalizeProductMenu } from "./menuModifiers";
@@ -876,6 +877,33 @@ describe("hospitality prep batches", () => {
     expect(projection.costBasis).toBe("actual");
     expect(projection.projectedRevenueUgx).toBe(300_000);
     expect(projection.projectedProfitUgx).toBe(255_000);
+  });
+
+  it("values prepared stock at the frozen batch cost through prep, sale and waste", () => {
+    expect(
+      usePosStore.getState().prepareMenuBatch({
+        productId: DISH_ID,
+        portions: 18,
+        expectedPortions: 20,
+        actualPortions: 18,
+        additionalCosts: [{ id: "charcoal", label: "Charcoal", amountUgx: 17_000 }],
+        batchId: "batch-value",
+      }).ok,
+    ).toBe(true);
+    const batchCost = batch("batch-value").batchCostPerPlateUgx!;
+    expect(batchCost).toBe(4_033);
+    expect(inventoryLineValueAtCostUgx(dish())).toBe(18 * batchCost);
+    // Retail/plain products keep their existing valuation.
+    expect(inventoryLineValueAtCostUgx(product(DRINK_ID))).toBe(24 * 1_200);
+
+    usePosStore.setState({ draftLines: [qtyLine(dish(), 2, "l1")] });
+    expect(finalize().ok).toBe(true);
+    expect(inventoryLineValueAtCostUgx(dish())).toBe(16 * batchCost);
+
+    expect(
+      usePosStore.getState().wastePreparedPortions({ batchId: "batch-value", portions: 4, reason: "unsold" }).ok,
+    ).toBe(true);
+    expect(inventoryLineValueAtCostUgx(dish())).toBe(12 * batchCost);
   });
 
   it("values waste and remaining plates at the batch's frozen cost", () => {

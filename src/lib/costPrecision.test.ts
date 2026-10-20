@@ -273,6 +273,90 @@ describe("inventoryValueAtCostUgx — current-cost inventory valuation", () => {
   });
 });
 
+describe("inventoryValueAtCostUgx — prepared batch stock", () => {
+  it("values explicit batches at their frozen full cost per plate", () => {
+    const value = inventoryLineValueAtCostUgx({
+      stockOnHand: 16,
+      costPricePerUnitUgx: 0,
+      menu: {
+        prepBatches: [
+          { id: "a", preparedAt: "2026-10-01T10:00:00.000Z", remainingPortions: 10, batchCostPerPlateUgx: 4_033 },
+          { id: "b", preparedAt: "2026-10-02T10:00:00.000Z", remainingPortions: 6, batchCostPerPlateUgx: 4_200 },
+        ],
+      },
+    });
+    expect(value).toBe(10 * 4_033 + 6 * 4_200);
+  });
+
+  it("legacy batches fall back to their frozen ingredient-only unit cost", () => {
+    const value = inventoryLineValueAtCostUgx({
+      stockOnHand: 20,
+      costPricePerUnitUgx: 0,
+      menu: { prepBatches: [{ id: "legacy", remainingPortions: 20, unitCostUgx: 2_780 }] },
+    });
+    expect(value).toBe(20 * 2_780);
+  });
+
+  it("caps prepared value at recorded stock in FIFO order if batch remainders drift", () => {
+    const value = inventoryLineValueAtCostUgx({
+      stockOnHand: 5,
+      costPricePerUnitUgx: 0,
+      menu: {
+        prepBatches: [
+          { id: "later", preparedAt: "2026-10-02T10:00:00.000Z", remainingPortions: 3, batchCostPerPlateUgx: 2_000 },
+          { id: "earlier", preparedAt: "2026-10-01T10:00:00.000Z", remainingPortions: 4, batchCostPerPlateUgx: 1_000 },
+        ],
+      },
+    });
+    expect(value).toBe(4 * 1_000 + 1 * 2_000);
+  });
+
+  it("values unbatched excess at the current product unit cost", () => {
+    const value = inventoryLineValueAtCostUgx({
+      stockOnHand: 12,
+      costPricePerUnitUgx: 500,
+      menu: { prepBatches: [{ id: "b", remainingPortions: 10, batchCostPerPlateUgx: 4_033 }] },
+    });
+    expect(value).toBe(10 * 4_033 + 2 * 500);
+  });
+
+  it("products without batches keep the existing product-cost valuation", () => {
+    expect(
+      inventoryLineValueAtCostUgx({ stockOnHand: 10, costPricePerUnitUgx: 500, menu: { prepBatches: [] } }),
+    ).toBe(5_000);
+    expect(inventoryLineValueAtCostUgx({ stockOnHand: 10, costPricePerUnitUgx: 500 })).toBe(5_000);
+  });
+
+  it("respects an explicit zero batch cost instead of falling back", () => {
+    expect(
+      inventoryLineValueAtCostUgx({
+        stockOnHand: 2,
+        costPricePerUnitUgx: 999,
+        menu: { prepBatches: [{ id: "zero", remainingPortions: 2, batchCostPerPlateUgx: 0, unitCostUgx: 999 }] },
+      }),
+    ).toBe(0);
+  });
+
+  it("zero stock and exhausted batches contribute zero", () => {
+    expect(
+      inventoryLineValueAtCostUgx({
+        stockOnHand: 0,
+        costPricePerUnitUgx: 500,
+        menu: { prepBatches: [{ id: "b", remainingPortions: 10, batchCostPerPlateUgx: 4_033 }] },
+      }),
+    ).toBe(0);
+    expect(
+      inventoryValueAtCostUgx([
+        {
+          stockOnHand: 2,
+          costPricePerUnitUgx: 0,
+          menu: { prepBatches: [{ id: "spent", remainingPortions: 0, batchCostPerPlateUgx: 4_033 }] },
+        },
+      ]),
+    ).toBe(0);
+  });
+});
+
 describe("sale-line COGS via lineCostForProductQuantity — unaffected by the inventory-valuation fix", () => {
   it("a pack-priced product's FULL-pack sale still sums exactly to buyingPackCostUgx (FIFO, unchanged)", () => {
     const product = {

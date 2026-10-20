@@ -12,6 +12,7 @@ import {
   buildReportingProductsFingerprint,
   buildSalesFingerprint,
   getCachedComputation,
+  type ReportingProductFingerprintInput,
 } from "./computationResultCache";
 import { monthKeyKampala } from "./datesUg";
 import { localGetRangeSummary } from "./localReporting";
@@ -117,6 +118,56 @@ describe("NEW-02 reports expense / product range fingerprints", () => {
     const a = expense({ id: "e1", approvalStatus: "approved", description: "boda", pendingSync: false });
     const b = { ...a, description: "lunch", pendingSync: true, category: "rent" };
     expect(buildReportingExpensesFingerprint([b])).toBe(buildReportingExpensesFingerprint([a]));
+  });
+
+  it("TEST 9b — prepared batch remaining portions and cost change the fingerprint", () => {
+    const batch = {
+      id: "b1",
+      preparedAt: `${DAY}T10:00:00.000Z`,
+      remainingPortions: 10,
+      batchCostPerPlateUgx: 4_033,
+    };
+    const base: ReportingProductFingerprintInput = {
+      id: "dish",
+      costPricePerUnitUgx: 0,
+      stockOnHand: 16,
+      menu: { prepBatches: [batch] },
+    };
+    const withoutBatch: ReportingProductFingerprintInput = { ...base, menu: { prepBatches: [] } };
+    const fewerPortions: ReportingProductFingerprintInput = {
+      ...base,
+      menu: { prepBatches: [{ ...batch, remainingPortions: 9 }] },
+    };
+    const newCost: ReportingProductFingerprintInput = {
+      ...base,
+      menu: { prepBatches: [{ ...batch, batchCostPerPlateUgx: 4_500 }] },
+    };
+
+    expect(buildReportingProductsFingerprint([base])).not.toBe(buildReportingProductsFingerprint([withoutBatch]));
+    expect(buildReportingProductsFingerprint([base])).not.toBe(
+      buildReportingProductsFingerprint([fewerPortions]),
+    );
+    expect(buildReportingProductsFingerprint([base])).not.toBe(buildReportingProductsFingerprint([newCost]));
+  });
+
+  it("TEST 9c — batch order and unrelated batch metadata do not change the fingerprint", () => {
+    const a = { id: "a", preparedAt: `${DAY}T10:00:00.000Z`, remainingPortions: 4, batchCostPerPlateUgx: 1_000 };
+    const b = { id: "b", preparedAt: `${DAY}T11:00:00.000Z`, remainingPortions: 6, batchCostPerPlateUgx: 2_000 };
+    const base: ReportingProductFingerprintInput = {
+      id: "dish",
+      costPricePerUnitUgx: 0,
+      stockOnHand: 10,
+      menu: { prepBatches: [a, b] },
+    };
+    const reordered: ReportingProductFingerprintInput = { ...base, menu: { prepBatches: [b, a] } };
+    const renamed: ReportingProductFingerprintInput = {
+      ...base,
+      menu: { prepBatches: [{ ...a, note: "changed" } as typeof a, b] },
+    };
+    expect(buildReportingProductsFingerprint([base])).toBe(
+      buildReportingProductsFingerprint([reordered]),
+    );
+    expect(buildReportingProductsFingerprint([base])).toBe(buildReportingProductsFingerprint([renamed]));
   });
 
   it("TEST 9 — irrelevant product fields do not change fingerprint", () => {

@@ -242,6 +242,25 @@ export function lineCostFromSaleLine(line: {
 }
 
 /**
+ * Prepared-batch fields consumed by inventory valuation. Structural on purpose:
+ * this module is imported by the menu/recipe layer, so it must not import
+ * recipeEngine (that would create a cycle).
+ */
+export type InventoryValuationBatch = {
+  id?: string;
+  preparedAt?: string | null;
+  remainingPortions?: number | null;
+  batchCostPerPlateUgx?: number | null;
+  unitCostUgx?: number | null;
+};
+
+export type InventoryValuationProduct = {
+  stockOnHand: number;
+  costPricePerUnitUgx: number;
+  menu?: { prepBatches?: readonly InventoryValuationBatch[] | null } | null;
+};
+
+/**
  * Current on-hand inventory value for ONE product — deliberately NOT routed
  * through `lineCostForProductQuantity`/`buyingPackCostUgxForProduct`.
  *
@@ -263,22 +282,51 @@ export function lineCostFromSaleLine(line: {
  * FIFO-allocated against the invoice it came from") and deliberately use
  * different formulas. This function answers only the first one, always from
  * the current live unit cost — matching the Products table/CSV export.
+ *
+ * EXCEPTION — batch-prepared dishes: their finished `costPricePerUnitUgx` is
+ * normally 0 because the cost lives in `menu.prepBatches`. Prepared portions
+ * are valued at each batch's frozen cost per plate (the same basis as sale
+ * COGS / remaining value / waste value) instead of at 0.
  */
-export function inventoryLineValueAtCostUgx(product: {
-  stockOnHand: number;
-  costPricePerUnitUgx: number;
-}): number {
+export function inventoryLineValueAtCostUgx(product: InventoryValuationProduct): number {
   const stock = Math.max(0, Number(product.stockOnHand) || 0);
   if (stock <= 0) return 0;
+
+  // Batch-prepared dishes: the finished dish's own cost is usually 0 because the
+  // cost lives in its preparation batches. Prepared portions are valued at each
+  // batch's frozen full cost per plate (legacy batches: ingredient-only unit
+  // cost), the SAME basis used for sale COGS, remaining value and waste value.
+  // FIFO order only matters if recorded stock and batch remainders drift apart;
+  // normally their sum is exactly stockOnHand.
+  const batches = product.menu?.prepBatches;
+  if (batches?.length) {
+    const ordered = [...batches].sort((a, b) =>
+      String(a.preparedAt ?? "").localeCompare(String(b.preparedAt ?? "")),
+    );
+    let remainingToValue = stock;
+    let value = 0;
+    for (const batch of ordered) {
+      if (remainingToValue <= 0) break;
+      const portions = Math.max(0, Number(batch.remainingPortions) || 0);
+      if (portions <= 0) continue;
+      const take = Math.min(portions, remainingToValue);
+      const unitCost = normalizeUnitCostUgx(
+        batch.batchCostPerPlateUgx ?? batch.unitCostUgx ?? product.costPricePerUnitUgx,
+      );
+      value += take * unitCost;
+      remainingToValue -= take;
+    }
+    // Unbatched finished stock (normally blocked from sale) keeps the product cost.
+    if (remainingToValue > 0) {
+      value += remainingToValue * costPerBaseUnitUgxFromProduct(product);
+    }
+    return Math.round(value);
+  }
+
   return lineCostUgx(costPerBaseUnitUgxFromProduct(product), stock);
 }
 
-export function inventoryValueAtCostUgx(
-  products: Array<{
-    stockOnHand: number;
-    costPricePerUnitUgx: number;
-  }>,
-): number {
+export function inventoryValueAtCostUgx(products: readonly InventoryValuationProduct[]): number {
   return products.reduce((sum, p) => sum + inventoryLineValueAtCostUgx(p), 0);
 }
 

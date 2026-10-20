@@ -126,6 +126,15 @@ export type ReportingExpenseFingerprintInput = {
   paidOn?: string;
 };
 
+/** Batch fields consumed by prepared-stock valuation. */
+export type ReportingProductFingerprintBatch = {
+  id?: string;
+  preparedAt?: string | null;
+  remainingPortions?: number | null;
+  batchCostPerPlateUgx?: number | null;
+  unitCostUgx?: number | null;
+};
+
 /** Product fields consumed by `localGetInventoryInsights` / `inventoryValueAtCostUgx`. */
 export type ReportingProductFingerprintInput = {
   id: string;
@@ -135,6 +144,7 @@ export type ReportingProductFingerprintInput = {
   buyingPackCostUgx?: number | null;
   conversionRate?: number | null;
   packCostUnitsDepleted?: number | null;
+  menu?: { prepBatches?: readonly ReportingProductFingerprintBatch[] | null } | null;
 };
 
 export function buildReportingExpensesFingerprint(
@@ -151,6 +161,18 @@ export function buildReportingExpensesFingerprint(
   );
 }
 
+function reportingProductBatchToken(p: ReportingProductFingerprintInput): string {
+  return (p.menu?.prepBatches ?? [])
+    .map(
+      (b) =>
+        `${b.id ?? ""}:${b.preparedAt ?? ""}:${b.remainingPortions ?? 0}:${
+          b.batchCostPerPlateUgx ?? b.unitCostUgx ?? ""
+        }`,
+    )
+    .sort()
+    .join(",");
+}
+
 export function buildReportingProductsFingerprint(
   products: readonly ReportingProductFingerprintInput[],
 ): string {
@@ -159,7 +181,7 @@ export function buildReportingProductsFingerprint(
     [...products]
       .map(
         (p) =>
-          `${p.id}:${p.costPricePerUnitUgx ?? ""}:${p.stockOnHand ?? ""}:${p.minimumStockAlert ?? ""}:${p.buyingPackCostUgx ?? ""}:${p.conversionRate ?? ""}:${p.packCostUnitsDepleted ?? ""}`,
+          `${p.id}:${p.costPricePerUnitUgx ?? ""}:${p.stockOnHand ?? ""}:${p.minimumStockAlert ?? ""}:${p.buyingPackCostUgx ?? ""}:${p.conversionRate ?? ""}:${p.packCostUnitsDepleted ?? ""}:${reportingProductBatchToken(p)}`,
       )
       .sort(),
   );
