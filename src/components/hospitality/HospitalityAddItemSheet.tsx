@@ -2,10 +2,19 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Trash2 } from "lucide-react";
 import type { Language, ProductMenuConfig, RecipeLine } from "../../types";
-import { t } from "../../lib/i18n";
+import { t, tTemplate } from "../../lib/i18n";
 import { usePosStore } from "../../store/usePosStore";
 import { DEFAULT_MENU_SECTIONS } from "../../lib/menuModifiers";
 import { unitCostFromPackTotal } from "../../lib/costPrecision";
+import {
+  buildRecipeLineFromEntry,
+  formatRecipeQuantityInput,
+  parseRecipeQuantityInput,
+  recipePackUnitForIngredient,
+  recipeQuantityForEntry,
+  recipeQuantityToBase,
+  type RecipeEntryUnit,
+} from "../../lib/recipeQuantityUnits";
 import { formatUgx } from "../../lib/formatUgx";
 import { ModalSheet } from "../layout/ModalSheet";
 import { WakaButton } from "../ui/wakaPrimitives";
@@ -14,7 +23,9 @@ type ItemKind = "ingredient" | "retail" | "dish";
 
 type RecipeDraft = {
   ingredientProductId: string;
-  quantityBase: string;
+  /** Typed quantity in `entryUnit` (never persisted until converted to base). */
+  quantity: string;
+  entryUnit: RecipeEntryUnit;
 };
 
 type Props = {
@@ -123,7 +134,7 @@ export function HospitalityAddItemSheet({
     const first = ingredientProducts[0];
     setRecipeRows((rows) => [
       ...rows,
-      { ingredientProductId: first?.id ?? "", quantityBase: "1" },
+      { ingredientProductId: first?.id ?? "", quantity: "1", entryUnit: "base" },
     ]);
   };
 
@@ -169,15 +180,15 @@ export function HospitalityAddItemSheet({
         return;
       }
       const lines: RecipeLine[] = recipeRows
-        .map((row) => {
-          const ingredient = ingredientById.get(row.ingredientProductId);
-          return {
+        .map((row) =>
+          buildRecipeLineFromEntry({
+            ingredient: ingredientById.get(row.ingredientProductId),
             ingredientProductId: row.ingredientProductId,
-            quantityBase: Math.max(0, Number(row.quantityBase.replace(/[^\d.]/g, "")) || 0),
-            unitLabel: ingredient?.baseUnit ?? "ea",
-          };
-        })
-        .filter((line) => line.ingredientProductId && line.quantityBase > 0);
+            quantity: parseRecipeQuantityInput(row.quantity),
+            entryUnit: row.entryUnit,
+          }),
+        )
+        .filter((line): line is RecipeLine => line != null);
       if (lines.length === 0 || yieldN <= 0) {
         setError(t(lang, "hospitalityAddRecipeRequired"));
         return;
@@ -480,11 +491,44 @@ export function HospitalityAddItemSheet({
                 <ul className="mt-2 space-y-2">
                   {recipeRows.map((row, index) => {
                     const ingredient = ingredientById.get(row.ingredientProductId);
+                    const pack = ingredient ? recipePackUnitForIngredient(ingredient) : null;
+                    const entryUnit: RecipeEntryUnit = pack ? row.entryUnit : "base";
+                    const parsed = parseRecipeQuantityInput(row.quantity);
+                    const baseQty =
+                      parsed == null ? null : recipeQuantityToBase(parsed, entryUnit, pack);
+                    const baseUnitLabel = ingredient?.baseUnit ?? "ea";
+                    const conversionHint = pack
+                      ? tTemplate(lang, "menuRecipePackConversion", {
+                          pack: pack.label,
+                          rate: formatRecipeQuantityInput(pack.baseUnitsPerPack),
+                          unit: pack.baseUnit,
+                        })
+                      : baseUnitLabel;
+                    const equivalentHint =
+                      entryUnit === "pack" && pack && baseQty != null
+                        ? tTemplate(lang, "menuRecipePackEquivalent", {
+                            qty: formatRecipeQuantityInput(baseQty),
+                            unit: pack.baseUnit,
+                          })
+                        : null;
                     return (
                       <li key={index} className="grid grid-cols-[1fr_84px_28px] items-center gap-2">
                         <select
                           value={row.ingredientProductId}
-                          onChange={(e) => updateRecipeRow(index, { ingredientProductId: e.target.value })}
+                          onChange={(e) => {
+                            const nextId = e.target.value;
+                            // Preserve the physical base quantity; never reinterpret
+                            // the typed number as the new ingredient's pack size.
+                            const base =
+                              parsed == null
+                                ? 0
+                                : recipeQuantityToBase(parsed, entryUnit, pack) ?? 0;
+                            updateRecipeRow(index, {
+                              ingredientProductId: nextId,
+                              quantity: formatRecipeQuantityInput(base),
+                              entryUnit: "base",
+                            });
+                          }}
                           className="min-h-11 rounded-xl border border-border bg-card px-2 text-xs font-bold"
                         >
                           <option value="">{t(lang, "menuCostSelectIngredient")}</option>
@@ -495,9 +539,9 @@ export function HospitalityAddItemSheet({
                           ))}
                         </select>
                         <input
-                          value={row.quantityBase}
+                          value={row.quantity}
                           onChange={(e) =>
-                            updateRecipeRow(index, { quantityBase: e.target.value.replace(/[^\d.]/g, "") })
+                            updateRecipeRow(index, { quantity: e.target.value.replace(/[^\d.]/g, "") })
                           }
                           inputMode="decimal"
                           aria-label={t(lang, "menuCostQuantity")}
@@ -511,9 +555,34 @@ export function HospitalityAddItemSheet({
                         >
                           <Trash2 className="h-3.5 w-3.5" aria-hidden />
                         </button>
-                        <span className="col-span-3 -mt-1 text-[10px] font-semibold text-muted-foreground">
-                          {ingredient?.baseUnit ?? "ea"}
-                        </span>
+                        <div className="col-span-3 -mt-1 flex flex-wrap items-center gap-2">
+                          {pack ? (
+                            <select
+                              value={entryUnit}
+                              onChange={(e) => {
+                                const next = e.target.value as RecipeEntryUnit;
+                                const base =
+                                  parsed == null
+                                    ? 0
+                                    : recipeQuantityToBase(parsed, entryUnit, pack) ?? 0;
+                                const display = recipeQuantityForEntry(base, next, pack);
+                                updateRecipeRow(index, {
+                                  entryUnit: next,
+                                  quantity: formatRecipeQuantityInput(display),
+                                });
+                              }}
+                              aria-label={t(lang, "menuRecipeQuantityUnit")}
+                              className="min-h-[32px] rounded-lg border border-border bg-card px-1 text-[10px] font-bold"
+                            >
+                              <option value="base">{baseUnitLabel}</option>
+                              <option value="pack">{pack.label}</option>
+                            </select>
+                          ) : null}
+                          <span className="text-[10px] font-semibold text-muted-foreground">
+                            {equivalentHint ? `${equivalentHint} · ` : ""}
+                            {conversionHint}
+                          </span>
+                        </div>
                       </li>
                     );
                   })}

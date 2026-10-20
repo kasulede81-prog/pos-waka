@@ -16,6 +16,14 @@ import {
   isHospitalityRecipeDish,
 } from "../../lib/hospitalityMenuCosting";
 import { DEFAULT_MENU_SECTIONS, initialMenuConfigForProduct } from "../../lib/menuModifiers";
+import {
+  formatRecipeQuantityInput,
+  parseRecipeQuantityInput,
+  recipePackUnitForIngredient,
+  recipeQuantityForEntry,
+  recipeQuantityToBase,
+  type RecipeEntryUnit,
+} from "../../lib/recipeQuantityUnits";
 import { formatUgx } from "../../lib/formatUgx";
 import { usePosStore } from "../../store/usePosStore";
 import { WakaSwitch } from "../enterprise/WakaSwitch";
@@ -38,6 +46,14 @@ function newId(prefix: string) {
 export function ProductMenuConfigFields({ lang, product, ingredientProducts, comboProducts, onSave }: Props) {
   const [menu, setMenu] = useState<ProductMenuConfig>(() =>
     initialMenuConfigForProduct(product),
+  );
+  // Quantity-entry units are editor state only: the saved recipe stays canonical
+  // in base units, and every existing line opens in base mode.
+  const [recipeEntryUnits, setRecipeEntryUnits] = useState<RecipeEntryUnit[]>(() =>
+    (menu.recipe?.lines ?? []).map(() => "base"),
+  );
+  const [recipeQuantityDrafts, setRecipeQuantityDrafts] = useState<string[]>(() =>
+    (menu.recipe?.lines ?? []).map((line) => formatRecipeQuantityInput(line.quantityBase)),
   );
 
   const allProducts = usePosStore((s) => s.products);
@@ -66,6 +82,8 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, com
       ...menu,
       recipe: { ...menu.recipe, yieldQty: menu.recipe?.yieldQty, prepNotes: menu.recipe?.prepNotes, lines: [...(menu.recipe?.lines ?? []), line] },
     });
+    setRecipeEntryUnits((units) => [...units, "base"]);
+    setRecipeQuantityDrafts((drafts) => [...drafts, "1"]);
   };
 
   const updateRecipeLine = (li: number, next: RecipeLine) => {
@@ -74,9 +92,60 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, com
     setMenu({ ...menu, recipe: { ...menu.recipe, lines } });
   };
 
+  const setRecipeEntryUnitAt = (li: number, unit: RecipeEntryUnit) => {
+    setRecipeEntryUnits((units) => units.map((current, i) => (i === li ? unit : current)));
+  };
+
+  const setRecipeQuantityDraftAt = (li: number, value: string) => {
+    setRecipeQuantityDrafts((drafts) => drafts.map((current, i) => (i === li ? value : current)));
+  };
+
+  const changeRecipeIngredient = (li: number, ingredientProductId: string) => {
+    const line = menu.recipe?.lines[li];
+    if (!line) return;
+    const ingredient = ingredientProducts.find((p) => p.id === ingredientProductId);
+    // quantityBase is already canonical; switching ingredient never reinterprets
+    // it through the new ingredient's pack size.
+    updateRecipeLine(li, {
+      ...line,
+      ingredientProductId,
+      unitLabel: ingredient?.baseUnit ?? line.unitLabel,
+    });
+    setRecipeEntryUnitAt(li, "base");
+    setRecipeQuantityDraftAt(li, formatRecipeQuantityInput(line.quantityBase));
+  };
+
+  const changeRecipeEntryUnit = (li: number, unit: RecipeEntryUnit) => {
+    const line = menu.recipe?.lines[li];
+    if (!line) return;
+    const ingredient = ingredientProducts.find((p) => p.id === line.ingredientProductId);
+    const pack = ingredient ? recipePackUnitForIngredient(ingredient) : null;
+    if (unit === "pack" && !pack) return;
+    // Only the displayed value changes; the stored base quantity is untouched.
+    const display = recipeQuantityForEntry(line.quantityBase, unit, pack);
+    setRecipeEntryUnitAt(li, unit);
+    setRecipeQuantityDraftAt(li, formatRecipeQuantityInput(display));
+  };
+
+  const changeRecipeQuantity = (li: number, raw: string) => {
+    const line = menu.recipe?.lines[li];
+    if (!line) return;
+    const sanitized = raw.replace(/[^\d.]/g, "");
+    const ingredient = ingredientProducts.find((p) => p.id === line.ingredientProductId);
+    const pack = ingredient ? recipePackUnitForIngredient(ingredient) : null;
+    const entryUnit: RecipeEntryUnit = pack ? recipeEntryUnits[li] ?? "base" : "base";
+    const parsed = parseRecipeQuantityInput(sanitized);
+    const base =
+      parsed == null ? 0 : recipeQuantityToBase(parsed, entryUnit, pack) ?? 0;
+    updateRecipeLine(li, { ...line, quantityBase: base });
+    setRecipeQuantityDraftAt(li, sanitized);
+  };
+
   const removeRecipeLine = (li: number) => {
     const lines = (menu.recipe?.lines ?? []).filter((_, index) => index !== li);
     setMenu({ ...menu, recipe: { ...menu.recipe, lines } });
+    setRecipeEntryUnits((units) => units.filter((_, index) => index !== li));
+    setRecipeQuantityDrafts((drafts) => drafts.filter((_, index) => index !== li));
   };
 
   // Live food-cost panel: run the exact same engine the sale finalize path uses,
@@ -318,20 +387,20 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, com
           </div>
         )}
 
-        {(menu.recipe?.lines ?? []).map((line, li) => (
+        {(menu.recipe?.lines ?? []).map((line, li) => {
+          const ingredient = ingredientProducts.find((p) => p.id === line.ingredientProductId);
+          const pack = ingredient ? recipePackUnitForIngredient(ingredient) : null;
+          const entryUnit: RecipeEntryUnit = pack ? recipeEntryUnits[li] ?? "base" : "base";
+          const baseUnitLabel = line.unitLabel ?? ingredient?.baseUnit ?? "ea";
+          const quantityDraft =
+            recipeQuantityDrafts[li] ?? formatRecipeQuantityInput(line.quantityBase);
+          return (
           <div key={li} className="mb-2 rounded-xl bg-muted p-2">
-            <div className="grid grid-cols-[1fr_80px_44px] gap-2">
+            <div className="grid grid-cols-[1fr_78px_72px] gap-2">
               <select
                 value={line.ingredientProductId}
-                onChange={(e) => {
-                  const ing = ingredientProducts.find((p) => p.id === e.target.value);
-                  updateRecipeLine(li, {
-                    ...line,
-                    ingredientProductId: e.target.value,
-                    unitLabel: ing?.baseUnit ?? line.unitLabel,
-                  });
-                }}
-                className="min-h-[40px] rounded-lg border border-border px-2 text-sm"
+                onChange={(e) => changeRecipeIngredient(li, e.target.value)}
+                className="min-h-[40px] min-w-0 rounded-lg border border-border px-2 text-sm"
               >
                 <option value="">{t(lang, "menuCostSelectIngredient")}</option>
                 {ingredientProducts.map((p) => (
@@ -341,16 +410,41 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, com
                 ))}
               </select>
               <input
-                value={String(line.quantityBase)}
-                onChange={(e) =>
-                  updateRecipeLine(li, { ...line, quantityBase: Math.max(0, Number(e.target.value) || 0) })
-                }
+                value={quantityDraft}
+                onChange={(e) => changeRecipeQuantity(li, e.target.value)}
+                inputMode="decimal"
                 aria-label={t(lang, "menuCostQuantity")}
                 placeholder={t(lang, "menuCostQuantity")}
                 className="min-h-[40px] rounded-lg border border-border px-2 text-sm font-black"
               />
-              <span className="flex items-center text-xs font-bold text-muted-foreground">{line.unitLabel ?? "ea"}</span>
+              {pack ? (
+                <select
+                  value={entryUnit}
+                  onChange={(e) => changeRecipeEntryUnit(li, e.target.value as RecipeEntryUnit)}
+                  aria-label={t(lang, "menuRecipeQuantityUnit")}
+                  className="min-h-[40px] min-w-0 rounded-lg border border-border px-1 text-xs font-bold"
+                >
+                  <option value="base">{baseUnitLabel}</option>
+                  <option value="pack">{pack.label}</option>
+                </select>
+              ) : (
+                <span className="flex items-center text-xs font-bold text-muted-foreground">{baseUnitLabel}</span>
+              )}
             </div>
+            {entryUnit === "pack" && pack ? (
+              <p className="mt-1 text-[10px] font-bold text-waka-700">
+                {tTemplate(lang, "menuRecipePackEquivalent", {
+                  qty: formatRecipeQuantityInput(line.quantityBase),
+                  unit: pack.baseUnit,
+                })}
+                {" · "}
+                {tTemplate(lang, "menuRecipePackConversion", {
+                  pack: pack.label,
+                  rate: formatRecipeQuantityInput(pack.baseUnitsPerPack),
+                  unit: pack.baseUnit,
+                })}
+              </p>
+            ) : null}
             <div className="mt-2 grid grid-cols-[90px_1fr] gap-2">
               <label className="flex items-center gap-1">
                 <span className="text-[10px] font-bold text-muted-foreground">{t(lang, "menuWastePercent")}</span>
@@ -379,7 +473,8 @@ export function ProductMenuConfigFields({ lang, product, ingredientProducts, com
               {t(lang, "menuCostRemoveIngredient")}
             </button>
           </div>
-        ))}
+          );
+        })}
 
         {(menu.recipe?.lines ?? []).length > 0 && (
           <div className="mt-3 rounded-xl border border-waka-200 bg-waka-50 p-3">
