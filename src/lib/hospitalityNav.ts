@@ -1,20 +1,54 @@
 import type { LucideIcon } from "lucide-react";
-import { BarChart3, Calendar, ChefHat, LayoutDashboard, LayoutGrid, Monitor } from "lucide-react";
+import {
+  BarChart3,
+  Briefcase,
+  Calendar,
+  ChefHat,
+  LayoutDashboard,
+  LayoutGrid,
+  Monitor,
+} from "lucide-react";
 import type { Permission } from "../types";
+import { LAUNCHER_TILE_CATALOG } from "./launcherTiles";
 
 export type HospitalityNavItem = {
   path: string;
   labelKey: string;
   Icon: LucideIcon;
-  perm: Permission;
+  /** Single-permission item. */
+  perm?: Permission;
+  /** Any-of permissions, for a page whose contents are permission-filtered. */
+  permAny?: Permission[];
 };
 
 /** Hospitality home/dashboard — reachable without changing the floor landing. */
 export const HOSPITALITY_HOME_ROUTE = "/hospitality" as const;
 
+/**
+ * Shared Kiosk Duka launcher inside Hospitality. The same `LAUNCHER_TILE_CATALOG`
+ * and Home Menu visibility/order preferences render it; tiles remain permission
+ * filtered. No duplicate settings or business state.
+ */
+export const HOSPITALITY_BUSINESS_TOOLS_ROUTE = "/hospitality/tools" as const;
+
+/** Every permission that unlocks at least one shared launcher tile. */
+export const BUSINESS_TOOLS_PERMISSIONS: Permission[] = [
+  ...new Set(
+    LAUNCHER_TILE_CATALOG.map((tile) => tile.perm).filter(
+      (perm): perm is Permission => Boolean(perm),
+    ),
+  ),
+];
+
+/** True when at least one Kiosk Duka launcher tile is permitted. */
+export function canOpenBusinessTools(hasPerm: (perm: Permission) => boolean): boolean {
+  return BUSINESS_TOOLS_PERMISSIONS.some((perm) => hasPerm(perm));
+}
+
 /** Operational hospitality screens — one tap on mobile, permanent group on desktop. */
 export const HOSPITALITY_OPERATIONAL_PATHS = [
   HOSPITALITY_HOME_ROUTE,
+  HOSPITALITY_BUSINESS_TOOLS_ROUTE,
   "/floor",
   "/kitchen",
   "/expo",
@@ -23,6 +57,7 @@ export const HOSPITALITY_OPERATIONAL_PATHS = [
 
 export function isHospitalityOperationalRoute(pathname: string): boolean {
   if (pathname === HOSPITALITY_HOME_ROUTE) return true;
+  if (pathname === HOSPITALITY_BUSINESS_TOOLS_ROUTE) return true;
   if (pathname === "/floor" || pathname === "/floor/reservations") return true;
   if (pathname.startsWith("/floor/order/")) return true;
   if (pathname === "/kitchen" || pathname.startsWith("/kitchen/")) return true;
@@ -33,6 +68,9 @@ export function isHospitalityOperationalRoute(pathname: string): boolean {
 
 export function hospitalityNavItemActive(path: string, pathname: string): boolean {
   if (path === HOSPITALITY_HOME_ROUTE) return pathname === HOSPITALITY_HOME_ROUTE;
+  if (path === HOSPITALITY_BUSINESS_TOOLS_ROUTE) {
+    return pathname === HOSPITALITY_BUSINESS_TOOLS_ROUTE;
+  }
   if (path === "/floor") {
     return (
       pathname === "/floor" ||
@@ -49,6 +87,12 @@ export function hospitalityNavItemActive(path: string, pathname: string): boolea
 
 export const HOSPITALITY_NAV_CATALOG: HospitalityNavItem[] = [
   { path: HOSPITALITY_HOME_ROUTE, labelKey: "navHome", Icon: LayoutDashboard, perm: "hospitality.floor" },
+  {
+    path: HOSPITALITY_BUSINESS_TOOLS_ROUTE,
+    labelKey: "hospitalityBusinessToolsNav",
+    Icon: Briefcase,
+    permAny: BUSINESS_TOOLS_PERMISSIONS,
+  },
   { path: "/floor", labelKey: "restaurantFloorNav", Icon: LayoutGrid, perm: "hospitality.floor" },
   { path: "/kitchen", labelKey: "navKitchen", Icon: ChefHat, perm: "hospitality.kitchen" },
   { path: "/expo", labelKey: "navExpo", Icon: Monitor, perm: "hospitality.kitchen" },
@@ -67,7 +111,11 @@ export function visibleHospitalityNavItems(input: {
   kitchenEnabled: boolean;
   barOnly: boolean;
 }): HospitalityNavItem[] {
-  return HOSPITALITY_NAV_CATALOG.filter((item) => input.hasPerm(item.perm))
+  return HOSPITALITY_NAV_CATALOG.filter((item) => {
+    if (item.perm) return input.hasPerm(item.perm);
+    if (item.permAny) return item.permAny.some(input.hasPerm);
+    return true;
+  })
     .filter((item) => input.kitchenEnabled || item.path !== "/expo")
     .map((item) =>
       item.path === "/kitchen" && input.barOnly ? { ...item, labelKey: "hospitalityStation_bar" } : item,

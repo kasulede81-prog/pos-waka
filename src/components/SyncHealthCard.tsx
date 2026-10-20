@@ -4,6 +4,8 @@ import { t, tTemplate } from "../lib/i18n";
 import { useSyncStatus } from "../hooks/useSyncStatus";
 import { useOfflineStatus } from "../hooks/useOfflineStatus";
 import { computeSyncSalesStats } from "../offline/cloudSync";
+import { syncErrorOwnerMessageKey } from "../lib/saleAdjustmentSync";
+import { formatSyncFlushSummary, type SyncFlushSummary } from "../lib/syncFlushSummary";
 import { usePosStore } from "../store/usePosStore";
 
 type Props = { lang: Language; variant?: "full" | "simple" };
@@ -25,7 +27,7 @@ function fmtShort(iso: string | null, lang: Language): string {
 export function SyncHealthCard({ lang, variant = "full" }: Props) {
   const { isOnline } = useOfflineStatus();
   const sync = useSyncStatus();
-  const [msg, setMsg] = useState<string | null>(null);
+  const [lastRun, setLastRun] = useState<SyncFlushSummary | null | undefined>(undefined);
   const h = sync.health;
   const simple = variant === "simple";
 
@@ -139,24 +141,30 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
           <p className="text-xs font-black uppercase text-rose-900">{t(lang, "syncAffectedRecords")}</p>
           <ul className="mt-1 space-y-0.5 text-xs font-medium text-rose-800">
             {syncErrors.map((e) => (
-              <li key={e.id} className="truncate">
-                {t(lang, "syncSaleListItem")} · {e.id.slice(0, 8)}
+              <li key={e.id}>
+                <p className="truncate font-bold">
+                  {t(lang, "syncSaleListItem")} · {e.id.slice(0, 8)}
+                </p>
+                <p className="text-rose-700">{t(lang, syncErrorOwnerMessageKey(e.error))}</p>
               </li>
             ))}
           </ul>
         </div>
       ) : null}
 
-      {msg ? <p className="mt-2 text-sm font-semibold text-waka-800">{msg}</p> : null}
+      {lastRun !== undefined ? (
+        <p className="mt-2 rounded-xl border border-waka-200 bg-waka-50 px-3 py-2 text-sm font-semibold text-waka-900">
+          {lastRun === null
+            ? t(lang, "syncRunNotStarted")
+            : formatSyncFlushSummary(lang, lastRun)}
+        </p>
+      ) : null}
 
       <button
         type="button"
         disabled={!isOnline || sync.syncing}
         onClick={async () => {
-          setMsg(null);
-          await sync.flush();
-          setMsg(t(lang, "syncRetryDone"));
-          window.setTimeout(() => setMsg(null), 4000);
+          setLastRun(await sync.flush());
         }}
         className="mt-3 w-full rounded-2xl bg-waka-600 py-3 text-sm font-black text-white disabled:opacity-50"
       >
@@ -170,10 +178,7 @@ export function SyncHealthCard({ lang, variant = "full" }: Props) {
             type="button"
             disabled={!isOnline || sync.syncing}
             onClick={async () => {
-              setMsg(null);
-              await sync.flushFull();
-              setMsg(t(lang, "backupSyncForceFullDone"));
-              window.setTimeout(() => setMsg(null), 5000);
+              setLastRun(await sync.flushFull());
             }}
             className="mt-2 w-full rounded-2xl border-2 border-border bg-card py-3 text-sm font-black text-foreground disabled:opacity-50"
           >

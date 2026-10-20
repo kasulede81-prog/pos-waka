@@ -6,7 +6,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { BusinessProfileRequiredRoute } from "./components/BusinessProfileRequiredRoute";
 import { KnownIdentityGate } from "./components/routing/KnownIdentityGate";
-import { RoleProtectedRoute } from "./components/RoleProtectedRoute";
+import { AnyPermissionRoute, RoleProtectedRoute } from "./components/RoleProtectedRoute";
 import { MarketingAgentProtectedRoute } from "./components/MarketingAgentProtectedRoute";
 import { ActivationGateOutlet } from "./components/ActivationGateOutlet";
 import { ActivationProvider } from "./context/ActivationContext";
@@ -107,6 +107,7 @@ import { RouteSeoController } from "./components/marketing/RouteSeoController";
 import { NativePublicGuard } from "./components/NativePublicGuard";
 import { LoyaltySurfaceBoundary } from "./components/routing/LoyaltySurfaceBoundary";
 import { unauthenticatedEntryPath } from "./lib/nativeApp";
+import { BUSINESS_TOOLS_PERMISSIONS } from "./lib/hospitalityNav";
 import { isLoyaltySurface } from "./lib/productHost";
 import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { DeviceActivationProvider } from "./context/DeviceActivationContext";
@@ -160,6 +161,11 @@ const ReceiptsPage = lazy(() => import("./pages/ReceiptsPage").then((m) => ({ de
 const FloorPlanPage = lazy(() => import("./pages/FloorPlanPage").then((m) => ({ default: m.FloorPlanPage })));
 const HospitalityDashboardPage = lazy(() =>
   import("./pages/HospitalityDashboardPage").then((m) => ({ default: m.HospitalityDashboardPage })),
+);
+const HospitalityBusinessToolsPage = lazy(() =>
+  import("./pages/HospitalityBusinessToolsPage").then((m) => ({
+    default: m.HospitalityBusinessToolsPage,
+  })),
 );
 const TableOrderPage = lazy(() => import("./pages/TableOrderPage").then((m) => ({ default: m.TableOrderPage })));
 const SettingsFloorPage = lazy(() => import("./pages/SettingsFloorPage").then((m) => ({ default: m.SettingsFloorPage })));
@@ -966,6 +972,19 @@ function AppRoutes() {
                       <HospitalityDashboardPage lang={lang} />
                     </Suspense>
                   </RoleProtectedRoute>
+                </HospitalityBusinessRoute>
+              }
+            />
+            <Route
+              path="hospitality/tools"
+              element={
+                <HospitalityBusinessRoute>
+                  {/* Any launcher permission may open the page; tiles inside are filtered. */}
+                  <AnyPermissionRoute permissions={BUSINESS_TOOLS_PERMISSIONS}>
+                    <Suspense fallback={<LazyWait />}>
+                      <HospitalityBusinessToolsPage lang={lang} />
+                    </Suspense>
+                  </AnyPermissionRoute>
                 </HospitalityBusinessRoute>
               }
             />

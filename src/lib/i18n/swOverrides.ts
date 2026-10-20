@@ -1188,4 +1188,41 @@ export const swOverrides: Record<string, string> = {
   unbatchedStock: "Hisa iliyoandaliwa bila kundi — rekebisha hesabu kabla ya kuuza.",
   insufficientPreparedStock: "Hakuna sehemu za kutosha zilizoandaliwa.",
   prepAvailableShort: "inapatikana",
+
+  // Sync run feedback and safe owner-facing upload errors.
+  syncRunFinishedUploaded: "Usawazishaji umekamilika — kitu {count} kimepakiwa.",
+  syncRunFinishedNothingPending: "Usawazishaji umekamilika — hakuna kinachosubiri.",
+  syncRunFinishedPending:
+    "Mzunguko wa usawazishaji umekamilika — {pending} zinasubiri ({sales} mauzo), {backingOff} zinasubiri kurudia, {failed} zimeshindwa, {uploaded} zimepakiwa.",
+  syncRunNotStarted:
+    "Usawazishaji haukuanza — kifaa kiko nje ya mtandao au usawazishaji unaendelea.",
+  syncErrorGeneric: "Upakiaji umeshindwa. Jaribu tena mtandao ukiwa mzuri.",
+  syncErrorSaleAlreadyCompleted:
+    "Uuzaji huu tayari upo kama umekamilika kwenye cloud. Haukupakiwa tena; uhakiki kabla ya kubadilisha.",
+  syncErrorSaleMissingLocally:
+    "Uuzaji ulio kwenye foleni haupatikani kwenye kifaa hiki. Wasiliana na support kabla ya kufuta chochote.",
+  syncErrorSaleStaleVersion:
+    "Uuzaji huu ulibadilika kwenye cloud. Usawazishaji utaunganisha mabadiliko mapya.",
+  syncErrorClosedBusinessDate:
+    "Siku ya biashara ya uuzaji imefungwa. Fungua siku au wasiliana na support.",
+  syncErrorForbidden:
+    "Akaunti hii hairuhusiwi kupakia uuzaji huu. Ingia kama owner au manager.",
+  syncErrorNotAuthenticated: "Ingia tena ili kupakia mauzo yanayosubiri.",
+  syncErrorShopContext: "Duka linalotumika halikuthibitishwa. Fungua app tena na ujaribu.",
+  syncErrorSaleDataRejected:
+    "Cloud ilikataa data ya uuzaji. Angalia bidhaa na viungo vya meza, kisha wasiliana na support.",
+  syncErrorProductNotInShop:
+    "Bidhaa kwenye uuzaji huu haipo kwenye duka linalotumika. Uhakiki uuzaji.",
+  syncErrorSaleInvalid: "Data ya uuzaji si sahihi na haiwezi kupakiwa. Wasiliana na support.",
+  syncErrorCloudUnavailable: "Huduma ya kupakia cloud haipatikani. Jaribu baadaye.",
+  syncErrorOrganizationBlocked:
+    "Upakiaji wa cloud umesimamishwa kwa akaunti hii. Wasiliana na support.",
+  syncErrorCloudNotConfigured: "Usawazishaji wa cloud haujawekwa kwenye kifaa hiki.",
+
+  // Shared Kiosk Duka launcher inside Hospitality.
+  hospitalityBusinessToolsNav: "Zana",
+  hospitalityBusinessToolsTitle: "Zana za biashara",
+  hospitalityBusinessToolsSub: "Uza, hisa, madeni, fedha, ripoti na mipangilio ya duka hili.",
+  hospitalityBusinessToolsHint:
+    "Hizi ni zana za Kiosk Duka zinazoshirikiwa. Vitu hufuata jukumu lako na mipangilio ya Menyu ya Nyumbani; Back Office na Mipangilio zinabaki na PIN na ulinzi wa njia zao. Akaunti za jikoni pekee hazipati ukurasa huu.",
 };

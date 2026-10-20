@@ -3,14 +3,19 @@ import { reportSyncIssue } from "../lib/monitoring";
 import type { SyncOperation, SyncOperationKind } from "../types";
 import { computeSyncBackoffMs, markSyncOpFailed, markSyncOpQuarantined, shouldRetrySyncOp, isQuarantinedSyncOp, SYNC_QUARANTINE_AFTER_ATTEMPTS, QUARANTINED_MAX_ATTEMPTS_ERROR, QUARANTINED_NO_SHOP_ERROR, clearSyncOpQuarantine } from "../lib/autoSync";
 import {
+  classifySaleUploadError,
   isBlockedBusinessSyncError,
   markSyncOpBlockedBusiness,
   syncProcessLastError,
   syncProcessStatus,
   type SyncProcessResult,
+  CLOUD_NOT_CONFIGURED_ERROR,
+  SHOP_CONTEXT_MISMATCH_ERROR,
+  SYNC_OPERATION_FAILED_ERROR,
 } from "../lib/saleAdjustmentSync";
 import { usePosStore } from "../store/usePosStore";
 import { sortSyncQueueByPriority } from "../lib/syncQueuePriority";
+import { isClosedBusinessDateSyncError } from "../lib/businessDateLock";
 import { processCloudSyncOperation } from "./cloudSync";
 import { appendSyncOperation, readSyncQueue, removeSyncOperation } from "./localDb";
 import {
@@ -83,10 +88,12 @@ export async function enqueueSync(op: Omit<SyncOperation, "attempts"> & { attemp
  * When configured but signed out, ops are retried later.
  */
 async function processOne(op: SyncOperation): Promise<SyncProcessResult> {
-  if (!hasSupabaseConfig || !supabase) return "retry";
+  if (!hasSupabaseConfig || !supabase) {
+    return { status: "retry", lastError: CLOUD_NOT_CONFIGURED_ERROR };
+  }
 
   const { data: session } = await supabase.auth.getSession();
-  if (!session.session) return "retry";
+  if (!session.session) return { status: "retry", lastError: "not_authenticated" };
 
   const opShopId = inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string });
   if (!opShopId) {
@@ -96,7 +103,7 @@ async function processOne(op: SyncOperation): Promise<SyncProcessResult> {
 
   const activeShop = getActiveShopId();
   if (activeShop && opShopId !== activeShop) {
-    return "retry";
+    return { status: "retry", lastError: SHOP_CONTEXT_MISMATCH_ERROR };
   }
 
   try {
@@ -109,11 +116,43 @@ async function processOne(op: SyncOperation): Promise<SyncProcessResult> {
     }
     return (await processCloudSyncOperation({ ...op, shopId: opShopId })) ? "ack" : "retry";
   } catch {
-    return "retry";
+    return { status: "retry", lastError: SYNC_OPERATION_FAILED_ERROR };
   }
 }
 
-export async function flushSyncQueue(onProgress?: (done: number, total: number) => void, opts?: { retryQuarantined?: boolean }): Promise<{
+/**
+ * The pending-sale scan (`pushAllPendingToCloud`) records the real upload
+ * failure on the SALE, but a backed-off queue row is skipped by the queue
+ * flush. Copy that safe reason onto the durable row so System Health can show
+ * the blocker without waiting for the retry window. Never changes attempts,
+ * status or the sale itself.
+ */
+export async function refreshSaleQueueDiagnosticsFromStore(): Promise<void> {
+  if (!usePosStore.getState()._hydrated) return;
+  const queue = await readSyncQueue();
+  if (queue.length === 0) return;
+  const state = usePosStore.getState();
+  const saleById = new Map<string, (typeof state.sales)[number]>();
+  for (const sale of [...state.sales, ...state.archivedSales]) {
+    if (!saleById.has(sale.id)) saleById.set(sale.id, sale);
+  }
+  for (const op of queue) {
+    if (op.kind !== "pending_sales" && op.kind !== "sale") continue;
+    const payload = (op.payload && typeof op.payload === "object" ? op.payload : {}) as Record<string, unknown>;
+    const saleId = String(payload.saleId ?? "").trim();
+    if (!saleId) continue;
+    const sale = saleById.get(saleId);
+    if (!sale?.lastSyncError) continue;
+    const safe = classifySaleUploadError(sale.lastSyncError);
+    if (op.lastError === safe) continue;
+    await appendSyncOperation({ ...op, lastError: safe });
+  }
+}
+
+export async function flushSyncQueue(
+  onProgress?: (done: number, total: number) => void,
+  opts?: { retryQuarantined?: boolean; retryBackoff?: boolean },
+): Promise<{
   failed: number;
   remaining: number;
   skippedBackoff: number;
@@ -122,7 +161,10 @@ export async function flushSyncQueue(onProgress?: (done: number, total: number) 
   return withGlobalSyncMutex("flushSyncQueue", () => flushSyncQueueInner(onProgress, opts));
 }
 
-export async function flushSyncQueueInner(onProgress?: (done: number, total: number) => void, opts?: { retryQuarantined?: boolean }): Promise<{
+export async function flushSyncQueueInner(
+  onProgress?: (done: number, total: number) => void,
+  opts?: { retryQuarantined?: boolean; retryBackoff?: boolean },
+): Promise<{
   failed: number;
   remaining: number;
   skippedBackoff: number;
@@ -145,6 +187,9 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
       ? cloudMod.probeBlockedReturnRecovery
       : async () => false;
   const retryQuarantined = opts?.retryQuarantined === true;
+  // A manual "Run sync now" may attempt one ordinary backoff window early.
+  // Closed-date parks, blocked business rejections and quarantines stay parked.
+  const retryBackoff = opts?.retryBackoff === true;
   const activeShop = getActiveShopId();
 
   // Admin-reset safety net: an op queued BEFORE a shop reset (a pending
@@ -245,8 +290,12 @@ export async function flushSyncQueueInner(onProgress?: (done: number, total: num
       continue;
     }
     if (!shouldRetrySyncOp(op, Date.now(), dayCloses)) {
-      skippedBackoff += 1;
-      continue;
+      const closedDatePark =
+        isClosedBusinessDateSyncError(op.lastError) && Boolean(op.closedDateKey);
+      if (!retryBackoff || closedDatePark) {
+        skippedBackoff += 1;
+        continue;
+      }
     }
     ready.push(op);
   }

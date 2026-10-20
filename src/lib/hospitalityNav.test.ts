@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  canOpenBusinessTools,
+  HOSPITALITY_BUSINESS_TOOLS_ROUTE,
   HOSPITALITY_NAV_CATALOG,
   hospitalityNavItemActive,
   isHospitalityOperationalRoute,
@@ -9,6 +11,7 @@ import {
 describe("hospitalityNav", () => {
   it("detects operational routes", () => {
     expect(isHospitalityOperationalRoute("/hospitality")).toBe(true);
+    expect(isHospitalityOperationalRoute("/hospitality/tools")).toBe(true);
     expect(isHospitalityOperationalRoute("/floor")).toBe(true);
     expect(isHospitalityOperationalRoute("/floor/reservations")).toBe(true);
     expect(isHospitalityOperationalRoute("/floor/order/abc")).toBe(true);
@@ -32,6 +35,9 @@ describe("hospitalityNav", () => {
     expect(home?.perm).toBe("hospitality.floor");
     expect(hospitalityNavItemActive("/hospitality", "/hospitality")).toBe(true);
     expect(hospitalityNavItemActive("/hospitality", "/floor")).toBe(false);
+    expect(
+      hospitalityNavItemActive(HOSPITALITY_BUSINESS_TOOLS_ROUTE, "/hospitality/tools"),
+    ).toBe(true);
 
     const floorStaff = visibleHospitalityNavItems({
       hasPerm: (perm) => perm === "hospitality.floor",
@@ -46,5 +52,25 @@ describe("hospitalityNav", () => {
       barOnly: false,
     });
     expect(kitchenOnly.some((item) => item.path === "/hospitality")).toBe(false);
+  });
+
+  it("makes the shared business tools reachable only with a launcher permission", () => {
+    expect(canOpenBusinessTools((perm) => perm === "pos.sell")).toBe(true);
+    expect(canOpenBusinessTools((perm) => perm === "settings.view")).toBe(true);
+    expect(canOpenBusinessTools((perm) => perm === "hospitality.kitchen")).toBe(false);
+
+    const waiter = visibleHospitalityNavItems({
+      hasPerm: (perm) => perm === "pos.sell",
+      kitchenEnabled: true,
+      barOnly: false,
+    });
+    expect(waiter.some((item) => item.path === HOSPITALITY_BUSINESS_TOOLS_ROUTE)).toBe(true);
+
+    const kitchenOnly = visibleHospitalityNavItems({
+      hasPerm: (perm) => perm === "hospitality.kitchen",
+      kitchenEnabled: true,
+      barOnly: false,
+    });
+    expect(kitchenOnly.some((item) => item.path === HOSPITALITY_BUSINESS_TOOLS_ROUTE)).toBe(false);
   });
 });

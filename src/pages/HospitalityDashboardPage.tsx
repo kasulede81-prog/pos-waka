@@ -19,6 +19,10 @@ import { BusinessTypeOnboarding } from "../components/BusinessTypeOnboarding";
 import { dateKeyKampala } from "../lib/datesUg";
 import { localGetDailySalesSummary } from "../lib/localReporting";
 import { hospitalityKitchenEnabledFromPrefs, isHospitalityMode } from "../lib/hospitality";
+import {
+  canOpenBusinessTools,
+  HOSPITALITY_BUSINESS_TOOLS_ROUTE,
+} from "../lib/hospitalityNav";
 import { hospitalityMenuCostState, isHospitalityRecipeDish } from "../lib/hospitalityMenuCosting";
 import { formatUgx } from "../lib/formatUgx";
 import {
@@ -62,6 +66,9 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
   const canSell = actorHasEffectivePermission(actor, "pos.sell", snapshot, authMode);
   const canStock = actorHasEffectivePermission(actor, "stock.view", snapshot, authMode);
   const canSettings = actorHasEffectivePermission(actor, "settings.shop", snapshot, authMode);
+  const canBusinessTools = canOpenBusinessTools((permission) =>
+    actorHasEffectivePermission(actor, permission, snapshot, authMode),
+  );
   const recipeDishes = useMemo(
     () => products.filter((p) => !p.menu?.hideFromMenu && isHospitalityRecipeDish(p)),
     [products],
@@ -131,6 +138,11 @@ export function HospitalityDashboardPage({ lang }: { lang: Language }) {
           {canKitchen ? (
             <Link to="/kitchen" className={clsx(themeUi.btnSecondary, "shrink-0")}>
               {t(lang, "hospitalityDashGoKitchen")}
+            </Link>
+          ) : null}
+          {canBusinessTools ? (
+            <Link to={HOSPITALITY_BUSINESS_TOOLS_ROUTE} className={clsx(themeUi.btnSecondary, "shrink-0")}>
+              {t(lang, "hospitalityBusinessToolsNav")}
             </Link>
           ) : null}
         </div>

@@ -1,6 +1,11 @@
 import type { DayCloseSummary, SyncOperation } from "../types";
-import { shouldRetryClosedBusinessDateOp } from "./businessDateLock";
-import { isBlockedBusinessSyncError, sanitizeStoredSyncError } from "./saleAdjustmentSync";
+import { isClosedBusinessDateSyncError, shouldRetryClosedBusinessDateOp } from "./businessDateLock";
+import {
+  classifySaleUploadError,
+  isBlockedBusinessSyncError,
+  isWaitingForSaleSyncError,
+  sanitizeStoredSyncError,
+} from "./saleAdjustmentSync";
 
 export const SYNC_BACKOFF_BASE_MS = 2_000;
 export const SYNC_BACKOFF_CAP_MS = 300_000;
@@ -47,7 +52,12 @@ export function markSyncOpFailed(op: SyncOperation, lastError?: string | null): 
     attempts: op.attempts + 1,
     lastAttemptAt: new Date().toISOString(),
   };
-  const sanitized = sanitizeStoredSyncError(lastError);
+  // Allowlisted tokens win; any other concrete failure is classified to a safe
+  // token instead of being silently dropped (the old behavior left a blank
+  // lastError on every non-allowlisted upload failure).
+  const sanitized =
+    sanitizeStoredSyncError(lastError) ??
+    (String(lastError ?? "").trim() ? classifySaleUploadError(lastError) : null);
   if (sanitized) next.lastError = sanitized;
   return next;
 }
@@ -75,6 +85,63 @@ export function clearSyncOpQuarantine(op: SyncOperation): SyncOperation {
 }
 
 export type QueueHealth = "healthy" | "degraded" | "backing_off" | "blocked" | "quarantined";
+
+export type SyncQueueSummary = {
+  pending: number;
+  ready: number;
+  backingOff: number;
+  failed: number;
+  blocked: number;
+  quarantined: number;
+  parkedClosedDate: number;
+};
+
+/**
+ * Truthful post-cycle counts for the owner. `failed` includes blocked,
+ * quarantined and closed-date-parked rows, plus retryable rows carrying an
+ * error; a row waiting only because of backoff is counted in both `backingOff`
+ * and `failed` (it failed and will retry). No payload or customer data.
+ */
+export function summarizeSyncQueue(
+  queue: readonly SyncOperation[],
+  nowMs = Date.now(),
+  dayCloses?: DayCloseSummary[],
+): SyncQueueSummary {
+  let ready = 0;
+  let backingOff = 0;
+  let failed = 0;
+  let blocked = 0;
+  let quarantined = 0;
+  let parkedClosedDate = 0;
+  for (const op of queue) {
+    if (isQuarantinedSyncOp(op)) {
+      quarantined += 1;
+      failed += 1;
+      continue;
+    }
+    if (isBlockedBusinessSyncError(op.lastError)) {
+      blocked += 1;
+      failed += 1;
+      continue;
+    }
+    if (op.lastError && !isWaitingForSaleSyncError(op.lastError)) failed += 1;
+    if (!shouldRetrySyncOp(op, nowMs, dayCloses)) {
+      if (isClosedBusinessDateSyncError(op.lastError) && op.closedDateKey) parkedClosedDate += 1;
+      else backingOff += 1;
+      continue;
+    }
+    ready += 1;
+  }
+  return {
+    pending: queue.length,
+    ready,
+    backingOff,
+    failed,
+    blocked,
+    quarantined,
+    parkedClosedDate,
+  };
+}
 
 export function isUnhealthyQueueHealth(health: QueueHealth): boolean {
   return health === "degraded" || health === "backing_off" || health === "blocked" || health === "quarantined";

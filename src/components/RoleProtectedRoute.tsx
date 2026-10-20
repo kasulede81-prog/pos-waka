@@ -19,6 +19,11 @@ type Props = {
   children: React.ReactNode;
 };
 
+type AnyPermissionProps = {
+  permissions: readonly Permission[];
+  children: React.ReactNode;
+};
+
 function SessionLoadingGate() {
   return (
     <div className="flex min-h-[28vh] items-center justify-center px-4 text-sm font-semibold text-muted-foreground">
@@ -83,6 +88,36 @@ export function RoleProtectedRoute({ permission, capability, children }: Props) 
         state={{ from: location.pathname }}
       />
     );
+  }
+
+  return <>{children}</>;
+}
+
+/**
+ * Gate for a page whose contents are themselves permission-filtered (e.g. the
+ * shared launcher inside Hospitality). Requires ANY of the listed permissions;
+ * it never broadens what the page can render.
+ */
+export function AnyPermissionRoute({ permissions, children }: AnyPermissionProps) {
+  const actor = useSessionActor();
+  const location = useLocation();
+  const { authMode, loading: subscriptionLoading, snapshot } = useSubscription();
+  const { roleReady } = useSessionHydration();
+  const shopHydrated = usePosStore((s) => s._hydrated);
+
+  const waitingForSession =
+    authMode === "supabase" && (subscriptionLoading || !roleReady || !shopHydrated);
+
+  if (waitingForSession) {
+    return <SessionLoadingGate />;
+  }
+
+  if (
+    !permissions.some((permission) =>
+      actorHasEffectivePermission(actor, permission, snapshot, authMode),
+    )
+  ) {
+    return <Navigate to="/" replace state={{ from: location.pathname }} />;
   }
 
   return <>{children}</>;

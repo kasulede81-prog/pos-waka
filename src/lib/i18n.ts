@@ -2100,6 +2100,11 @@ const en: Dict = {
   starterPharmacy_cetirizine: "Cetirizine",
   settingsHubPharmacy: "Pharmacy",
   settingsHubPharmacySub: "Expiry alerts and expired sale rules",
+  hospitalityBusinessToolsNav: "Tools",
+  hospitalityBusinessToolsTitle: "Business tools",
+  hospitalityBusinessToolsSub: "Sell, stock, debts, cash, reports and settings for this shop.",
+  hospitalityBusinessToolsHint:
+    "These are the shared Kiosk Duka tools. Tiles follow your role and the Home Menu settings; Back Office and Settings keep their existing PIN and route guards. Kitchen-only accounts do not get this page.",
   hospitalityDashTitle: "Service today",
   hospitalityDashSub: "Tables, tabs, kitchen, and open bills at a glance.",
   hospitalityDashOpenTables: "Open tables",
@@ -7379,6 +7384,31 @@ const en: Dict = {
   syncIssuePartial: "Some items still uploading",
   syncIssueError: "Upload problem — try again when internet is good",
   syncSaleListItem: "Sale needs upload",
+  syncRunFinishedUploaded: "Sync finished — {count} item(s) uploaded.",
+  syncRunFinishedNothingPending: "Sync finished — nothing pending.",
+  syncRunFinishedPending:
+    "Sync cycle finished — {pending} pending ({sales} sale(s)), {backingOff} backing off, {failed} failed, {uploaded} uploaded.",
+  syncRunNotStarted: "Sync did not run — device offline or a sync is already in progress.",
+  syncErrorGeneric: "Upload failed. Try again when the connection is stable.",
+  syncErrorSaleAlreadyCompleted:
+    "This sale already exists as completed in the cloud. It was not uploaded again; review it before making changes.",
+  syncErrorSaleMissingLocally:
+    "The queued sale could not be found on this device. Contact support before deleting anything.",
+  syncErrorSaleStaleVersion:
+    "This sale changed in the cloud. Syncing will merge the newest changes.",
+  syncErrorClosedBusinessDate:
+    "The sale's business date is closed. Reopen the day or contact support.",
+  syncErrorForbidden:
+    "This account is not allowed to upload this sale. Sign in with an owner or manager account.",
+  syncErrorNotAuthenticated: "Sign in again to upload pending sales.",
+  syncErrorShopContext: "The active shop could not be confirmed. Reopen the app and try again.",
+  syncErrorSaleDataRejected:
+    "The cloud rejected the sale data. Check products and table links, then contact support.",
+  syncErrorProductNotInShop: "A product on this sale is not in the active shop. Review the sale.",
+  syncErrorSaleInvalid: "The sale data is invalid and cannot be uploaded. Contact support.",
+  syncErrorCloudUnavailable: "The cloud upload service is unavailable. Try again later.",
+  syncErrorOrganizationBlocked: "Cloud uploads are paused for this account. Contact support.",
+  syncErrorCloudNotConfigured: "Cloud sync is not configured on this device.",
   loginWelcomeTitle: "Sign in to sell",
   loginWelcomeSub: "Sign in to your DKASU POS workspace",
   loginRememberMe: "Remember me",
@@ -10846,6 +10876,12 @@ const lgBase: Dict = {
   starterPharmacy_cetirizine: "Cetirizine",
   settingsHubPharmacy: "Famasi",
   settingsHubPharmacySub: "Expiry n'amateeka g'okutunda",
+  hospitalityBusinessToolsNav: "Ebikozesebwa",
+  hospitalityBusinessToolsTitle: "Ebikozesebwa by'edduuka",
+  hospitalityBusinessToolsSub:
+    "Okutunda, sitoka, ebibanja, ssente, alipoota ne settings ku dduuka lino.",
+  hospitalityBusinessToolsHint:
+    "Bino bye bikozesebwa bya Kiosk Duka ebyagabana. Ebika bikwatagana n'omulimu gwo n'enkola ya Home Menu; Back Office ne Settings bisigala n'okukuuma PIN n'ebiwandiiko byabyo. Akawunti ya kkizinzi yokka tefuuna lupapula luno.",
   hospitalityDashTitle: "Service leero",
   hospitalityDashSub: "Emmeza, tabs, kitchen, n'bills eziggule.",
   hospitalityDashOpenTables: "Emmeza eziggule",
@@ -14945,6 +14981,34 @@ const lgBase: Dict = {
   syncIssuePartial: "Ebimu bikyali birindirira okuteekebwa",
   syncIssueError: "Obuzibu ku kuteeeka — ddamu intaneeti bw'ejja",
   syncSaleListItem: "Okutunda kuno kwetaaga okuteekebwa",
+  syncRunFinishedUploaded: "Okuteekebwa kuwedde — ekintu {count} kiteekeddwa.",
+  syncRunFinishedNothingPending: "Okuteekebwa kuwedde — tewali kintu kisinze okuteekebwa.",
+  syncRunFinishedPending:
+    "Okuteekebwa kuwedde — {pending} bisigadde ({sales} okutunda), {backingOff} bilindirira, {failed} biremeddwa, {uploaded} biteekeddwa.",
+  syncRunNotStarted: "Okuteekebwa tekutandise — offline oba okuteekebwa kuli mu maaso.",
+  syncErrorGeneric: "Okuteekebwa kulemeddwa. Gezaako nate nga intaneeti nnungi.",
+  syncErrorSaleAlreadyCompleted:
+    "Okutunda kuno kumaze okukakasibwa mu cloud nga kukomekkereziddwa. Tekwaddiddwamu; kwekenneenya nga tonnakola kikyusiddwa.",
+  syncErrorSaleMissingLocally:
+    "Okutunda okuli mu luwandiiko tekusangibwa ku kyuma kino. Tuukirira support nga tonnaggyawo kintu.",
+  syncErrorSaleStaleVersion:
+    "Okutunda kuno kwakyusibwa mu cloud. Okuteekebwa kugatta enkyusa empya.",
+  syncErrorClosedBusinessDate:
+    "Olunaku lw'okutunda lukkaliddwa. Ziggula olunaku oba tuukirira support.",
+  syncErrorForbidden:
+    "Akawunti eno tekkirizibwa kuteeka okutunda kuno. Yingira nga owner oba manager.",
+  syncErrorNotAuthenticated: "Yingira nate okuteeka okutunda okulisigadde.",
+  syncErrorShopContext: "Edduuka erikola tekkakasibwa. Ziggula app nate ogezaako.",
+  syncErrorSaleDataRejected:
+    "Cloud ekigaana ebikwata ku kutunda. Kebera ebintu n'emisittale gya table, oluvannyuma tuukirira support.",
+  syncErrorProductNotInShop:
+    "Ekintu kimu ku kutunda kino tekiri mu dduuka erikola. Kwekenneenya okutunda.",
+  syncErrorSaleInvalid:
+    "Ebikwata ku kutunda bitali mu ngeri nnungi era tebisobola kuteekebwa. Tuukirira support.",
+  syncErrorCloudUnavailable: "Obuweereza bw'okuteeka mu cloud tebuliwo. Gezaako edda.",
+  syncErrorOrganizationBlocked:
+    "Okuteeka mu cloud kuyimiriziddwa ku akawunti eno. Tuukirira support.",
+  syncErrorCloudNotConfigured: "Okuteeka mu cloud tekuteekeddwa ku kyuma kino.",
   loginWelcomeTitle: "Yingira otunde",
   loginWelcomeSub: "Yingira mu workspace yo eya DKASU POS",
   loginRememberMe: "Nzijukire",

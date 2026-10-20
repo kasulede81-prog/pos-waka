@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { shouldPausePosBackgroundPull } from "../lib/backgroundWorkPolicy";
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { deriveQueueHealth } from "../lib/autoSync";
+import { deriveQueueHealth, summarizeSyncQueue } from "../lib/autoSync";
 import { getDeviceOnline } from "../lib/deviceOnline";
 import { runWhenIdle } from "../lib/uiYield";
 import { readSyncQueue } from "../offline/localDb";
@@ -39,9 +39,11 @@ import {
   type SyncHealthMeta,
 } from "../lib/syncMeta";
 import { readLastEntityPullErrors } from "../lib/pullDiagnostics";
+import { usePosStore } from "../store/usePosStore";
 import { appendPilotEvent } from "../lib/pilotEventLog";
 import { pilotSyncLog } from "../lib/pilotSyncLog";
 import { captureAppException } from "../lib/crashReporting";
+import type { SyncFlushSummary } from "../lib/syncFlushSummary";
 import type { SyncOperationKind, SyncStatus } from "../types";
 
 type PendingBreakdown = {
@@ -63,8 +65,8 @@ export type SyncStatusApi = {
   health: SyncHealthMeta;
   refreshQueue: () => void;
   /** Diagnostics-only manual sync (pull + push). */
-  flush: () => Promise<void>;
-  flushFull: () => Promise<void>;
+  flush: () => Promise<SyncFlushSummary | null>;
+  flushFull: () => Promise<SyncFlushSummary | null>;
 };
 
 const SyncStatusContext = createContext<SyncStatusApi | null>(null);
@@ -175,8 +177,8 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
     forceFull?: boolean;
     showSpinner?: boolean;
     forcePending?: boolean;
-  }) => {
-    if (!getDeviceOnline() || syncingRef.current) return;
+  }): Promise<SyncFlushSummary | null> => {
+    if (!getDeviceOnline() || syncingRef.current) return null;
     const now = Date.now();
     let wantPull = opts?.pull === true;
     const forceFull = opts?.forceFull === true;
@@ -194,26 +196,34 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
       now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS &&
       !pendingWork
     ) {
-      return;
+      return null;
     }
     if (wantPull && !forceFull && !forcePending && now - lastFullSyncAtRef.current < MIN_FULL_SYNC_INTERVAL_MS) {
-      if (now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && !pendingWork) return;
+      if (now - lastPushAtRef.current < MIN_PUSH_INTERVAL_MS && !pendingWork) return null;
     }
 
     syncingRef.current = true;
     if (showSpinner) setSyncing(true);
+    let cycleUploaded = 0;
+    let cycleQueueFailed = 0;
     const attemptAt = new Date().toISOString();
     writeSyncHealthMeta({ lastAttemptAt: attemptAt });
     setHealth(readSyncHealthMeta());
     try {
       const work = (async () => {
         const retryQuarantined = showSpinner || forcePending;
+        // A manual run may try one ordinary backoff window early, but never
+        // quarantined, blocked-business or closed-date rows (handled in the queue).
+        const retryBackoff = forcePending;
         if (wantPull) {
           const { pulled, push, queueFailed, hadOutboundWork } = await syncShopWithCloud({
             pull: true,
             forceFull,
             retryQuarantined,
+            retryBackoff,
           });
+          cycleUploaded = push.ok;
+          cycleQueueFailed = queueFailed;
           lastFullSyncAtRef.current = Date.now();
           lastPushAtRef.current = lastFullSyncAtRef.current;
           const entityPullErrors = readLastEntityPullErrors();
@@ -244,7 +254,12 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
             /* telemetry must not fail flush */
           }
         } else {
-          const { push, queueFailed, hadOutboundWork } = await pushShopPendingToCloud({ retryQuarantined });
+          const { push, queueFailed, hadOutboundWork } = await pushShopPendingToCloud({
+            retryQuarantined,
+            retryBackoff,
+          });
+          cycleUploaded = push.ok;
+          cycleQueueFailed = queueFailed;
           lastPushAtRef.current = Date.now();
           const durable = await readSyncQueue();
           const entityPullErrors = readLastEntityPullErrors();
@@ -306,6 +321,22 @@ function useSyncStatusEngine(opts?: { pullPaused?: boolean }) {
       writeSyncHealthMeta({ queueHealth });
       setHealth(readSyncHealthMeta());
     }
+
+    const durable = await readSyncQueue();
+    const counts = summarizeSyncQueue(
+      durable,
+      Date.now(),
+      usePosStore.getState().dayCloses,
+    );
+    return {
+      uploaded: cycleUploaded,
+      pending: counts.pending,
+      pendingSales: countUnsyncedSales(),
+      backingOff: counts.backingOff,
+      failed: Math.max(counts.failed, cycleQueueFailed),
+      blocked: counts.blocked,
+      quarantined: counts.quarantined,
+    };
   }, [pullPaused]);
 
   /** Realtime channel + startup resume (must survive React StrictMode remount). */

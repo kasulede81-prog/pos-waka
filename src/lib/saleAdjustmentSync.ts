@@ -9,6 +9,14 @@ export const WAITING_FOR_SALE_ERROR = "waiting_for_sale";
 export const SALE_ADJUSTMENT_RETURN = "return";
 export const SALE_ADJUSTMENT_VOID = "void";
 export const RPC_FAILED_ERROR = "rpc_failed";
+export const SALE_UPLOAD_FAILED_ERROR = "sale_upload_failed";
+export const SALE_MISSING_LOCALLY_ERROR = "sale_missing_locally";
+export const CLOUD_CONTEXT_UNAVAILABLE_ERROR = "cloud_context_unavailable";
+export const SHOP_CONTEXT_MISMATCH_ERROR = "shop_context_mismatch";
+export const SYNC_OPERATION_FAILED_ERROR = "sync_operation_failed";
+export const ORGANIZATION_BLOCKED_ERROR = "organization_blocked";
+export const CLOUD_NOT_CONFIGURED_ERROR = "cloud_not_configured";
+export const PENDING_CANCEL_FAILED_ERROR = "pending_cancel_failed";
 
 export type SyncProcessStatus = "ack" | "retry" | "wait" | "park" | "block";
 export type SyncProcessRetry = { status: "retry"; lastError: string };
@@ -36,6 +44,14 @@ export const BLOCKED_BUSINESS_ERRORS = new Set<string>([
   "invalid_uuid",
   "product_not_in_shop",
   "constraint_violation",
+  /**
+   * The server already holds this id as a COMPLETED sale. Re-sending the draft
+   * can never succeed and used to retry forever with no visible reason. Keep the
+   * queue row for reconciliation, but stop automatic retries.
+   */
+  "already_completed",
+  /** The durable queue row exists but its sale is no longer on this device. */
+  SALE_MISSING_LOCALLY_ERROR,
 ]);
 
 export function isBlockedBusinessSyncError(error?: string | null): boolean {
@@ -56,6 +72,18 @@ const STORED_SYNC_ERRORS = new Set<string>([
   ...RPC_BUSINESS_ERRORS,
   ...POSTGREST_CODE_ERRORS,
   RPC_FAILED_ERROR,
+  "stale_version",
+  "already_completed",
+  "invalid_sale",
+  "invalid_sale_id",
+  SALE_UPLOAD_FAILED_ERROR,
+  SALE_MISSING_LOCALLY_ERROR,
+  CLOUD_CONTEXT_UNAVAILABLE_ERROR,
+  SHOP_CONTEXT_MISMATCH_ERROR,
+  SYNC_OPERATION_FAILED_ERROR,
+  ORGANIZATION_BLOCKED_ERROR,
+  CLOUD_NOT_CONFIGURED_ERROR,
+  PENDING_CANCEL_FAILED_ERROR,
   "quarantined_max_attempts",
   "quarantined_no_shop",
 ]);
@@ -68,6 +96,10 @@ export function sanitizeStoredSyncError(error?: string | null): string | null {
 export function classifyPostgrestSyncError(code?: string | null): string {
   const token = String(code ?? "").trim();
   if (token === "401" || token === "403" || token === "42501" || token === "42P01") return token;
+  if (token === "22P02") return "invalid_uuid";
+  if (token === "23502" || token === "23503" || token === "23505" || token === "23514") {
+    return "constraint_violation";
+  }
   if (token.startsWith("PGRST")) return "PGRST";
   return RPC_FAILED_ERROR;
 }
@@ -89,6 +121,93 @@ export function classifySyncExceptionMessage(raw?: string | null): string {
     return "constraint_violation";
   }
   return RPC_FAILED_ERROR;
+}
+
+const SALE_UPLOAD_SAFE_ERRORS = new Set<string>([
+  ...RPC_BUSINESS_ERRORS,
+  ...POSTGREST_CODE_ERRORS,
+  RPC_FAILED_ERROR,
+  PENDING_CANCEL_FAILED_ERROR,
+  SALE_UPLOAD_FAILED_ERROR,
+  SALE_MISSING_LOCALLY_ERROR,
+  CLOUD_CONTEXT_UNAVAILABLE_ERROR,
+  SHOP_CONTEXT_MISMATCH_ERROR,
+  SYNC_OPERATION_FAILED_ERROR,
+  ORGANIZATION_BLOCKED_ERROR,
+  CLOUD_NOT_CONFIGURED_ERROR,
+  "stale_version",
+  "already_completed",
+  "invalid_sale",
+  "invalid_sale_id",
+]);
+
+/**
+ * Map any sale upload failure (server business token, PostgREST code, raw SQL
+ * message, or legacy value) to a small safe token. The raw database message is
+ * never persisted or shown to the owner.
+ */
+export function classifySaleUploadError(raw?: string | null): string {
+  const token = String(raw ?? "").trim();
+  if (!token) return SALE_UPLOAD_FAILED_ERROR;
+  if (SALE_UPLOAD_SAFE_ERRORS.has(token)) return token;
+  if (
+    token.startsWith("PGRST") ||
+    token === "401" ||
+    token === "403" ||
+    token === "42501" ||
+    token === "42P01" ||
+    token === "22P02" ||
+    token === "23502" ||
+    token === "23503" ||
+    token === "23505" ||
+    token === "23514"
+  ) {
+    return classifyPostgrestSyncError(token);
+  }
+  return classifySyncExceptionMessage(token);
+}
+
+/** i18n key for a safe, owner-facing explanation of a sync error token. */
+export function syncErrorOwnerMessageKey(error?: string | null): string {
+  const token = classifySaleUploadError(error);
+  switch (token) {
+    case "already_completed":
+      return "syncErrorSaleAlreadyCompleted";
+    case SALE_MISSING_LOCALLY_ERROR:
+      return "syncErrorSaleMissingLocally";
+    case "stale_version":
+      return "syncErrorSaleStaleVersion";
+    case "closed_business_date":
+      return "syncErrorClosedBusinessDate";
+    case "forbidden":
+    case "403":
+    case "42501":
+      return "syncErrorForbidden";
+    case "not_authenticated":
+    case "401":
+      return "syncErrorNotAuthenticated";
+    case "shop_required":
+    case CLOUD_CONTEXT_UNAVAILABLE_ERROR:
+    case SHOP_CONTEXT_MISMATCH_ERROR:
+      return "syncErrorShopContext";
+    case "constraint_violation":
+      return "syncErrorSaleDataRejected";
+    case "product_not_in_shop":
+      return "syncErrorProductNotInShop";
+    case "invalid_uuid":
+    case "invalid_sale":
+    case "invalid_sale_id":
+      return "syncErrorSaleInvalid";
+    case "42P01":
+    case "PGRST":
+      return "syncErrorCloudUnavailable";
+    case ORGANIZATION_BLOCKED_ERROR:
+      return "syncErrorOrganizationBlocked";
+    case CLOUD_NOT_CONFIGURED_ERROR:
+      return "syncErrorCloudNotConfigured";
+    default:
+      return "syncErrorGeneric";
+  }
 }
 
 export function classifyShopPushSaleReturnOutcome(input: {

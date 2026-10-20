@@ -34,7 +34,11 @@ import {
   reservationForTable,
   visibleFloorTables,
 } from "../lib/hospitalityFrontOfHouse";
-import { HOSPITALITY_HOME_ROUTE } from "../lib/hospitalityNav";
+import {
+  canOpenBusinessTools,
+  HOSPITALITY_BUSINESS_TOOLS_ROUTE,
+  HOSPITALITY_HOME_ROUTE,
+} from "../lib/hospitalityNav";
 import { FLOOR_GRID_CLASS, selectFloorPlanSlice } from "../lib/floorDisplayPrefs";
 import { HospitalityOpsStatusStrip } from "../components/hospitality/HospitalityOpsStatusStrip";
 
@@ -385,6 +389,8 @@ export function FloorPlanPage({ lang }: { lang: Language }) {
         onReservations={() => navigate("/floor/reservations")}
         onDocuments={() => navigate("/pending-sales")}
         onStats={() => navigate("/owner")}
+        onTools={() => navigate(HOSPITALITY_BUSINESS_TOOLS_ROUTE)}
+        showTools={canOpenBusinessTools((perm) => actorHasPermission(actor, perm))}
       />
 
       <div className="flex shrink-0 flex-col gap-2 border-t border-border bg-card px-3 py-2">

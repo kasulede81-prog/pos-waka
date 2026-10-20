@@ -143,12 +143,15 @@ describe("markSyncOpFailed observability", () => {
     expect(failed.id).toBe("a");
   });
 
-  it("stores allowlisted lastError only", () => {
+  it("stores allowlisted or safely classified lastError, never the raw text", () => {
     const before = op({ id: "b", attempts: 1, lastError: undefined });
     const classified = markSyncOpFailed(before, "401");
     expect(classified.lastError).toBe("401");
     const rejected = markSyncOpFailed(before, "Bearer secret.jwt.token");
-    expect(rejected.lastError).toBeUndefined();
+    // A concrete but unrecognised failure is classified to a safe generic token
+    // instead of being dropped (which used to leave the row blank).
+    expect(rejected.lastError).toBe("rpc_failed");
+    expect(rejected.lastError).not.toContain("secret");
     expect(rejected.attempts).toBe(2);
   });
 

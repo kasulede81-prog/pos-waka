@@ -178,14 +178,21 @@ export function stampedShopIdForImmediateCashSync(shopId?: string | null): strin
 import { classifyPendingStockPayload, shouldAckR3StockResult } from "../lib/stockDurableSync";
 import {
   classifyPostgrestSyncError,
+  classifySaleUploadError,
   classifyShopPushSaleReturnOutcome,
   classifySyncExceptionMessage,
   isBlockedBusinessSyncError,
   isSaleCloudAcked,
   isSyncAck,
   linkedSaleAdjustmentDecision,
+  CLOUD_CONTEXT_UNAVAILABLE_ERROR,
+  ORGANIZATION_BLOCKED_ERROR,
+  PENDING_CANCEL_FAILED_ERROR,
+  SALE_MISSING_LOCALLY_ERROR,
+  SALE_UPLOAD_FAILED_ERROR,
   type SyncProcessResult,
 } from "../lib/saleAdjustmentSync";
+import { QUARANTINED_NO_SHOP_ERROR } from "../lib/autoSync";
 import { saleHeaderForCloudComplete } from "../lib/saleCloudCompleteFinancials";
 import {
   clearSaleStockEnforcement,
@@ -612,9 +619,11 @@ function mergeCatalogPreferences(
 
 
 function markSaleSyncState(saleId: string, synced: boolean, errorCode: string | null): void {
+  // Never persist a raw SQL/PostgREST message on the sale; only safe tokens.
+  const safeError = synced ? null : classifySaleUploadError(errorCode);
   usePosStore.setState((s) => ({
     sales: s.sales.map((x) =>
-      x.id === saleId ? { ...x, pendingSync: !synced, lastSyncError: synced ? null : errorCode } : x,
+      x.id === saleId ? { ...x, pendingSync: !synced, lastSyncError: safeError } : x,
     ),
   }));
 }
@@ -2554,11 +2563,18 @@ export async function processCloudSyncOperationResult(op: SyncOperation): Promis
   try {
     await assertOrganizationOperationsAllowed();
   } catch {
-    return "retry";
+    return { status: "retry", lastError: ORGANIZATION_BLOCKED_ERROR };
+  }
+
+  if (!supabase) return { status: "retry", lastError: CLOUD_CONTEXT_UNAVAILABLE_ERROR };
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session) return { status: "retry", lastError: "not_authenticated" };
+  if (!inferShopIdFromQueueRow(op as SyncOperation & { accountKey?: string })) {
+    return { status: "block", lastError: QUARANTINED_NO_SHOP_ERROR };
   }
 
   const ctx = await resolveShopCtxForOperation(op);
-  if (!ctx) return "retry";
+  if (!ctx) return { status: "retry", lastError: CLOUD_CONTEXT_UNAVAILABLE_ERROR };
 
   const payload = op.payload as Record<string, unknown>;
 
@@ -2571,8 +2587,61 @@ export async function processCloudSyncOperationResult(op: SyncOperation): Promis
       return processSaleVoidAdjustment(classified, payload, ctx);
     }
   }
+  if (op.kind === "pending_sales" || op.kind === "sale") {
+    return processSaleQueueOperationResult(op, ctx, payload);
+  }
 
   return (await processCloudSyncOperationLegacy(op, ctx, payload)) ? "ack" : "retry";
+}
+
+/** The sale's stored error is the only place the RPC reason survives. Read it safely. */
+function resolveSaleSyncError(saleId: string): string | null {
+  const state = usePosStore.getState();
+  const sale =
+    state.sales.find((s) => s.id === saleId) ?? state.archivedSales.find((s) => s.id === saleId);
+  return sale?.lastSyncError ?? null;
+}
+
+/**
+ * Sale queue rows need structured outcomes: a bare boolean would collapse
+ * "already completed", "constraint violation", etc. into an anonymous retry and
+ * leave the durable row with a blank lastError.
+ */
+async function processSaleQueueOperationResult(
+  _op: SyncOperation,
+  ctx: ShopCtx,
+  payload: Record<string, unknown>,
+): Promise<SyncProcessResult> {
+  if (payload.kind === "day_close") return "ack";
+  const saleId = String(payload.saleId ?? "");
+  if (!saleId) return { status: "block", lastError: SALE_MISSING_LOCALLY_ERROR };
+
+  if (payload.kind === "pending_cancel") {
+    const sale = await resolveSaleForSync(saleId);
+    const ok =
+      sale && isPreCompletionVoidedSale(sale)
+        ? await pushUnsavedCartVoidToCloud(sale, ctx)
+        : await pushCancelPendingSaleToCloud(saleId, ctx);
+    if (ok) return "ack";
+    const safe = classifySaleUploadError(resolveSaleSyncError(saleId) ?? PENDING_CANCEL_FAILED_ERROR);
+    return isBlockedBusinessSyncError(safe)
+      ? { status: "block", lastError: safe }
+      : { status: "retry", lastError: safe };
+  }
+
+  const sale = await resolveSaleForSync(saleId);
+  if (!sale) return { status: "block", lastError: SALE_MISSING_LOCALLY_ERROR };
+  const ok = await pushSaleRowToCloud(sale, ctx, {
+    baseUpdatedAt: typeof payload.baseUpdatedAt === "string" ? payload.baseUpdatedAt : null,
+    deletedLineIds: Array.isArray(payload.deletedLineIds)
+      ? payload.deletedLineIds.filter((id): id is string => typeof id === "string")
+      : undefined,
+  });
+  if (ok) return "ack";
+  const safe = classifySaleUploadError(resolveSaleSyncError(saleId) ?? SALE_UPLOAD_FAILED_ERROR);
+  return isBlockedBusinessSyncError(safe)
+    ? { status: "block", lastError: safe }
+    : { status: "retry", lastError: safe };
 }
 
 async function processCloudSyncOperationLegacy(
@@ -5150,6 +5219,9 @@ export async function pushAllPendingToCloud(): Promise<{ ok: number; fail: numbe
   const pendingSales = sales.filter(
     (s) =>
       s.pendingSync &&
+      // A permanently rejected sale would otherwise be re-uploaded every cycle.
+      // Editing it creates a fresh queue row, which can retry without this block.
+      !isBlockedBusinessSyncError(s.lastSyncError) &&
       !shouldSkipPendingClosedDateSync(dateKeyKampala(s.createdAt), s.lastSyncError, dayCloses),
   );
   const saleResults = await mapPool(pendingSales, SYNC_SALE_PUSH_CONCURRENCY, async (s) => {
@@ -5307,7 +5379,10 @@ async function runIncrementalCloudPull(reason: string, opts?: { force?: boolean 
 }
 
 /** Push pending sales/queue only (fast, for background sync). */
-async function pushShopPendingToCloudInner(opts?: { retryQuarantined?: boolean }): Promise<{
+async function pushShopPendingToCloudInner(opts?: {
+  retryQuarantined?: boolean;
+  retryBackoff?: boolean;
+}): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
   hadOutboundWork: boolean;
@@ -5326,8 +5401,14 @@ async function pushShopPendingToCloudInner(opts?: { retryQuarantined?: boolean }
     const { readSyncQueue } = await import("./localDb");
     const queueBefore = (await readSyncQueue()).length;
     push = await pushAllPendingToCloud();
-    const { flushSyncQueueInner } = await import("./syncEngine");
-    const result = await flushSyncQueueInner(undefined, { retryQuarantined: opts?.retryQuarantined === true });
+    const { flushSyncQueueInner, refreshSaleQueueDiagnosticsFromStore } = await import("./syncEngine");
+    // The sale scan records failures on the sale. Copy the safe reason onto the
+    // durable queue row before the flush, so a backed-off row is not blank.
+    await refreshSaleQueueDiagnosticsFromStore();
+    const result = await flushSyncQueueInner(undefined, {
+      retryQuarantined: opts?.retryQuarantined === true,
+      retryBackoff: opts?.retryBackoff === true,
+    });
     queueFailed = result.failed;
     hadOutboundWork = push.ok > 0 || result.remaining < queueBefore;
     writeSyncHealthMeta({ lastPushAt: new Date().toISOString() });
@@ -5340,7 +5421,10 @@ async function pushShopPendingToCloudInner(opts?: { retryQuarantined?: boolean }
   return { push, queueFailed, hadOutboundWork };
 }
 
-export async function pushShopPendingToCloud(opts?: { retryQuarantined?: boolean }): Promise<{
+export async function pushShopPendingToCloud(opts?: {
+  retryQuarantined?: boolean;
+  retryBackoff?: boolean;
+}): Promise<{
   push: { ok: number; fail: number };
   queueFailed: number;
   hadOutboundWork?: boolean;
@@ -5354,6 +5438,7 @@ async function syncShopWithCloudInner(opts?: {
   pull?: boolean;
   forceFull?: boolean;
   retryQuarantined?: boolean;
+  retryBackoff?: boolean;
 }): Promise<{
   pulled: boolean;
   push: { ok: number; fail: number };
@@ -5403,7 +5488,10 @@ async function syncShopWithCloudInner(opts?: {
 
   const pushPromise = getDeviceOnline()
     ? withPushSyncMutex("pushPending", () =>
-        pushShopPendingToCloudInner({ retryQuarantined: opts?.retryQuarantined === true }),
+        pushShopPendingToCloudInner({
+          retryQuarantined: opts?.retryQuarantined === true,
+          retryBackoff: opts?.retryBackoff === true,
+        }),
       )
     : Promise.resolve({ push: { ok: 0, fail: 0 }, queueFailed: 0, hadOutboundWork: false });
 
@@ -5429,6 +5517,7 @@ export async function syncShopWithCloud(opts?: {
   pull?: boolean;
   forceFull?: boolean;
   retryQuarantined?: boolean;
+  retryBackoff?: boolean;
 }): Promise<{
   pulled: boolean;
   push: { ok: number; fail: number };
@@ -5497,7 +5586,12 @@ export function computeSyncSalesStats(sales: Sale[]): {
     if (s.lastSyncError) {
       errorCount += 1;
       if (errors.length < 6) {
-        errors.push({ id: s.id, error: s.lastSyncError, createdAt: s.createdAt });
+        errors.push({
+          id: s.id,
+          // Existing/legacy rows may still hold a raw message; classify on read.
+          error: classifySaleUploadError(s.lastSyncError),
+          createdAt: s.createdAt,
+        });
       }
     }
   }

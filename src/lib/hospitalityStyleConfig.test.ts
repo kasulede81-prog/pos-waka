@@ -64,7 +64,15 @@ describe("hospitality navigation follows the style", () => {
     visibleHospitalityNavItems({ hasPerm: all, ...o }).map((i) => i.path);
 
   it("restaurant / restaurant + bar keep Kitchen and Expo", () => {
-    expect(paths({ kitchenEnabled: true, barOnly: false })).toEqual(["/floor", "/kitchen", "/expo", "/floor/reservations", "/reports"]);
+    expect(paths({ kitchenEnabled: true, barOnly: false })).toEqual([
+      "/hospitality",
+      "/hospitality/tools",
+      "/floor",
+      "/kitchen",
+      "/expo",
+      "/floor/reservations",
+      "/reports",
+    ]);
   });
 
   it("bar-only drops Expo and shows the bar screen instead of 'Kitchen'", () => {
@@ -81,7 +89,23 @@ describe("hospitality navigation follows the style", () => {
 
   it("permissions still filter everything", () => {
     const items = visibleHospitalityNavItems({ hasPerm: (p) => p === "hospitality.floor", kitchenEnabled: true, barOnly: false });
-    expect(items.map((i) => i.path)).toEqual(["/floor", "/floor/reservations"]);
+    expect(items.map((i) => i.path)).toEqual(["/hospitality", "/floor", "/floor/reservations"]);
+  });
+
+  it("shows the shared business tools only to accounts with a launcher permission", () => {
+    const waiter = visibleHospitalityNavItems({
+      hasPerm: (p) => p === "pos.sell" || p === "receipts.view",
+      kitchenEnabled: true,
+      barOnly: false,
+    });
+    expect(waiter.map((i) => i.path)).toContain("/hospitality/tools");
+
+    const kitchenOnly = visibleHospitalityNavItems({
+      hasPerm: (p) => p === "hospitality.kitchen",
+      kitchenEnabled: true,
+      barOnly: false,
+    });
+    expect(kitchenOnly.map((i) => i.path)).not.toContain("/hospitality/tools");
   });
 });
 
